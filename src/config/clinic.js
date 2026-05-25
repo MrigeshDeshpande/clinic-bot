@@ -1,8 +1,8 @@
 export const CLINIC = {
   name: 'Shri Balaji Dental Clinic',
   phone: '+91 91833 74850',
-  address: '[TO BE FILLED BY USER]',
-  mapsLink: '[TO BE FILLED BY USER]',
+  address: 'Ground Floor, MIG-1/321, Amdi Nagar, Hudco Colony, Hudco, Bhilai, Chhattisgarh 490009',
+  mapsLink: 'https://share.google/a2jCV7O4P6KbgrQoo',
   hours: {
     weekday: { open: '09:00', close: '20:00', label: 'Mon\u2013Sat: 9:00 AM \u2013 8:00 PM' },
     sunday:  { open: '10:00', close: '14:00', label: 'Sunday: 10:00 AM \u2013 2:00 PM' },
