@@ -26,12 +26,60 @@ const ID_TO_INTENT = {
   'edit_time': 'edit_time',
   'cancel': 'cancel',
   'time_other': 'time_custom',
+  'my_appts': 'my_appointments',
+  'book_another': 'appointment',
+  'cancel_appt': 'cancel_appointment',
+  'resched': 'reschedule',
+  'confirm_cancel_yes': 'confirm_cancel',
+  'confirm_cancel_no': 'back',
 };
+
+function resolveDateId(id) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (id === 'date_today') return new Date(today);
+  if (id === 'date_tomorrow') {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    return d;
+  }
+  if (id === 'date_next_mon') {
+    // Next Monday from today — if today is Monday, returns 7 days out
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+    return d;
+  }
+
+  const match = id.match(/^date_(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+  }
+
+  return null;
+}
 
 export function classifyIntent(normalized, session) {
   // Priority 0: Interactive ID match — deterministic, always wins
-  if (normalized.interactiveId && ID_TO_INTENT[normalized.interactiveId]) {
-    return { intent: ID_TO_INTENT[normalized.interactiveId], confidence: 1.0, source: 'interactive_id' };
+  if (normalized.interactiveId) {
+    const id = normalized.interactiveId;
+
+    // Handle date_* IDs — resolve date and return as entity
+    if (id.startsWith('date_')) {
+      if (id === 'date_other') {
+        return { intent: 'date_custom', confidence: 1.0, source: 'interactive_id' };
+      }
+      const date = resolveDateId(id);
+      if (date) {
+        return { intent: 'provide_date', confidence: 1.0, source: 'interactive_id', entities: { date } };
+      }
+    }
+
+    // Standard intent mapping
+    if (ID_TO_INTENT[id]) {
+      return { intent: ID_TO_INTENT[id], confidence: 1.0, source: 'interactive_id' };
+    }
   }
 
   const text = normalized.textLower;

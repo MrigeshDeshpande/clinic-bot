@@ -49,6 +49,8 @@ export function getNextState(state, intent, entities) {
       return 'BOOKING_CONFIRMATION';
     case 'confirm':
       return 'BOOKED';
+    case 'confirm_cancel':
+      return 'MAIN_MENU';
     case 'edit_date':
       return 'BOOKING_DATE';
     case 'edit_time':

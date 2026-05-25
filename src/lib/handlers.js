@@ -1,7 +1,8 @@
 import { CLINIC } from '@/config/clinic';
 import { validateDate, validateTime, validateTreatment, validatePhone } from '@/lib/validators';
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
-import { createAppointment } from '@/db/repositories/appointmentRepository';
+import { createAppointment, findUpcomingByWaId, updateAppointment, cancelAppointment } from '@/db/repositories/appointmentRepository';
+import { sendList } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 
 // ───────────────────────────────────────────────
@@ -16,6 +17,7 @@ const STATE_GREETING = {
   LOCATION:             'Hi! You were checking our location.',
   TIMINGS:              'Hi! You were checking our hours.',
   BOOKED:               'Hi! You have an appointment booked.',
+  CANCEL_CONFIRM:       'Hi! Were you looking to cancel an appointment?',
 };
 
 // ───────────────────────────────────────────────
@@ -49,6 +51,7 @@ export async function handle(state, { session, normalized, entities, intent }) {
   if (intent === 'location') return handleLocation(session);
   if (intent === 'timings') return handleTimings(session);
   if (intent === 'services') return handleServices(session, intent);
+  if (intent === 'my_appointments') return handleMyAppointments(session);
 
   // State-specific routing
   switch (state) {
@@ -57,10 +60,10 @@ export async function handle(state, { session, normalized, entities, intent }) {
       return handleIdle(session);
 
     case 'MAIN_MENU':
-      return handleMainMenu(session);
+      return handleMainMenu(session, intent);
 
     case 'BOOKING_DATE':
-      return handleBookingDate(session, entities, normalized);
+      return handleBookingDate(session, entities, normalized, intent);
 
     case 'BOOKING_TIME':
       return handleBookingTime(session, entities, normalized, intent);
@@ -73,6 +76,9 @@ export async function handle(state, { session, normalized, entities, intent }) {
 
     case 'BOOKED':
       return handleBooked(session, intent);
+
+    case 'CANCEL_CONFIRM':
+      return handleCancelConfirm(session, intent);
 
     case 'SERVICES':
       return handleServices(session, intent);
@@ -113,7 +119,19 @@ function handleIdle(session) {
 // ───────────────────────────────────────────────
 // MAIN_MENU
 // ───────────────────────────────────────────────
-function handleMainMenu(session) {
+function handleMainMenu(session, intent) {
+  // Handle transition intents from list taps — return the correct reply
+  // for the NEXT state instead of showing the main menu again
+  if (intent === 'appointment') {
+    session = { ...session, state: 'BOOKING_DATE', previousState: session.state, context: resetBookingContext(session.context) };
+    session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+    return {
+      session,
+      reply: getDateListReply('What date works for you?'),
+      replyType: 'list',
+    };
+  }
+
   session = { ...session, state: 'MAIN_MENU', previousState: session.state };
   session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, frustrationScore: 0 };
   return {
@@ -138,7 +156,16 @@ function mainMenuSections() {
 // ───────────────────────────────────────────────
 // BOOKING_DATE
 // ───────────────────────────────────────────────
-function handleBookingDate(session, entities, normalized) {
+function handleBookingDate(session, entities, normalized, intent) {
+  // If user tapped "Type a different date" — send text prompt, no failure penalty
+  if (intent === 'date_custom') {
+    return {
+      session,
+      reply: 'Please type the date you\'d like.\n\nExamples: "tomorrow", "next Monday", "28 May"',
+      replyType: 'text',
+    };
+  }
+
   // Check if user provided a date
   const text = normalized ? normalized.textTrimmed : '';
   const dateToValidate = entities.date || text;
@@ -179,7 +206,7 @@ function handleBookingDate(session, entities, normalized) {
     };
   }
 
-  // Invalid date — send reason-specific message
+  // Invalid date — show list with reason-specific body
   session = { ...session };
   session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
 
@@ -188,13 +215,17 @@ function handleBookingDate(session, entities, normalized) {
   }
 
   const REASON_MESSAGES = {
-    PAST_DATE:           'That date has already passed. Please pick a future date.\n\nExamples: "tomorrow", "next Monday", "28 May"',
-    BEYOND_HORIZON:      `We only book up to ${CLINIC.bookingHorizonDays} days ahead. Please pick a closer date.`,
-    PARSE_FAILED:        'I didn\'t catch that date.\n\nTry: "tomorrow", "next Friday", "28 May"',
+    PAST_DATE:           'That date has already passed. Please pick a future date from the list below.',
+    BEYOND_HORIZON:      `We only book up to ${CLINIC.bookingHorizonDays} days ahead. Please pick a closer date from the list below.`,
+    PARSE_FAILED:        'I didn\'t catch that date. Try tapping a date below or type one yourself.',
   };
 
-  const reply = REASON_MESSAGES[result.reason] || REASON_MESSAGES.PARSE_FAILED;
-  return { session, reply, replyType: 'text' };
+  const reasonBody = REASON_MESSAGES[result.reason] || REASON_MESSAGES.PARSE_FAILED;
+  return {
+    session,
+    reply: getDateListReply(reasonBody),
+    replyType: 'list',
+  };
 }
 
 // ───────────────────────────────────────────────
@@ -227,6 +258,86 @@ function getTimeListReply(session) {
     body: 'What time works for you?\nSlots available every 30 minutes.',
     buttonLabel: 'Select time',
     sections: timeQuickPickSections(slots),
+  };
+}
+
+// ───────────────────────────────────────────────
+// Date list sections
+// ───────────────────────────────────────────────
+function getDateListSections() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function fmt(d) {
+    return `${dayNames[d.getDay()]} ${d.getDate()} ${monthNames[d.getMonth()]}`;
+  }
+
+  function toId(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `date_${y}-${m}-${day}`;
+  }
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const nextMon = new Date(today);
+  nextMon.setDate(nextMon.getDate() + 1);
+  while (nextMon.getDay() !== 1) nextMon.setDate(nextMon.getDate() + 1);
+
+  // Quick pick dates for deduplication
+  const quickPickDates = [today, tomorrow, nextMon];
+  function isQuickPick(d) {
+    return quickPickDates.some(qd => qd.getTime() === d.getTime());
+  }
+
+  const sections = [];
+
+  // Section 1: Quick Picks
+  sections.push({
+    title: 'Quick Picks',
+    rows: [
+      { id: 'date_today', title: `Today (${fmt(today)})` },
+      { id: 'date_tomorrow', title: `Tomorrow (${fmt(tomorrow)})` },
+      { id: 'date_next_mon', title: `Next Monday (${fmt(nextMon)})` },
+    ],
+  });
+
+  // Section 2: Upcoming Dates (remaining weekdays, capped at 6 for WhatsApp 10-row limit)
+  const upcomingRows = [];
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    if (d.getDay() === 0 || d.getDay() === 6) continue; // Skip weekends
+    if (isQuickPick(d)) continue;
+    upcomingRows.push({ id: toId(d), title: fmt(d) });
+    if (upcomingRows.length >= 6) break;
+  }
+
+  if (upcomingRows.length > 0) {
+    sections.push({ title: 'Upcoming Dates', rows: upcomingRows });
+  }
+
+  // Section 3: Custom
+  sections.push({
+    title: 'Custom',
+    rows: [
+      { id: 'date_other', title: 'Type a different date' },
+    ],
+  });
+
+  return sections;
+}
+
+function getDateListReply(body) {
+  return {
+    body,
+    buttonLabel: 'Select date',
+    sections: getDateListSections(),
   };
 }
 
@@ -394,26 +505,48 @@ function treatmentSections() {
 async function handleBookingConfirmation(session, intent, entities) {
   if (intent === 'confirm') {
     const booking = session.context.booking;
+    let appointment;
+    let isReschedule = false;
 
-    // Persist appointment to DB
-    const appointment = await createAppointment({
-      sessionId: session.id,
-      waId: session.waId,
-      patientName: session.profileName,
-      date: booking.date,
-      time: booking.time,
-      treatment: booking.treatment,
-    });
-
-    if (appointment) {
-      logger.info('APPOINTMENT_CREATED', {
-        waId: session.waId,
-        appointmentId: appointment.id,
+    // Check if this is a reschedule — update existing appointment
+    if (session.context.reschedulingAppointmentId) {
+      appointment = await updateAppointment(session.context.reschedulingAppointmentId, {
         date: booking.date,
         time: booking.time,
         treatment: booking.treatment,
       });
-      session.context.appointmentId = appointment.id;
+      if (appointment) {
+        isReschedule = true;
+        logger.info('APPOINTMENT_RESCHEDULED', {
+          waId: session.waId,
+          appointmentId: appointment.id,
+          date: booking.date,
+          time: booking.time,
+          treatment: booking.treatment,
+        });
+        session.context.appointmentId = appointment.id;
+      }
+      delete session.context.reschedulingAppointmentId;
+    } else {
+      // New appointment
+      appointment = await createAppointment({
+        sessionId: session.id,
+        waId: session.waId,
+        patientName: session.profileName,
+        date: booking.date,
+        time: booking.time,
+        treatment: booking.treatment,
+      });
+      if (appointment) {
+        logger.info('APPOINTMENT_CREATED', {
+          waId: session.waId,
+          appointmentId: appointment.id,
+          date: booking.date,
+          time: booking.time,
+          treatment: booking.treatment,
+        });
+        session.context.appointmentId = appointment.id;
+      }
     }
 
     session = {
@@ -423,13 +556,24 @@ async function handleBookingConfirmation(session, intent, entities) {
     };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
 
+    const header = isReschedule ? '✅ Rescheduled!' : '✅ Confirmed!';
+
     return {
       session,
       reply: {
-        body: `✅ Confirmed!\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}\n\nWe look forward to seeing you!`,
-        buttons: ['Book Another', 'Main Menu'],
+        body: `${header}\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}\n\nWe look forward to seeing you!`,
+        buttonLabel: 'Options',
+        sections: [{
+          title: 'Manage Booking',
+          rows: [
+            { id: 'book_another', title: 'Book Another', description: 'Schedule a new appointment' },
+            { id: 'resched', title: 'Reschedule', description: 'Change date, time, or treatment' },
+            { id: 'cancel_appt', title: 'Cancel', description: 'Cancel this appointment' },
+            { id: 'main_menu', title: 'Main Menu', description: 'Back to home' },
+          ],
+        }],
       },
-      replyType: 'buttons',
+      replyType: 'list',
     };
   }
 
@@ -443,7 +587,11 @@ async function handleBookingConfirmation(session, intent, entities) {
       },
     };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
-    return { session, reply: 'What date would you like instead?', replyType: 'text' };
+    return {
+      session,
+      reply: getDateListReply('What date would you like instead?'),
+      replyType: 'list',
+    };
   }
 
   if (intent === 'edit_time') {
@@ -477,6 +625,29 @@ async function handleBookingConfirmation(session, intent, entities) {
 // BOOKED
 // ───────────────────────────────────────────────
 function handleBooked(session, intent) {
+  if (intent === 'cancel_appointment') {
+    return handleCancelAppointment(session);
+  }
+
+  if (intent === 'reschedule') {
+    session = {
+      ...session,
+      state: 'BOOKING_DATE',
+      previousState: session.state,
+      context: {
+        ...session.context,
+        reschedulingAppointmentId: session.context.appointmentId,
+        booking: { date: null, time: null, treatment: null },
+      },
+    };
+    session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+    return {
+      session,
+      reply: getDateListReply('Sure! Let\'s reschedule. What date works for you?'),
+      replyType: 'list',
+    };
+  }
+
   if (intent === 'appointment') {
     session = {
       ...session,
@@ -485,7 +656,11 @@ function handleBooked(session, intent) {
       context: resetBookingContext(session.context),
     };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
-    return { session, reply: 'Sure! What date works for you?', replyType: 'text' };
+    return {
+      session,
+      reply: getDateListReply('Sure! What date works for you?'),
+      replyType: 'list',
+    };
   }
 
   return handleMainMenu(session);
@@ -500,7 +675,11 @@ function handleServices(session, intent) {
   if (intent === 'appointment') {
     session = { ...session, state: 'BOOKING_DATE', previousState: session.state };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
-    return { session, reply: 'What date works for you?', replyType: 'text' };
+    return {
+      session,
+      reply: getDateListReply('What date works for you?'),
+      replyType: 'list',
+    };
   }
 
   const servicesBullets = CLINIC.treatments.map(t => `• ${t.name}`).join('\n');
@@ -640,6 +819,7 @@ function handleUnknown(session, normalized) {
     SERVICES:             'Tap "Book Appointment" or "Main Menu".',
     LOCATION:             'Tap "Main Menu" to go back.',
     TIMINGS:              'Tap "Main Menu" to go back.',
+    CANCEL_CONFIRM:       'Tap "Yes, Cancel It" to cancel or "No, Keep It" to keep your appointment.',
   };
 
   const hint = hints[session.state] || 'Type "0" for the menu or tell me what you need.';
@@ -662,10 +842,17 @@ function handleGreeting(session) {
     };
   }
 
-  // Returning user
+  // Returning user — show interactive list for date selection
+  if (session.state === 'BOOKING_DATE') {
+    return {
+      session,
+      reply: getDateListReply(STATE_GREETING.BOOKING_DATE),
+      replyType: 'list',
+    };
+  }
+
   const greeting = STATE_GREETING[session.state] || 'Welcome back!';
   const repromptHints = {
-    BOOKING_DATE:         'What date works?',
     BOOKING_TIME:         'What time works for you?',
     BOOKING_TREATMENT:    'Which treatment do you need?',
     BOOKING_CONFIRMATION: 'Your appointment details are ready.',
@@ -680,9 +867,171 @@ function handleGreeting(session) {
 }
 
 // ───────────────────────────────────────────────
-// Cancel handler
+// Cancel Appointment (from BOOKED or when user wants to cancel an existing booking)
+// ───────────────────────────────────────────────
+function handleCancelAppointment(session) {
+  session = {
+    ...session,
+    state: 'CANCEL_CONFIRM',
+    previousState: session.state,
+  };
+  session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+  return {
+    session,
+    reply: {
+      body: 'Are you sure you want to cancel this appointment?',
+      buttonLabel: 'Choose',
+      sections: [{
+        title: 'Cancel Appointment',
+        rows: [
+          { id: 'confirm_cancel_yes', title: 'Yes, Cancel It' },
+          { id: 'confirm_cancel_no', title: 'No, Keep It' },
+        ],
+      }],
+    },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Confirm Cancel
+// ───────────────────────────────────────────────
+async function handleCancelConfirm(session, intent) {
+  if (intent === 'confirm_cancel') {
+    // Cancel in DB (await result for audit accuracy)
+    const appointmentId = session.context.appointmentId;
+    let cancelled = false;
+    if (appointmentId) {
+      const result = await cancelAppointment(appointmentId, 'Cancelled by patient').catch(() => null);
+      if (result) {
+        cancelled = true;
+        logger.info('APPOINTMENT_CANCELLED', { waId: session.waId, appointmentId, reason: 'Cancelled by patient' });
+      }
+    }
+
+    session = {
+      ...session,
+      state: 'MAIN_MENU',
+      context: resetBookingContext(session.context),
+    };
+    session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+
+    if (cancelled) {
+      // Fire-and-forget the main menu after a short delay so the empathetic
+      // cancellation message lands first and breathes before options appear
+      setTimeout(() => {
+        sendList(session.waId, 'What would you like to do next?', 'Menu', mainMenuSections()).catch(() => {});
+      }, 1500);
+
+      return {
+        session,
+        reply: '✅ Your appointment has been cancelled.\n\nWe understand plans change. If there\'s anything we can help with, we\'re here for you.',
+        replyType: 'text',
+      };
+    }
+
+    return {
+      session,
+      reply: 'There was an issue cancelling your appointment. Please call us at ' + CLINIC.phone + ' or try again later.',
+      replyType: 'text',
+    };
+  }
+
+  // If back / no — go back to BOOKED
+  if (session.previousState === 'BOOKED') {
+    return showBookedSummary(session);
+  }
+
+  // Fallback: go to main menu (preserve context — don't use resetBookingContext)
+  session = { ...session, state: 'MAIN_MENU', previousState: session.state };
+  session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+  return {
+    session,
+    reply: { body: 'No problem. What would you like to do instead?', buttonLabel: 'Menu', sections: mainMenuSections() },
+    replyType: 'list',
+  };
+}
+
+function showBookedSummary(session) {
+  const booking = session.context.booking;
+  session = { ...session, state: 'BOOKED', previousState: session.state };
+  session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+  return {
+    session,
+    reply: {
+      body: `📋 Your Appointment\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}`,
+      buttonLabel: 'Options',
+      sections: [{
+        title: 'Manage Booking',
+        rows: [
+          { id: 'book_another', title: 'Book Another', description: 'Schedule a new appointment' },
+          { id: 'resched', title: 'Reschedule', description: 'Change date, time, or treatment' },
+          { id: 'cancel_appt', title: 'Cancel', description: 'Cancel this appointment' },
+          { id: 'main_menu', title: 'Main Menu', description: 'Back to home' },
+        ],
+      }],
+    },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// My Appointments (async — look up and return the correct reply directly)
+// ───────────────────────────────────────────────
+async function handleMyAppointments(session) {
+  session = { ...session, state: 'MAIN_MENU', previousState: session.state };
+  session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+
+  try {
+    const appointments = await findUpcomingByWaId(session.waId);
+
+    if (!appointments || appointments.length === 0) {
+      return {
+        session,
+        reply: {
+          body: 'You don\'t have any upcoming appointments.\n\nWould you like to book one?',
+          buttonLabel: 'Menu',
+          sections: mainMenuSections(),
+        },
+        replyType: 'list',
+      };
+    }
+
+    let body = '📋 *Your Upcoming Appointments*\n\n';
+    appointments.forEach((apt, i) => {
+      const d = new Date(apt.date + 'T' + apt.time);
+      body += `${i + 1}. ${d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} at ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}\n`;
+      body += `   Treatment: ${apt.treatment || 'N/A'}\n`;
+      body += `   Status: ${apt.status}\n\n`;
+    });
+    body += 'Tap "Main Menu" to continue.';
+
+    return {
+      session,
+      reply: { body, buttonLabel: 'Menu', sections: mainMenuSections() },
+      replyType: 'list',
+    };
+  } catch {
+    // DB error fallback — just show the main menu
+    return {
+      session,
+      reply: { body: `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, buttonLabel: 'Select option', sections: mainMenuSections() },
+      replyType: 'list',
+    };
+  }
+}
+
+// ───────────────────────────────────────────────
+// Global Cancel handler (state-aware)
 // ───────────────────────────────────────────────
 function handleCancel(session) {
+  // If user has an appointment (either in BOOKED state or session has appointmentId),
+  // offer cancellation flow
+  if (session.state === 'BOOKED' || session.context.appointmentId) {
+    return handleCancelAppointment(session);
+  }
+
+  // Otherwise: reset booking context, go to main menu
   session = {
     ...session,
     state: 'MAIN_MENU',

@@ -71,16 +71,18 @@ export async function runMigrations() {
 
     await db`
       CREATE TABLE IF NOT EXISTS appointments (
-        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        session_id    UUID REFERENCES sessions(id),
-        wa_id         VARCHAR(20) NOT NULL,
-        patient_name  VARCHAR(100),
-        date          DATE NOT NULL,
-        time          TIME NOT NULL,
-        treatment     VARCHAR(100),
-        status        VARCHAR(20) NOT NULL DEFAULT 'confirmed',
-        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id          UUID REFERENCES sessions(id),
+        wa_id               VARCHAR(20) NOT NULL,
+        patient_name        VARCHAR(100),
+        date                DATE NOT NULL,
+        time                TIME NOT NULL,
+        treatment           VARCHAR(100),
+        status              VARCHAR(20) NOT NULL DEFAULT 'confirmed',
+        cancelled_at        TIMESTAMPTZ,
+        cancellation_reason VARCHAR(255),
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         CONSTRAINT valid_appt_status CHECK (status IN ('confirmed','cancelled','completed','no_show'))
       );
     `;
@@ -90,6 +92,26 @@ export async function runMigrations() {
     `;
     await db`
       CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date);
+    `;
+
+    // Add new columns if the table already exists (for existing installations)
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(255);
+    `;
+
+    // Ensure the valid_state constraint includes CANCEL_CONFIRM
+    await db`
+      ALTER TABLE sessions DROP CONSTRAINT IF EXISTS valid_state;
+    `;
+    await db`
+      ALTER TABLE sessions ADD CONSTRAINT valid_state CHECK (
+        state IN ('IDLE','MAIN_MENU','BOOKING_DATE','BOOKING_TIME','BOOKING_TREATMENT',
+                  'BOOKING_CONFIRMATION','BOOKED','SERVICES','LOCATION','TIMINGS',
+                  'EMERGENCY','HUMAN_ESCALATION','CALLBACK_REQUESTED','CANCEL_CONFIRM',
+                  'DONE','ABANDONED')
+      );
     `;
 
     logger.info('DB_MIGRATIONS_COMPLETE');

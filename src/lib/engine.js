@@ -148,8 +148,8 @@ export async function processEvent(payload) {
       // Step 2e: classifyIntent
       const intentResult = classifyIntent(normalized, session);
 
-      // Step 2f: extractEntities
-      const entities = extractEntities(normalized.textClean);
+      // Step 2f: extractEntities (router may provide entities for interactive IDs)
+      const entities = intentResult.entities || extractEntities(normalized.textClean);
 
       // Determine next state
       const nextState = getNextState(session.state, intentResult.intent, entities);
