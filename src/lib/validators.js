@@ -156,6 +156,37 @@ export function validateTime(text, date) {
     }
   }
 
+  // "after [number]", "after [number]pm", "before [number]", "after [time]"
+  if (!parsedTime) {
+    const afterNum = lower.match(/\b(?:(?:right\s+)?(?:after|before|by|around|about))\s+(\d{1,2})\s*(am|pm)?\b/i);
+    if (afterNum) {
+      let h = parseInt(afterNum[1], 10);
+      const meridiem = afterNum[2];
+      if (meridiem) {
+        const ampm = meridiem.toLowerCase();
+        if (ampm === 'pm' && h < 12) h += 12;
+        if (ampm === 'am' && h === 12) h = 0;
+      } else {
+        // No AM/PM specified — default to PM for hours 1-6 (afternoon/evening context),
+        // AM for hours 7-12 (morning context)
+        if (h >= 1 && h <= 6) h += 12; // 1pm-6pm
+        // 7-12 → keep as is (7am-12pm)
+      }
+      parsedTime = `${String(h).padStart(2, '0')}:00`;
+    }
+  }
+
+  // Time-of-day words: morning → 10:00, afternoon → 14:00, evening → 17:00
+  if (!parsedTime) {
+    if (/\b(morning|breakfast)/.test(lower)) {
+      parsedTime = '10:00';
+    } else if (/\b(afternoon|lunch)/.test(lower)) {
+      parsedTime = '14:00';
+    } else if (/\b(evening|night|dinner)/.test(lower)) {
+      parsedTime = '17:00';
+    }
+  }
+
   // "half past 2", "quarter to 3", "quarter past 2", "2 o'clock"
   if (!parsedTime) {
     const halfPast = lower.match(/\bhalf\s+past\s+(\d{1,2})\b/);

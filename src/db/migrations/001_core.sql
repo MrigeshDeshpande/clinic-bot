@@ -1,7 +1,7 @@
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    wa_id            VARCHAR(20) NOT NULL UNIQUE,
+    wa_id            VARCHAR(50) NOT NULL UNIQUE,
     phone_number_id  VARCHAR(20),
     profile_name     VARCHAR(100),
     state            VARCHAR(50) NOT NULL DEFAULT 'IDLE',
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS messages (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     msg_id       VARCHAR(100) UNIQUE,
     session_id   UUID REFERENCES sessions(id) ON DELETE CASCADE,
-    wa_id        VARCHAR(20) NOT NULL,
+    wa_id        VARCHAR(50) NOT NULL,
     role         VARCHAR(10) NOT NULL CHECK (role IN ('user','bot')),
     content      TEXT,
     intent       VARCHAR(50),

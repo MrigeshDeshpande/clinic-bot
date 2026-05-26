@@ -10,6 +10,12 @@ export const GLOBAL_INTENTS = {
   help:      ['help','?','what can you do'],
 };
 
+export const CORRECTION_INTENTS = [
+  'correction_date',
+  'correction_time',
+  'correction_treatment',
+];
+
 export const STATE_INTENTS = {
   MAIN_MENU:            { appointment: ['1','book','appointment','book appointment','schedule a visit','booking','schedule'],
                           services:    ['2','services','dental services','treatment','procedures','what we offer','what do you do'],
@@ -17,6 +23,12 @@ export const STATE_INTENTS = {
                           timings:     ['4','timings','clinic timings','hours','open','close','schedule'],
                           my_appointments: ['5','my appointments','my bookings','upcoming appointments','appointments','cancel my appointment',"reschedule","manage appointment"],
                           callback:    ['callback','call back','call me back','ring me'] },
+  BOOKING_DATE:         { correction_time:   ['actually','change time','different time','evening','morning','afternoon'],
+                          correction_treatment: ['not','actually','different treatment','not that'] },
+  BOOKING_TIME:         { correction_date:   ['actually','change date','different date','tomorrow','today','next','monday','tuesday','wednesday','thursday','friday','saturday','sunday'],
+                          correction_treatment: ['not','actually','different treatment','not that'] },
+  BOOKING_TREATMENT:    { correction_date:   ['actually','change date','different date'],
+                          correction_time:   ['actually','change time','different time','evening','morning'] },
   BOOKING_CONFIRMATION: { confirm:    ['confirm','correct','book it','done','proceed','yes','go ahead'],
                           edit_date:  ['change date','different date','date'],
                           edit_time:  ['change time','different time','time'] },

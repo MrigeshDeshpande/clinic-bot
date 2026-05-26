@@ -2,6 +2,15 @@ import { logger } from '@/lib/logger';
 
 const API_VERSION = 'v19.0';
 
+// When REPLAY_MODE is active, return mock message IDs without network calls
+function isReplayMode() {
+  return process.env.REPLAY_MODE === 'true';
+}
+
+function mockMsgId() {
+  return `replay_mock_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
 function getCredentials() {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -13,6 +22,10 @@ function getCredentials() {
 }
 
 async function apiPost(to, payload) {
+  if (isReplayMode()) {
+    return mockMsgId();
+  }
+
   const creds = getCredentials();
   if (!creds) return null;
 
@@ -85,6 +98,8 @@ export async function sendList(to, bodyText, buttonLabel, sections) {
 }
 
 export async function markAsRead(messageId) {
+  if (isReplayMode()) return;
+
   const creds = getCredentials();
   if (!creds) return;
 

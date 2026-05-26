@@ -4,6 +4,8 @@ import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
 import { createAppointment, findUpcomingByWaId, updateAppointment, cancelAppointment } from '@/db/repositories/appointmentRepository';
 import { sendList } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
+import { evaluateOverwrite, applyFieldOverwrite, getTargetState } from '@/lib/overwrite-policy';
+import { accumulateEntities } from '@/lib/entities';
 
 // ───────────────────────────────────────────────
 // State-aware greeting for returning users
@@ -33,6 +35,50 @@ function calculateFrustration(session, textLower) {
 }
 
 // ───────────────────────────────────────────────
+// Progressive field fill — tries to auto-advance by checking
+// accumulated entities for the next booking field.
+// Supports fragmented messages like "Tomorrow after 5" sent
+// as two separate messages before the bot replies.
+// ───────────────────────────────────────────────
+function progressiveFieldFill(session, justSetField, entities) {
+  const booking = session.context.booking;
+  const accumulated = session.context.receivedEntities || {};
+
+  // Step 1: After setting date, check if we have a valid time in entities or accumulated
+  if (justSetField === 'date' && !booking.time) {
+    const timeEntity = entities?.time || (accumulated.times && accumulated.times.length > 0 ? accumulated.times[accumulated.times.length - 1] : null);
+    if (timeEntity) {
+      const timeStr = typeof timeEntity === 'string' ? timeEntity : String(timeEntity);
+      const bookingDate = booking.date ? new Date(booking.date) : new Date();
+      // Re-validate via validateTime using the raw time string
+      const result = validateTime(timeStr, bookingDate);
+      if (result.valid && result.parsed) {
+        const updated = applyFieldOverwrite(booking, session.context.bookingTimestamps, 'time', result.parsed);
+        session.context.booking = updated.booking;
+        session.context.bookingTimestamps = updated.bookingTimestamps;
+        // Now check if treatment also available
+        return progressiveFieldFill(session, 'time', entities);
+      }
+    }
+  }
+
+  // Step 2: After setting time, check if we have a valid treatment
+  if (justSetField === 'time' && !booking.treatment) {
+    const treatmentEntity = entities?.treatment || (accumulated.treatments && accumulated.treatments.length > 0 ? accumulated.treatments[accumulated.treatments.length - 1] : null);
+    if (treatmentEntity) {
+      const result = validateTreatment(treatmentEntity);
+      if (result.valid && result.parsed) {
+        const updated = applyFieldOverwrite(booking, session.context.bookingTimestamps, 'treatment', result.parsed);
+        session.context.booking = updated.booking;
+        session.context.bookingTimestamps = updated.bookingTimestamps;
+      }
+    }
+  }
+
+  return session;
+}
+
+// ───────────────────────────────────────────────
 // Main dispatch
 // ───────────────────────────────────────────────
 export async function handle(state, { session, normalized, entities, intent }) {
@@ -40,9 +86,19 @@ export async function handle(state, { session, normalized, entities, intent }) {
   session = { ...session };
   session.metrics = { ...session.metrics, messagesInState: session.metrics.messagesInState + 1 };
 
+  // Accumulate entities from this message into session context
+  if (entities && Object.keys(entities).length > 0) {
+    const { receivedEntities, pendingFields } = accumulateEntities(session.context, entities);
+    session.context.receivedEntities = receivedEntities;
+    session.context.pendingFields = pendingFields;
+  }
+
+  // Update message sequence counter for rapid-fire detection
+  session.context.messageSequence = (session.context.messageSequence || 0) + 1;
+
   // Global intent handling (before state-specific routing)
   if (intent === 'emergency') return handleEmergency(session);
-  if (intent === 'escalate') return handleEscalation(session);
+  if (intent === 'escalate') return handleHumanEscalation(session);
   if (intent === 'cancel') return handleCancel(session);
   if (intent === 'main_menu') return handleMainMenu(session);
   if (intent === 'greeting') return handleGreeting(session);
@@ -52,6 +108,73 @@ export async function handle(state, { session, normalized, entities, intent }) {
   if (intent === 'timings') return handleTimings(session);
   if (intent === 'services') return handleServices(session, intent);
   if (intent === 'my_appointments') return handleMyAppointments(session);
+
+  // Correction intents — route to the right handler but pass correction context
+  if (intent === 'correction_date') {
+    // Enforce overwrite policy before proceeding
+    const policy = evaluateOverwrite({
+      state: session.state,
+      field: 'date',
+      isCorrection: true,
+      booking: session.context.booking,
+    });
+    if (!policy.allowed && policy.action === 'require_edit') {
+      return { session, reply: 'Your appointment is already confirmed. Would you like to reschedule instead?', replyType: 'text' };
+    }
+    if (entities?.date) {
+      session.context.lastCorrection = { field: 'date', fromValue: session.context.booking.date, timestamp: new Date().toISOString() };
+      return handleBookingDate(session, entities, normalized, intent);
+    }
+    // If no date entity but correction intent, ask for the new date
+    session.context.lastCorrection = { field: 'date', timestamp: new Date().toISOString() };
+    return {
+      session,
+      reply: getDateListReply('Sure! What date would you like instead?'),
+      replyType: 'list',
+    };
+  }
+  if (intent === 'correction_time') {
+    const policy = evaluateOverwrite({
+      state: session.state,
+      field: 'time',
+      isCorrection: true,
+      booking: session.context.booking,
+    });
+    if (!policy.allowed && policy.action === 'require_edit') {
+      return { session, reply: 'Your appointment is already confirmed. Would you like to reschedule instead?', replyType: 'text' };
+    }
+    if (entities?.time) {
+      session.context.lastCorrection = { field: 'time', fromValue: session.context.booking.time, timestamp: new Date().toISOString() };
+      return handleBookingTime(session, entities, normalized, intent);
+    }
+    session.context.lastCorrection = { field: 'time', timestamp: new Date().toISOString() };
+    return { session, reply: 'Sure! What time works better?', replyType: 'text' };
+  }
+  if (intent === 'correction_treatment') {
+    const policy = evaluateOverwrite({
+      state: session.state,
+      field: 'treatment',
+      isCorrection: true,
+      booking: session.context.booking,
+    });
+    if (!policy.allowed && policy.action === 'require_edit') {
+      return { session, reply: 'Your appointment is already confirmed. Would you like to reschedule instead?', replyType: 'text' };
+    }
+    if (entities?.treatment) {
+      session.context.lastCorrection = { field: 'treatment', fromValue: session.context.booking.treatment, timestamp: new Date().toISOString() };
+      return handleBookingTreatment(session, entities, normalized, intent);
+    }
+    session.context.lastCorrection = { field: 'treatment', timestamp: new Date().toISOString() };
+    return {
+      session,
+      reply: {
+        body: 'Sure! Which treatment would you like instead?',
+        buttonLabel: 'Select treatment',
+        sections: treatmentSections(),
+      },
+      replyType: 'list',
+    };
+  }
 
   // State-specific routing
   switch (state) {
@@ -69,7 +192,7 @@ export async function handle(state, { session, normalized, entities, intent }) {
       return handleBookingTime(session, entities, normalized, intent);
 
     case 'BOOKING_TREATMENT':
-      return handleBookingTreatment(session, entities, normalized);
+      return handleBookingTreatment(session, entities, normalized, intent);
 
     case 'BOOKING_CONFIRMATION':
       return handleBookingConfirmation(session, intent, entities);
@@ -184,26 +307,76 @@ function handleBookingDate(session, entities, normalized, intent) {
     // Store as YYYY-MM-DD string (local timezone) for proper parsing downstream
     const isoDate = dateObj.toLocaleDateString('en-CA');
 
+    // Apply field overwrite with audit tracking
+    const { booking, bookingTimestamps } = applyFieldOverwrite(
+      session.context.booking,
+      session.context.bookingTimestamps,
+      'date',
+      isoDate
+    );
+
     session = {
       ...session,
-      state: 'BOOKING_TIME',
       previousState: session.state,
       context: {
         ...session.context,
-        booking: { ...session.context.booking, date: isoDate },
+        booking,
+        bookingTimestamps,
       },
     };
-    session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, currentField: 'time' };
 
-    return {
-      session,
-      reply: {
-        body: 'What time works for you?\nSlots available every 30 minutes.',
-        buttonLabel: 'Select time',
-        sections: timeQuickPickSections(slots),
-      },
-      replyType: 'list',
+    // Try progressive fill: check if we also have time (and treatment) entities
+    const filledSession = progressiveFieldFill(session, 'date', entities);
+
+    // Determine next state based on available fields
+    const nowHasTime = filledSession.context.booking.time;
+    const nowHasTreatment = filledSession.context.booking.treatment;
+
+    let nextState, replyObj;
+    if (nowHasTime && nowHasTreatment) {
+      // All fields filled — go straight to confirmation
+      nextState = 'BOOKING_CONFIRMATION';
+      replyObj = {
+        reply: {
+          body: buildConfirmationBody(filledSession.context.booking),
+          buttonLabel: 'Choose',
+          sections: confirmationSections(),
+        },
+        replyType: 'list',
+      };
+    } else if (nowHasTime) {
+      // Time set but still need treatment
+      nextState = 'BOOKING_TREATMENT';
+      replyObj = {
+        reply: {
+          body: 'Which treatment do you need?',
+          buttonLabel: 'Select treatment',
+          sections: treatmentSections(),
+        },
+        replyType: 'list',
+      };
+    } else {
+      // Only date — ask for time
+      nextState = 'BOOKING_TIME';
+      replyObj = {
+        reply: {
+          body: 'What time works for you?\nSlots available every 30 minutes.',
+          buttonLabel: 'Select time',
+          sections: timeQuickPickSections(slots),
+        },
+        replyType: 'list',
+      };
+    }
+
+    filledSession.state = nextState;
+    filledSession.metrics = {
+      ...filledSession.metrics,
+      failedAttempts: 0,
+      messagesInState: 0,
+      currentField: getFieldForState(nextState),
     };
+
+    return { session: filledSession, ...replyObj };
   }
 
   // Invalid date — show list with reason-specific body
@@ -358,27 +531,60 @@ function handleBookingTime(session, entities, normalized, intent) {
     const result = validateTime(entities.time, bookingDate);
 
     if (result.valid && result.parsed) {
-      const formattedTime = formatTime(result.parsed);
+      // Apply field overwrite with audit tracking
+      const { booking, bookingTimestamps } = applyFieldOverwrite(
+        session.context.booking,
+        session.context.bookingTimestamps,
+        'time',
+        result.parsed
+      );
+
       session = {
         ...session,
-        state: 'BOOKING_TREATMENT',
         previousState: session.state,
         context: {
           ...session.context,
-          booking: { ...session.context.booking, time: result.parsed },
+          booking,
+          bookingTimestamps,
         },
       };
-      session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, currentField: 'treatment' };
 
-      return {
-        session,
-      reply: {
-        body: 'Which treatment do you need?',
-        buttonLabel: 'Select treatment',
-        sections: treatmentSections(),
-      },
-      replyType: 'list',
+      // Try progressive fill: check if we also have treatment entity
+      const filledSession = progressiveFieldFill(session, 'time', entities);
+      const nowHasTreatment = filledSession.context.booking.treatment;
+
+      let nextState, replyObj;
+      if (nowHasTreatment) {
+        nextState = 'BOOKING_CONFIRMATION';
+        replyObj = {
+          reply: {
+            body: buildConfirmationBody(filledSession.context.booking),
+            buttonLabel: 'Choose',
+            sections: confirmationSections(),
+          },
+          replyType: 'list',
+        };
+      } else {
+        nextState = 'BOOKING_TREATMENT';
+        replyObj = {
+          reply: {
+            body: 'Which treatment do you need?',
+            buttonLabel: 'Select treatment',
+            sections: treatmentSections(),
+          },
+          replyType: 'list',
+        };
+      }
+
+      filledSession.state = nextState;
+      filledSession.metrics = {
+        ...filledSession.metrics,
+        failedAttempts: 0,
+        messagesInState: 0,
+        currentField: getFieldForState(nextState),
       };
+
+      return { session: filledSession, ...replyObj };
     }
 
     session = { ...session };
@@ -421,7 +627,7 @@ function handleBookingTime(session, entities, normalized, intent) {
 // ───────────────────────────────────────────────
 // BOOKING_TREATMENT
 // ───────────────────────────────────────────────
-function handleBookingTreatment(session, entities, normalized) {
+function handleBookingTreatment(session, entities, normalized, intent) {
   let treatmentName = entities.treatment || null;
 
   // Check number input
@@ -438,13 +644,22 @@ function handleBookingTreatment(session, entities, normalized) {
   if (treatmentName) {
     const result = validateTreatment(treatmentName);
     if (result.valid && result.parsed) {
+      // Apply field overwrite with audit tracking
+      const { booking, bookingTimestamps } = applyFieldOverwrite(
+        session.context.booking,
+        session.context.bookingTimestamps,
+        'treatment',
+        result.parsed
+      );
+
       session = {
         ...session,
         state: 'BOOKING_CONFIRMATION',
         previousState: session.state,
         context: {
           ...session.context,
-          booking: { ...session.context.booking, treatment: result.parsed },
+          booking,
+          bookingTimestamps,
         },
       };
       session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, currentField: null };
@@ -1048,10 +1263,23 @@ function handleCancel(session) {
 // ───────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────
+function getFieldForState(state) {
+  switch (state) {
+    case 'BOOKING_DATE': return 'date';
+    case 'BOOKING_TIME': return 'time';
+    case 'BOOKING_TREATMENT': return 'treatment';
+    default: return null;
+  }
+}
+
 function resetBookingContext(context) {
   return {
     ...context,
     booking: { date: null, time: null, treatment: null, patientName: null, patientPhone: null, notes: null },
+    bookingTimestamps: { date: null, time: null, treatment: null },
+    pendingFields: ['date', 'time', 'treatment'],
+    receivedEntities: { dates: [], times: [], treatments: [] },
+    lastCorrection: { field: null, fromValue: null, toValue: null, timestamp: null },
     escalationReason: null,
   };
 }

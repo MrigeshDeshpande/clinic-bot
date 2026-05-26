@@ -1,6 +1,20 @@
 import { findSessionByWaId, upsertSession, saveSession } from '@/db/repositories/sessionRepository';
 import { logger } from '@/lib/logger';
 
+// In-memory session cache for replay mode and no-DB scenarios.
+// Ensures session continuity when Neon persistence is unavailable.
+const sessionCache = new Map();
+const MAX_CACHE_SIZE = 500;
+
+function cacheSession(session) {
+  if (!session.waId) return;
+  if (sessionCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = sessionCache.keys().next().value;
+    if (firstKey) sessionCache.delete(firstKey);
+  }
+  sessionCache.set(session.waId, session);
+}
+
 function emptySession(waId, phoneNumberId, profileName) {
   return {
     id: null,
@@ -11,6 +25,12 @@ function emptySession(waId, phoneNumberId, profileName) {
     previousState: null,
     context: {
       booking: { date: null, time: null, treatment: null, patientName: null, patientPhone: null, notes: null },
+      bookingTimestamps: { date: null, time: null, treatment: null },
+      pendingFields: ['date', 'time', 'treatment'],
+      receivedEntities: { dates: [], times: [], treatments: [] },
+      lastCorrection: { field: null, fromValue: null, toValue: null, timestamp: null },
+      messageSequence: 0,
+      lastMessageIds: [],
       appointmentId: null,
       escalationReason: null,
     },
@@ -40,6 +60,25 @@ function rowToSession(row) {
         patientPhone: contextRaw.booking?.patientPhone || null,
         notes: contextRaw.booking?.notes || null,
       },
+      bookingTimestamps: {
+        date: contextRaw.bookingTimestamps?.date || null,
+        time: contextRaw.bookingTimestamps?.time || null,
+        treatment: contextRaw.bookingTimestamps?.treatment || null,
+      },
+      pendingFields: contextRaw.pendingFields || ['date', 'time', 'treatment'],
+      receivedEntities: {
+        dates: Array.isArray(contextRaw.receivedEntities?.dates) ? contextRaw.receivedEntities.dates : [],
+        times: Array.isArray(contextRaw.receivedEntities?.times) ? contextRaw.receivedEntities.times : [],
+        treatments: Array.isArray(contextRaw.receivedEntities?.treatments) ? contextRaw.receivedEntities.treatments : [],
+      },
+      lastCorrection: {
+        field: contextRaw.lastCorrection?.field || null,
+        fromValue: contextRaw.lastCorrection?.fromValue || null,
+        toValue: contextRaw.lastCorrection?.toValue || null,
+        timestamp: contextRaw.lastCorrection?.timestamp || null,
+      },
+      messageSequence: contextRaw.messageSequence || 0,
+      lastMessageIds: Array.isArray(contextRaw.lastMessageIds) ? contextRaw.lastMessageIds : [],
       appointmentId: contextRaw.appointmentId || null,
       escalationReason: contextRaw.escalationReason || null,
     },
@@ -64,13 +103,23 @@ function rowToSession(row) {
 }
 
 export async function getOrCreate(waId, phoneNumberId, profileName) {
+  // Layer 1: In-memory cache (replay mode, no-DB, or between saves)
+  // Cached sessions are in internal format — return a shallow copy directly
+  if (sessionCache.has(waId)) {
+    const cached = sessionCache.get(waId);
+    return { ...cached, metrics: { ...cached.metrics } };
+  }
+
+  // Layer 2: Database
   const existing = await findSessionByWaId(waId);
 
   if (existing) {
-    return rowToSession(existing);
+    const session = rowToSession(existing);
+    cacheSession(session);
+    return session;
   }
 
-  // No existing session — create one via upsert
+  // Layer 3: New session — create via upsert or fallback to in-memory
   const session = emptySession(waId, phoneNumberId, profileName);
   const created = await upsertSession({
     waId: session.waId,
@@ -80,11 +129,19 @@ export async function getOrCreate(waId, phoneNumberId, profileName) {
   if (created) {
     session.id = created.id;
     session.version = created.version;
+    cacheSession(session);
+  } else {
+    // No DB available — cache in-memory for continuity
+    cacheSession(session);
   }
   return session;
 }
 
 export async function save(session) {
+  // Always update in-memory cache for continuity
+  cacheSession(session);
+
+  // DB persistence (may be unavailable in replay/no-DB mode)
   if (!session.id) return;
 
   try {

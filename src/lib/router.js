@@ -1,6 +1,7 @@
-import { GLOBAL_INTENTS, STATE_INTENTS } from '@/config/intents';
+import { GLOBAL_INTENTS, STATE_INTENTS, CORRECTION_INTENTS } from '@/config/intents';
 import { CLINIC } from '@/config/clinic';
 import { extractEntities } from '@/lib/entities';
+import { detectCorrection } from '@/lib/correction-detector';
 
 function matchKeywords(text, keywords) {
   for (const kw of keywords) {
@@ -91,6 +92,34 @@ export function classifyIntent(normalized, session) {
     }
   }
 
+  // Priority 1b: Correction intent detection (before state-specific, after global)
+  // Only check corrections if session has booking state context
+  const bookingStates = ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION', 'BOOKED'];
+  if (bookingStates.includes(session.state)) {
+    const entitiesForCorrection = extractEntities(text);
+    const correction = detectCorrection({ ...normalized, _entities: entitiesForCorrection }, session);
+    if (correction && correction.isCorrection && !correction.requiresEditFlow) {
+      const intentKey = `correction_${correction.field}`;
+      if (CORRECTION_INTENTS.includes(intentKey)) {
+        return { intent: intentKey, confidence: correction.confidence || 0.8, source: 'correction', entities: entitiesForCorrection };
+      }
+    }
+    // If correction requires edit flow and we're in BOOKING_CONFIRMATION or BOOKED,
+    // map to the standard edit intent
+    if (correction && correction.isCorrection && correction.requiresEditFlow) {
+      if (session.state === 'BOOKING_CONFIRMATION' || session.state === 'BOOKED') {
+        const editIntent = `edit_${correction.field}`;
+        if (editIntent === 'edit_date' || editIntent === 'edit_time') {
+          return { intent: editIntent, confidence: 0.8, source: 'correction_edit_redirect', entities: entitiesForCorrection };
+        }
+        // For treatment changes in BOOKED, route to reschedule
+        if (editIntent === 'edit_treatment') {
+          return { intent: 'reschedule', confidence: 0.8, source: 'correction_edit_redirect' };
+        }
+      }
+    }
+  }
+
   // Priority 2: State-specific intents
   const state = session.state;
   const stateIntents = STATE_INTENTS[state];
@@ -104,17 +133,17 @@ export function classifyIntent(normalized, session) {
 
   // Priority 3: Entity-derived intents (state-guarded)
   const entities = extractEntities(text);
-  if (entities.date && ['BOOKING_DATE', 'IDLE', 'MAIN_MENU'].includes(session.state)) {
-    return { intent: 'provide_date', confidence: 0.9, source: 'entity' };
+  if (entities.date && ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION', 'IDLE', 'MAIN_MENU'].includes(session.state)) {
+    return { intent: 'provide_date', confidence: 0.9, source: 'entity', entities };
   }
-  if (entities.time && session.state === 'BOOKING_TIME') {
-    return { intent: 'provide_time', confidence: 0.9, source: 'entity' };
+  if (entities.time && ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION'].includes(session.state)) {
+    return { intent: 'provide_time', confidence: 0.9, source: 'entity', entities };
   }
-  if (entities.treatment && session.state === 'BOOKING_TREATMENT') {
-    return { intent: 'provide_treatment', confidence: 0.9, source: 'entity' };
+  if (entities.treatment && ['BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION'].includes(session.state)) {
+    return { intent: 'provide_treatment', confidence: 0.9, source: 'entity', entities };
   }
   if (entities.phone && session.state === 'CALLBACK_REQUESTED') {
-    return { intent: 'provide_phone', confidence: 0.9, source: 'entity' };
+    return { intent: 'provide_phone', confidence: 0.9, source: 'entity', entities };
   }
 
   // Priority 4: For BOOKING_TREATMENT state, check if it's a number

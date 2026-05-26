@@ -1,9 +1,11 @@
 import { isDuplicate } from '@/lib/deduplicate';
 import { getOrCreate, save } from '@/lib/session';
 import { classifyIntent } from '@/lib/router';
-import { extractEntities } from '@/lib/entities';
+import { extractEntities, accumulateEntities } from '@/lib/entities';
 import { handle } from '@/lib/handlers';
 import { getNextState } from '@/lib/transitions';
+import { detectCorrection } from '@/lib/correction-detector';
+import { evaluateOverwrite } from '@/lib/overwrite-policy';
 import { sendText, sendButtons, sendList, markAsRead } from '@/lib/whatsapp';
 import { createMessage } from '@/db/repositories/messageRepository';
 import { logger } from '@/lib/logger';
@@ -117,6 +119,32 @@ async function sendReply(waId, reply, replyType) {
 }
 
 // ───────────────────────────────────────────────
+// Rapid message safety — check for stale response conditions
+// ───────────────────────────────────────────────
+function checkRapidFireSafety(normalized, session) {
+  const seq = session.context.messageSequence || 0;
+
+  // If session has no recent replies yet this is safe
+  if (session.context.lastMessageIds.length === 0) {
+    return { safe: true };
+  }
+
+  // Check if this message references the last bot reply (via interactive ID)
+  const hasReplyToLastBot = normalized.interactiveId &&
+    session.context.lastMessageIds.includes(normalized.interactiveId);
+
+  // Check for rapid-fire: many quick messages without bot responses
+  const rapidFireRisk = seq > 2 && session.context.lastMessageIds.length >= 2;
+
+  return {
+    safe: true, // Always process; rapid-fire is handled by session state integrity
+    hasReplyToLastBot,
+    rapidFireRisk,
+    sequence: seq,
+  };
+}
+
+// ───────────────────────────────────────────────
 // Main pipeline
 // ───────────────────────────────────────────────
 export async function processEvent(payload) {
@@ -125,6 +153,9 @@ export async function processEvent(payload) {
   // Step 1: classifyEvent
   const event = classifyEvent(payload);
   if (event === PIPELINE_HALT) return null;
+
+  const isReplay = process.env.REPLAY_MODE === 'true';
+  const steps = isReplay ? [] : null;
 
   // Process each message in order
   for (const msg of event.messages) {
@@ -145,11 +176,53 @@ export async function processEvent(payload) {
       // Step 2d: loadSession
       const session = await getOrCreate(normalized.waId, normalized.phoneNumberId, normalized.profileName);
 
-      // Step 2e: classifyIntent
+      // Step 2d-ii: Rapid fire safety check
+      const safety = checkRapidFireSafety(normalized, session);
+      if (safety.rapidFireRisk) {
+        logger.debug('RAPID_FIRE_RISK', {
+          waId: normalized.waId,
+          sequence: safety.sequence,
+          msgId: normalized.msgId,
+        });
+      }
+
+      // Track last message IDs for continuity
+      session.context.lastMessageIds = [...(session.context.lastMessageIds || []).slice(-4), normalized.msgId];
+
+      // Step 2e: classifyIntent (also checks for corrections internally)
       const intentResult = classifyIntent(normalized, session);
 
-      // Step 2f: extractEntities (router may provide entities for interactive IDs)
+      // Step 2e-ii: Explicit correction detection (for non-booking states where router may miss it)
+      // Only needed if classifyIntent didn't already catch it as correction_* intent
+      if (!intentResult.intent.startsWith('correction_') && intentResult.intent === 'unknown') {
+        const bookingStates = ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION', 'BOOKED'];
+        if (bookingStates.includes(session.state)) {
+          const entitiesForCorrection = extractEntities(normalized.textClean);
+          const correction = detectCorrection({ ...normalized, _entities: entitiesForCorrection }, session);
+          if (correction && correction.isCorrection) {
+            logger.info('CORRECTION_DETECTED_IN_PIPELINE', {
+              waId: normalized.waId,
+              field: correction.field,
+              from: correction.oldValue,
+              to: correction.newValue,
+              state: session.state,
+            });
+            // Override intent with correction intent
+            intentResult.intent = `correction_${correction.field}`;
+            intentResult.source = 'correction_pipeline';
+            intentResult.entities = entitiesForCorrection;
+          }
+        }
+      }
+
+      // Step 2f: extractEntities
       const entities = intentResult.entities || extractEntities(normalized.textClean);
+
+      // Step 2f-ii: Accumulate entities into session context for progressive filling
+      if (entities && Object.keys(entities).length > 0) {
+        const { receivedEntities } = accumulateEntities(session.context, entities);
+        session.context.receivedEntities = receivedEntities;
+      }
 
       // Determine next state
       const nextState = getNextState(session.state, intentResult.intent, entities);
@@ -162,13 +235,24 @@ export async function processEvent(payload) {
         intent: intentResult.intent,
       });
 
-      // Apply state transition if handler didn't already change it
-      if (nextState && handlerResult.session.state === session.state) {
+      // Apply state transition if handler didn't already change it.
+      // Correction intents are excluded — the handler already manages state
+      // transitions correctly via handleBookingDate/Time/Treatment, and applying
+      // the transition table's nextState would override the handler's decision.
+      if (nextState && handlerResult.session.state === session.state && !intentResult.intent.startsWith('correction_')) {
         handlerResult.session.state = nextState;
       }
 
       // Step 2h: sendReply
       const sentMsgId = await sendReply(normalized.waId, handlerResult.reply, handlerResult.replyType);
+
+      // Track sent message IDs for future continuity checks
+      if (sentMsgId && handlerResult.session.context) {
+        handlerResult.session.context.lastMessageIds = [
+          ...(handlerResult.session.context.lastMessageIds || []).slice(-4),
+          sentMsgId,
+        ];
+      }
 
       // Step 2i: saveMessages
       await createMessage({
@@ -206,14 +290,38 @@ export async function processEvent(payload) {
         text: normalized.textClean,
         msgType: normalized.type,
       });
+
+      // Record step in replay mode
+      if (isReplay && steps) {
+        steps.push({
+          text: normalized.textClean || normalized.text,
+          intent: intentResult.intent,
+          intentSource: intentResult.source,
+          state: handlerResult.session.state,
+          previousState: session.state,
+          nextState,
+          entities: entities ? { ...entities } : {},
+        });
+      }
     } catch (error) {
       logger.error('MESSAGE_PROCESSING_ERROR', {
         msgId: msg.id,
         error: error.message,
         stack: error.stack,
       });
+
+      if (isReplay && steps) {
+        steps.push({
+          text: msg.text?.body || '',
+          error: error.message,
+        });
+      }
     }
   }
 
-  return true;
+  if (isReplay && steps) {
+    return { success: true, steps };
+  }
+
+  return { success: true };
 }

@@ -47,3 +47,61 @@ export function extractEntities(text) {
 
   return entities;
 }
+
+/**
+ * Merge newly extracted entities into a session's received entities accumulation.
+ * This supports progressive slot filling across fragmented messages.
+ */
+export function accumulateEntities(sessionContext, newEntities) {
+  const acc = { ...sessionContext.receivedEntities };
+  if (!acc.dates) acc.dates = [];
+  if (!acc.times) acc.times = [];
+  if (!acc.treatments) acc.treatments = [];
+
+  if (newEntities.date) {
+    const dateStr = newEntities.date instanceof Date
+      ? newEntities.date.toISOString()
+      : String(newEntities.date);
+    if (!acc.dates.find(d => d === dateStr)) {
+      acc.dates.push(dateStr);
+    }
+  }
+
+  if (newEntities.time) {
+    if (!acc.times.find(t => t === newEntities.time)) {
+      acc.times.push(newEntities.time);
+    }
+  }
+
+  if (newEntities.treatment) {
+    if (!acc.treatments.find(t => t === newEntities.treatment)) {
+      acc.treatments.push(newEntities.treatment);
+    }
+  }
+
+  return {
+    receivedEntities: acc,
+    pendingFields: computePendingFields(sessionContext, acc),
+  };
+}
+
+/**
+ * Determine which fields are still pending based on accumulated entities
+ * and what's already set in the booking context.
+ */
+function computePendingFields(context, accumulated) {
+  const booking = context.booking || {};
+  const pending = [];
+
+  if (!booking.date && (!accumulated.dates || accumulated.dates.length === 0)) {
+    pending.push('date');
+  }
+  if (!booking.time && (!accumulated.times || accumulated.times.length === 0)) {
+    pending.push('time');
+  }
+  if (!booking.treatment && (!accumulated.treatments || accumulated.treatments.length === 0)) {
+    pending.push('treatment');
+  }
+
+  return pending;
+}
