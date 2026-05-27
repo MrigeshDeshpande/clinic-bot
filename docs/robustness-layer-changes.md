@@ -617,12 +617,40 @@ tests/replay/
 
 ---
 
-## Summary Statistics
+---
+
+## 12. DB Connection Reliability Fix (2026-05-26)
+
+### Problem
+
+All database operations were failing intermittently with `TypeError: fetch failed` — migrations, session reads/writes, and message persistence. The `@neondatabase/serverless` HTTP-based client makes `fetch()` calls to `https://api.c-7.us-east-1.aws.neon.tech/sql`, and those connections were timing out at the TCP level (`ETIMEDOUT`).
+
+**Impact:** The app fell back to in-memory session caching on every webhook request, losing all persistence. The `ensureMigrations()` retry mechanism was also broken — `runMigrations()` caught its own errors internally and never threw, so the `.catch()` handler in `ensureMigrations` that resets `migrationsPromise` to `null` was dead code. Migrations were never retried after the first failure.
+
+### Root Cause
+
+Intermittent TCP connection timeouts from this machine to the Neon API endpoint. Node.js's `undici` (the fetch implementation) would try IPv6 addresses first (which fail with "Network is unreachable"), then fall back to IPv4. The entire multi-address connection attempt sometimes exceeded the default timeout.
+
+### Changes (`src/db/pool.js`)
+
+1. **Added fetch timeout** (line 18): Passes `fetchOptions: { signal: AbortSignal.timeout(15000) }` to `neon()` so requests don't hang indefinitely.
+
+2. **Added retry loop** (lines 27–188): `runMigrations()` now retries up to 3 times with linear backoff (1s, 2s) before surfacing the failure.
+
+3. **Re-throws on final retry exhaustion** (line 184): After all retries fail, the error is thrown so `ensureMigrations()` catch handler resets `migrationsPromise` to `null`, allowing retry on the next webhook request.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/db/pool.js` | Added `fetchOptions` timeout, retry loop with backoff, re-throw on exhaustion |
+
+### Summary Statistics
 
 | Metric | Value |
 |--------|-------|
 | New files | 3 (4 including path-loader) |
-| Modified files | 8 |
+| Modified files | 8 (now 9) |
 | Lines of new code | ~1,200 |
 | Correction markers | 13 |
 | Entity extractors | 5 |
@@ -631,4 +659,6 @@ tests/replay/
 | Pipeline stages added | 3 (rapid fire, correction fallback, entity accumulation) |
 | Session context fields added | 7 |
 | Overwrite policy actions | 3 (overwrite, require_edit, block) |
+| DB connection retries | 3 (1s, 2s linear backoff) |
+| Fetch timeout | 15s |
 | Lint status | ✅ Clean |

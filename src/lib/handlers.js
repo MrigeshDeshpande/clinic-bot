@@ -1,23 +1,19 @@
 import { CLINIC } from '@/config/clinic';
 import { validateDate, validateTime, validateTreatment, validatePhone } from '@/lib/validators';
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
-import { createAppointment, findUpcomingByWaId, updateAppointment, cancelAppointment } from '@/db/repositories/appointmentRepository';
+import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppointment } from '@/db/repositories/appointmentRepository';
 import { sendList } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 import { evaluateOverwrite, applyFieldOverwrite, getTargetState } from '@/lib/overwrite-policy';
-import { accumulateEntities } from '@/lib/entities';
+import { accumulateEntities, computePendingFields } from '@/lib/entities';
+import { getNextState } from '@/lib/transitions';
 
 // ───────────────────────────────────────────────
 // State-aware greeting for returning users
 // ───────────────────────────────────────────────
 const STATE_GREETING = {
-  BOOKING_DATE:         'Hi! We were picking a date for your appointment. What date works?',
-  BOOKING_TIME:         'Hello! We were choosing a time. What time works for you?',
-  BOOKING_TREATMENT:    'Hi! We were selecting a treatment. Which treatment do you need?',
+  BOOKING_COLLECTION:   'Hi! We were setting up your appointment. What works for you?',
   BOOKING_CONFIRMATION: 'Hello! Your appointment details are ready to confirm.',
-  SERVICES:             'Hi! You were looking at our services.',
-  LOCATION:             'Hi! You were checking our location.',
-  TIMINGS:              'Hi! You were checking our hours.',
   BOOKED:               'Hi! You have an appointment booked.',
   CANCEL_CONFIRM:       'Hi! Were you looking to cancel an appointment?',
 };
@@ -104,10 +100,36 @@ export async function handle(state, { session, normalized, entities, intent }) {
   if (intent === 'greeting') return handleGreeting(session);
   if (intent === 'thanks') return { session, reply: "You're welcome! Let me know if you need anything else.", replyType: 'text' };
   if (intent === 'help') return handleHelp(session);
+  if (intent === 'affirm') return handleAffirm(session);
   if (intent === 'location') return handleLocation(session);
   if (intent === 'timings') return handleTimings(session);
-  if (intent === 'services') return handleServices(session, intent);
+  if (intent === 'services') return handleServices(session);
   if (intent === 'my_appointments') return handleMyAppointments(session);
+  if (intent === 'back') return handleBack(session);
+
+  // Entity-derived booking intents — route from ANY state to booking collection.
+  // This handles "Back from booking" (state=MAIN_MENU) and escalation recovery
+  // (state=HUMAN_ESCALATION) where the router now returns provide_date/time/treatment.
+  if (['provide_date', 'provide_time', 'provide_treatment'].includes(intent) && session.state !== 'BOOKING_COLLECTION') {
+    const prevState = session.state;
+    session = {
+      ...session,
+      state: 'BOOKING_COLLECTION',
+      previousState: prevState,
+      metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+    };
+    return handleBookingCollection(session, entities, normalized, intent);
+  }
+
+  // Treatment_help can also come from text input (not just list tap)
+  if (intent === 'treatment_help') {
+    session.context = { ...session.context, awaitingTreatmentHelp: true };
+    return {
+      session,
+      reply: "No problem! Tell me a bit about what you're experiencing:\n\n• Tooth pain or sensitivity?\n• Need a routine checkup?\n• Looking for cosmetic treatment (whitening, braces)?\n• Something else?\n\nJust describe your symptoms and I'll recommend the right treatment.",
+      replyType: 'text',
+    };
+  }
 
   // Correction intents — route to the right handler but pass correction context
   if (intent === 'correction_date') {
@@ -123,7 +145,7 @@ export async function handle(state, { session, normalized, entities, intent }) {
     }
     if (entities?.date) {
       session.context.lastCorrection = { field: 'date', fromValue: session.context.booking.date, timestamp: new Date().toISOString() };
-      return handleBookingDate(session, entities, normalized, intent);
+      return handleBookingCollection(session, entities, normalized, intent);
     }
     // If no date entity but correction intent, ask for the new date
     session.context.lastCorrection = { field: 'date', timestamp: new Date().toISOString() };
@@ -145,7 +167,7 @@ export async function handle(state, { session, normalized, entities, intent }) {
     }
     if (entities?.time) {
       session.context.lastCorrection = { field: 'time', fromValue: session.context.booking.time, timestamp: new Date().toISOString() };
-      return handleBookingTime(session, entities, normalized, intent);
+      return handleBookingCollection(session, entities, normalized, intent);
     }
     session.context.lastCorrection = { field: 'time', timestamp: new Date().toISOString() };
     return { session, reply: 'Sure! What time works better?', replyType: 'text' };
@@ -162,7 +184,7 @@ export async function handle(state, { session, normalized, entities, intent }) {
     }
     if (entities?.treatment) {
       session.context.lastCorrection = { field: 'treatment', fromValue: session.context.booking.treatment, timestamp: new Date().toISOString() };
-      return handleBookingTreatment(session, entities, normalized, intent);
+      return handleBookingCollection(session, entities, normalized, intent);
     }
     session.context.lastCorrection = { field: 'treatment', timestamp: new Date().toISOString() };
     return {
@@ -185,14 +207,8 @@ export async function handle(state, { session, normalized, entities, intent }) {
     case 'MAIN_MENU':
       return handleMainMenu(session, intent);
 
-    case 'BOOKING_DATE':
-      return handleBookingDate(session, entities, normalized, intent);
-
-    case 'BOOKING_TIME':
-      return handleBookingTime(session, entities, normalized, intent);
-
-    case 'BOOKING_TREATMENT':
-      return handleBookingTreatment(session, entities, normalized, intent);
+    case 'BOOKING_COLLECTION':
+      return handleBookingCollection(session, entities, normalized, intent);
 
     case 'BOOKING_CONFIRMATION':
       return handleBookingConfirmation(session, intent, entities);
@@ -203,17 +219,15 @@ export async function handle(state, { session, normalized, entities, intent }) {
     case 'CANCEL_CONFIRM':
       return handleCancelConfirm(session, intent);
 
-    case 'SERVICES':
-      return handleServices(session, intent);
-
-    case 'LOCATION':
-      return handleLocation(session);
-
-    case 'TIMINGS':
-      return handleTimings(session);
-
     case 'EMERGENCY':
-      return handleEmergency(session);
+      // Safety net — handleEmergency now transitions to MAIN_MENU directly,
+      // so this case should rarely be hit. If it is, guide the user out.
+      session = { ...session, state: 'MAIN_MENU' };
+      return {
+        session,
+        reply: { body: 'How can I help you today?', buttonLabel: 'Select option', sections: mainMenuSections() },
+        replyType: 'list',
+      };
 
     case 'HUMAN_ESCALATION':
       return handleHumanEscalation(session);
@@ -246,11 +260,15 @@ function handleMainMenu(session, intent) {
   // Handle transition intents from list taps — return the correct reply
   // for the NEXT state instead of showing the main menu again
   if (intent === 'appointment') {
-    session = { ...session, state: 'BOOKING_DATE', previousState: session.state, context: resetBookingContext(session.context) };
+    session = { ...session, state: 'BOOKING_COLLECTION', previousState: session.state, context: resetBookingContext(session.context) };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
     return {
       session,
-      reply: getDateListReply('What date works for you?'),
+      reply: {
+        body: 'What date works for you?',
+        buttonLabel: 'Select date',
+        sections: getDateListSections(),
+      },
       replyType: 'list',
     };
   }
@@ -277,10 +295,13 @@ function mainMenuSections() {
 }
 
 // ───────────────────────────────────────────────
-// BOOKING_DATE
+// BOOKING_COLLECTION — unified field collection
+// Collects date, time, and treatment in sequence based on
+// computePendingFields(). Replaces BOOKING_DATE, BOOKING_TIME,
+// and BOOKING_TREATMENT as a single state.
 // ───────────────────────────────────────────────
-function handleBookingDate(session, entities, normalized, intent) {
-  // If user tapped "Type a different date" — send text prompt, no failure penalty
+function handleBookingCollection(session, entities, normalized, intent) {
+  // ── Non-field intents ──
   if (intent === 'date_custom') {
     return {
       session,
@@ -288,116 +309,225 @@ function handleBookingDate(session, entities, normalized, intent) {
       replyType: 'text',
     };
   }
-
-  // Check if user provided a date
-  const text = normalized ? normalized.textTrimmed : '';
-  const dateToValidate = entities.date || text;
-
-  // If entities already parsed a Date object, format as YYYY-MM-DD in local timezone
-  const dateStr = dateToValidate instanceof Date
-    ? dateToValidate.toLocaleDateString('en-CA')
-    : dateToValidate;
-  const result = validateDate(dateStr);
-
-  if (result.valid && result.parsed) {
-    const dateObj = result.parsed;
-    const dayType = dateObj.getDay() === 0 ? 'sunday' : 'weekday';
-    const slots = CLINIC.slots[dayType];
-
-    // Store as YYYY-MM-DD string (local timezone) for proper parsing downstream
-    const isoDate = dateObj.toLocaleDateString('en-CA');
-
-    // Apply field overwrite with audit tracking
-    const { booking, bookingTimestamps } = applyFieldOverwrite(
-      session.context.booking,
-      session.context.bookingTimestamps,
-      'date',
-      isoDate
-    );
-
-    session = {
-      ...session,
-      previousState: session.state,
-      context: {
-        ...session.context,
-        booking,
-        bookingTimestamps,
-      },
+  if (intent === 'time_custom') {
+    return {
+      session,
+      reply: 'Please type the time you\'d like.\n\nExamples: "10am", "2:30pm"\nSlots available every 30 minutes.',
+      replyType: 'text',
     };
+  }
 
-    // Try progressive fill: check if we also have time (and treatment) entities
-    const filledSession = progressiveFieldFill(session, 'date', entities);
-
-    // Determine next state based on available fields
-    const nowHasTime = filledSession.context.booking.time;
-    const nowHasTreatment = filledSession.context.booking.treatment;
-
-    let nextState, replyObj;
-    if (nowHasTime && nowHasTreatment) {
-      // All fields filled — go straight to confirmation
-      nextState = 'BOOKING_CONFIRMATION';
-      replyObj = {
+  // Treatment help flow — user already set awaitingTreatmentHelp via global intent
+  // ── Non-field intents — just re-prompt without penalty ──
+  // If the intent is unknown or not field-specific, don't treat the text
+  // as a field value. This prevents "Banana" from counting as a failed date
+  // attempt (fixture 9) and "O'clock" from counting as a failed time attempt.
+  if (!['provide_date', 'provide_time', 'provide_treatment',
+        'correction_date', 'correction_time', 'correction_treatment',
+        'date_custom', 'time_custom', 'treatment_help'].includes(intent)) {
+    const noFieldPending = computePendingFields(session.context, session.context.receivedEntities || {});
+    const noFieldCurrent = noFieldPending[0];
+    if (!noFieldCurrent) {
+      const filledSession = { ...session };
+      filledSession.state = 'BOOKING_CONFIRMATION';
+      filledSession.metrics = { ...filledSession.metrics, failedAttempts: 0, messagesInState: 0, currentField: null };
+      return {
+        session: filledSession,
         reply: {
           body: buildConfirmationBody(filledSession.context.booking),
-          buttonLabel: 'Choose',
-          sections: confirmationSections(),
-        },
-        replyType: 'list',
-      };
-    } else if (nowHasTime) {
-      // Time set but still need treatment
-      nextState = 'BOOKING_TREATMENT';
-      replyObj = {
-        reply: {
-          body: 'Which treatment do you need?',
-          buttonLabel: 'Select treatment',
-          sections: treatmentSections(),
-        },
-        replyType: 'list',
-      };
-    } else {
-      // Only date — ask for time
-      nextState = 'BOOKING_TIME';
-      replyObj = {
-        reply: {
-          body: 'What time works for you?\nSlots available every 30 minutes.',
-          buttonLabel: 'Select time',
-          sections: timeQuickPickSections(slots),
+          buttonLabel: 'Select option',
+          sections: confirmationSectionsWithBack(),
         },
         replyType: 'list',
       };
     }
+    session.metrics = { ...session.metrics };
+    return { session, ...buildFieldPrompt(noFieldCurrent, session.context.booking) };
+  }
 
-    filledSession.state = nextState;
+  if (session.context.awaitingTreatmentHelp && normalized?.textTrimmed) {
+    session.context = { ...session.context };
+    delete session.context.awaitingTreatmentHelp;
+    const suggestion = recommendTreatment(normalized.textLower);
+    if (suggestion) {
+      entities = { ...entities, treatment: suggestion };
+    } else {
+      return {
+        session,
+        reply: {
+          body: "I'm not quite sure based on what you described. Pick the closest symptom or tell me more:",
+          buttonLabel: 'Select symptom',
+          sections: symptomSectionsWithBack(),
+        },
+        replyType: 'list',
+      };
+    }
+  }
+
+  // ── Determine current field being collected ──
+  // Correction intents override the target field
+  let targetField = null;
+  if (intent.startsWith('correction_')) {
+    const field = intent.replace('correction_', '');
+    if (['date', 'time', 'treatment'].includes(field)) {
+      targetField = field;
+    }
+  }
+
+  // Determine field from intent first (if it's a provide_* intent)
+  // This ensures the handler respects what the user actually said, rather
+  // than always following computePendingFields order. E.g. "2pm" after "10am"
+  // (fixture 10) should set time to 14:00, not try to collect treatment.
+  let intentField = null;
+  if (intent.startsWith('provide_')) {
+    const field = intent.replace('provide_', '');
+    if (['date', 'time', 'treatment'].includes(field)) {
+      intentField = field;
+    }
+  }
+
+  const pending = computePendingFields(session.context, session.context.receivedEntities || {});
+  // Correction targets override, then intent-derived field, then pending order
+  const currentField = targetField || intentField || pending[0];
+
+  // All fields filled → go to confirmation
+  if (!currentField) {
+    const filledSession = { ...session };
+    filledSession.state = 'BOOKING_CONFIRMATION';
     filledSession.metrics = {
       ...filledSession.metrics,
       failedAttempts: 0,
       messagesInState: 0,
-      currentField: getFieldForState(nextState),
+      currentField: null,
     };
-
-    return { session: filledSession, ...replyObj };
+    return {
+      session: filledSession,
+      reply: {
+        body: buildConfirmationBody(filledSession.context.booking),
+        buttonLabel: 'Select option',
+        sections: confirmationSectionsWithBack(),
+      },
+      replyType: 'list',
+    };
   }
 
-  // Invalid date — show list with reason-specific body
-  session = { ...session };
-  session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
+  // ── Get field value from entities or text input ──
+  const text = normalized ? normalized.textTrimmed : '';
+  let rawValue = entities?.[currentField] || text || null;
 
+  // Number input for treatment list
+  if (!rawValue && currentField === 'treatment' && normalized) {
+    const num = normalized.textTrimmed.match(/^(\d+)$/);
+    if (num) {
+      const idx = parseInt(num[1], 10) - 1;
+      if (CLINIC.treatments[idx]) {
+        rawValue = CLINIC.treatments[idx].name;
+      }
+    }
+  }
+
+  // ── Validate and process field value ──
+  if (rawValue) {
+    let validation;
+
+    if (currentField === 'date') {
+      const dateStr = rawValue instanceof Date ? rawValue.toLocaleDateString('en-CA') : rawValue;
+      validation = validateDate(dateStr);
+    } else if (currentField === 'time') {
+      const bookingDate = session.context.booking.date ? new Date(session.context.booking.date) : new Date();
+      validation = validateTime(rawValue, bookingDate);
+    } else if (currentField === 'treatment') {
+      validation = validateTreatment(rawValue);
+    }
+
+    if (validation?.valid && validation?.parsed) {
+      // ── Field value is valid — set it ──
+      let setValue;
+      if (currentField === 'date') {
+        setValue = validation.parsed.toLocaleDateString('en-CA');
+      } else {
+        setValue = validation.parsed;
+      }
+
+      const { booking, bookingTimestamps } = applyFieldOverwrite(
+        session.context.booking,
+        session.context.bookingTimestamps,
+        currentField,
+        setValue
+      );
+
+      session = {
+        ...session,
+        previousState: session.state,
+        context: {
+          ...session.context,
+          booking,
+          bookingTimestamps,
+        },
+      };
+
+      // Try progressive fill: check if entities also contain the next field
+      const filledSession = progressiveFieldFill(session, currentField, entities);
+      const newPending = computePendingFields(filledSession.context, filledSession.context.receivedEntities || {});
+
+      if (newPending.length === 0) {
+        // All fields filled — go to confirmation
+        filledSession.state = 'BOOKING_CONFIRMATION';
+        filledSession.metrics = {
+          ...filledSession.metrics,
+          failedAttempts: 0,
+          messagesInState: 0,
+          currentField: null,
+        };
+        return {
+          session: filledSession,
+          reply: {
+            body: buildConfirmationBody(filledSession.context.booking),          buttonLabel: 'Select option',
+          sections: confirmationSectionsWithBack(),
+        },
+        replyType: 'list',
+        };
+      }
+
+      // Still collecting — show next field prompt with acknowledgment
+      const nextField = newPending[0];
+      const ack = buildFieldAck(currentField, setValue);
+      filledSession.metrics = {
+        ...filledSession.metrics,
+        failedAttempts: 0,
+        messagesInState: 0,
+        currentField: nextField,
+      };
+
+      return {
+        session: filledSession,
+        ...buildFieldPrompt(nextField, filledSession.context.booking, ack),
+      };
+    }
+
+    // ── Invalid value — show suggestion and re-prompt ──
+    session.metrics = { ...session.metrics };
+    session.metrics.failedAttempts++;
+    session.metrics.totalFailedAttempts = (session.metrics.totalFailedAttempts || 0) + 1;
+    if (session.metrics.failedAttempts >= 3) {
+      return escalateForFailure(session);
+    }
+    return {
+      session,
+      ...buildFieldPrompt(currentField, session.context.booking, null, validation?.suggestion || ''),
+    };
+  }
+
+  // ── No recognizable value — re-prompt ──
+  session.metrics = { ...session.metrics };
+  session.metrics.failedAttempts++;
+  session.metrics.totalFailedAttempts = (session.metrics.totalFailedAttempts || 0) + 1;
   if (session.metrics.failedAttempts >= 3) {
     return escalateForFailure(session);
   }
-
-  const REASON_MESSAGES = {
-    PAST_DATE:           'That date has already passed. Please pick a future date from the list below.',
-    BEYOND_HORIZON:      `We only book up to ${CLINIC.bookingHorizonDays} days ahead. Please pick a closer date from the list below.`,
-    PARSE_FAILED:        'I didn\'t catch that date. Try tapping a date below or type one yourself.',
-  };
-
-  const reasonBody = REASON_MESSAGES[result.reason] || REASON_MESSAGES.PARSE_FAILED;
   return {
     session,
-    reply: getDateListReply(reasonBody),
-    replyType: 'list',
+    ...buildFieldPrompt(currentField, session.context.booking),
   };
 }
 
@@ -423,14 +553,30 @@ function timeQuickPickSections(slots) {
   }];
 }
 
+function timeQuickPickSectionsWithBack(slots) {
+  const sections = timeQuickPickSections(slots);
+  sections.push({
+    title: 'Navigation',
+    rows: [
+      { id: 'back', title: '← Back' },
+      { id: 'cancel', title: 'Cancel' },
+    ],
+  });
+  return sections;
+}
+
 function getTimeListReply(session) {
   const dateStr = session.context?.booking?.date;
   const dayType = dateStr ? (new Date(dateStr).getDay() === 0 ? 'sunday' : 'weekday') : 'weekday';
   const slots = CLINIC.slots[dayType];
+  const progress = session.context?.booking?.date ? buildProgressSummary(session.context.booking) : '';
+  const body = progress
+    ? `${progress}\n\nWhat time works for you?\nSlots available every 30 minutes.`
+    : 'What time works for you?\nSlots available every 30 minutes.';
   return {
-    body: 'What time works for you?\nSlots available every 30 minutes.',
+    body,
     buttonLabel: 'Select time',
-    sections: timeQuickPickSections(slots),
+    sections: timeQuickPickSectionsWithBack(slots),
   };
 }
 
@@ -480,7 +626,7 @@ function getDateListSections() {
     ],
   });
 
-  // Section 2: Upcoming Dates (remaining weekdays, capped at 6 for WhatsApp 10-row limit)
+  // Section 2: Upcoming Dates (capped at 4 for WhatsApp 10-row limit)
   const upcomingRows = [];
   for (let i = 1; i <= 14; i++) {
     const d = new Date(today);
@@ -488,7 +634,7 @@ function getDateListSections() {
     if (d.getDay() === 0 || d.getDay() === 6) continue; // Skip weekends
     if (isQuickPick(d)) continue;
     upcomingRows.push({ id: toId(d), title: fmt(d) });
-    if (upcomingRows.length >= 6) break;
+    if (upcomingRows.length >= 4) break;
   }
 
   if (upcomingRows.length > 0) {
@@ -503,6 +649,15 @@ function getDateListSections() {
     ],
   });
 
+  // Section 4: Navigation
+  sections.push({
+    title: 'Navigation',
+    rows: [
+      { id: 'back', title: '← Back' },
+      { id: 'cancel', title: 'Cancel' },
+    ],
+  });
+
   return sections;
 }
 
@@ -514,203 +669,50 @@ function getDateListReply(body) {
   };
 }
 
-// ───────────────────────────────────────────────
-// BOOKING_TIME
-// ───────────────────────────────────────────────
-function handleBookingTime(session, entities, normalized, intent) {
-  // If user tapped "Type a different time" — send text prompt, no failure penalty
-  if (intent === 'time_custom') {
-    return {
-      session,
-      reply: 'Please type the time you\'d like.\n\nExamples: "10am", "2:30pm"\nSlots available every 30 minutes.',
-      replyType: 'text',
-    };
-  }
-  if (entities.time) {
-    const bookingDate = session.context.booking.date ? new Date(session.context.booking.date) : new Date();
-    const result = validateTime(entities.time, bookingDate);
-
-    if (result.valid && result.parsed) {
-      // Apply field overwrite with audit tracking
-      const { booking, bookingTimestamps } = applyFieldOverwrite(
-        session.context.booking,
-        session.context.bookingTimestamps,
-        'time',
-        result.parsed
-      );
-
-      session = {
-        ...session,
-        previousState: session.state,
-        context: {
-          ...session.context,
-          booking,
-          bookingTimestamps,
-        },
-      };
-
-      // Try progressive fill: check if we also have treatment entity
-      const filledSession = progressiveFieldFill(session, 'time', entities);
-      const nowHasTreatment = filledSession.context.booking.treatment;
-
-      let nextState, replyObj;
-      if (nowHasTreatment) {
-        nextState = 'BOOKING_CONFIRMATION';
-        replyObj = {
-          reply: {
-            body: buildConfirmationBody(filledSession.context.booking),
-            buttonLabel: 'Choose',
-            sections: confirmationSections(),
-          },
-          replyType: 'list',
-        };
-      } else {
-        nextState = 'BOOKING_TREATMENT';
-        replyObj = {
-          reply: {
-            body: 'Which treatment do you need?',
-            buttonLabel: 'Select treatment',
-            sections: treatmentSections(),
-          },
-          replyType: 'list',
-        };
-      }
-
-      filledSession.state = nextState;
-      filledSession.metrics = {
-        ...filledSession.metrics,
-        failedAttempts: 0,
-        messagesInState: 0,
-        currentField: getFieldForState(nextState),
-      };
-
-      return { session: filledSession, ...replyObj };
-    }
-
-    session = { ...session };
-    session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
-
-    if (session.metrics.failedAttempts >= 3) {
-      return escalateForFailure(session);
-    }
-
-    // Show suggestion + time list
-    const hint = result.suggestion || '';
-    const body = hint ? `${hint}\n\nWhat time works for you?\nSlots available every 30 minutes.` : 'What time works for you?\nSlots available every 30 minutes.';
-    const bookingDateStr = session.context.booking?.date;
-    const dayType = bookingDateStr ? (new Date(bookingDateStr).getDay() === 0 ? 'sunday' : 'weekday') : 'weekday';
-    return {
-      session,
-      reply: {
-        body,
-        buttonLabel: 'Select time',
-        sections: timeQuickPickSections(CLINIC.slots[dayType]),
-      },
-      replyType: 'list',
-    };
-  }
-
-  session = { ...session };
-  session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
-
-  if (session.metrics.failedAttempts >= 3) {
-    return escalateForFailure(session);
-  }
-
-  return {
-    session,
-    reply: getTimeListReply(session),
-    replyType: 'list',
-  };
-}
-
-// ───────────────────────────────────────────────
-// BOOKING_TREATMENT
-// ───────────────────────────────────────────────
-function handleBookingTreatment(session, entities, normalized, intent) {
-  let treatmentName = entities.treatment || null;
-
-  // Check number input
-  if (!treatmentName && normalized) {
-    const num = normalized.textTrimmed.match(/^(\d+)$/);
-    if (num) {
-      const idx = parseInt(num[1], 10) - 1;
-      if (CLINIC.treatments[idx]) {
-        treatmentName = CLINIC.treatments[idx].name;
-      }
-    }
-  }
-
-  if (treatmentName) {
-    const result = validateTreatment(treatmentName);
-    if (result.valid && result.parsed) {
-      // Apply field overwrite with audit tracking
-      const { booking, bookingTimestamps } = applyFieldOverwrite(
-        session.context.booking,
-        session.context.bookingTimestamps,
-        'treatment',
-        result.parsed
-      );
-
-      session = {
-        ...session,
-        state: 'BOOKING_CONFIRMATION',
-        previousState: session.state,
-        context: {
-          ...session.context,
-          booking,
-          bookingTimestamps,
-        },
-      };
-      session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, currentField: null };
-
-      return {
-        session,
-        reply: {
-          body: buildConfirmationBody(session.context.booking),
-          buttonLabel: 'Choose',
-          sections: confirmationSections(),
-        },
-        replyType: 'list',
-      };
-    }
-
-    session = { ...session };
-    session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
-
-    if (session.metrics.failedAttempts >= 3) {
-      return escalateForFailure(session);
-    }
-
-    const hint = result.suggestion || 'Please pick from the list.';
-    return { session, reply: hint, replyType: 'text' };
-  }
-
-  session = { ...session };
-  session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
-
-  if (session.metrics.failedAttempts >= 3) {
-    return escalateForFailure(session);
-  }
-
-  return {
-    session,
-    reply: {
-      body: 'Which treatment do you need?',
-      buttonLabel: 'Select treatment',
-      sections: treatmentSections(),
-    },
-    replyType: 'list',
-  };
-}
+// ── Old handler block removed — functionality consolidated into handleBookingCollection above
 
 function treatmentSections() {
   return [{
     title: 'Available Treatments',
-    rows: CLINIC.treatments.map(t => ({
-      id: t.id,
-      title: t.name,
-    })),
+    rows: [
+      ...CLINIC.treatments.map((t, i) => ({
+        id: t.id,
+        title: `${i + 1}. ${t.name}`,
+      })),
+      { id: 'treatment_help', title: "I'm not sure — help me choose", description: 'Describe your symptoms' },
+    ],
+  }];
+}
+
+function treatmentSectionsWithBack() {
+  return [...treatmentSections(), {
+    title: 'Navigation',
+    rows: [
+      { id: 'back', title: '← Back' },
+    ],
+  }];
+}
+
+function symptomSections() {
+  return [{
+    title: 'What brings you in?',
+    rows: [
+      ...CLINIC.treatments.map(t => ({
+        id: t.id,
+        title: t.symptom,
+        description: t.name,
+      })),
+      { id: 'treatment_help', title: "Something else — tell me more", description: "Describe what you're feeling" },
+    ],
+  }];
+}
+
+function symptomSectionsWithBack() {
+  return [...symptomSections(), {
+    title: 'Navigation',
+    rows: [
+      { id: 'back', title: '← Back' },
+    ],
   }];
 }
 
@@ -723,9 +725,9 @@ async function handleBookingConfirmation(session, intent, entities) {
     let appointment;
     let isReschedule = false;
 
-    // Check if this is a reschedule — update existing appointment
-    if (session.context.reschedulingAppointmentId) {
-      appointment = await updateAppointment(session.context.reschedulingAppointmentId, {
+    // Check if this is a reschedule — supersede the existing appointment chain
+    if (session.context.reschedulingLogicalId) {
+      appointment = await supersedeAppointment(session.context.reschedulingLogicalId, {
         date: booking.date,
         time: booking.time,
         treatment: booking.treatment,
@@ -734,14 +736,17 @@ async function handleBookingConfirmation(session, intent, entities) {
         isReschedule = true;
         logger.info('APPOINTMENT_RESCHEDULED', {
           waId: session.waId,
+          logicalId: appointment.logical_id,
           appointmentId: appointment.id,
+          version: appointment.version,
           date: booking.date,
           time: booking.time,
           treatment: booking.treatment,
         });
+        session.context.logicalId = appointment.logical_id;
         session.context.appointmentId = appointment.id;
       }
-      delete session.context.reschedulingAppointmentId;
+      delete session.context.reschedulingLogicalId;
     } else {
       // New appointment
       appointment = await createAppointment({
@@ -755,11 +760,14 @@ async function handleBookingConfirmation(session, intent, entities) {
       if (appointment) {
         logger.info('APPOINTMENT_CREATED', {
           waId: session.waId,
+          logicalId: appointment.logical_id,
           appointmentId: appointment.id,
+          version: appointment.version,
           date: booking.date,
           time: booking.time,
           treatment: booking.treatment,
         });
+        session.context.logicalId = appointment.logical_id;
         session.context.appointmentId = appointment.id;
       }
     }
@@ -795,10 +803,11 @@ async function handleBookingConfirmation(session, intent, entities) {
   if (intent === 'edit_date') {
     session = {
       ...session,
-      state: 'BOOKING_DATE',
+      state: 'BOOKING_COLLECTION',
       context: {
         ...session.context,
-        booking: { ...session.context.booking, date: null, time: null },
+        booking: { ...session.context.booking, date: null },
+        receivedEntities: { ...session.context.receivedEntities, dates: [] },
       },
     };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
@@ -812,7 +821,7 @@ async function handleBookingConfirmation(session, intent, entities) {
   if (intent === 'edit_time') {
     session = {
       ...session,
-      state: 'BOOKING_TIME',
+      state: 'BOOKING_COLLECTION',
       context: {
         ...session.context,
         booking: { ...session.context.booking, time: null },
@@ -845,20 +854,23 @@ function handleBooked(session, intent) {
   }
 
   if (intent === 'reschedule') {
+    // Capture current booking summary BEFORE resetting context
+    const currentSummary = buildProgressSummary(session.context.booking);
     session = {
       ...session,
-      state: 'BOOKING_DATE',
+      state: 'BOOKING_COLLECTION',
       previousState: session.state,
       context: {
         ...session.context,
-        reschedulingAppointmentId: session.context.appointmentId,
+        reschedulingLogicalId: session.context.logicalId,
         booking: { date: null, time: null, treatment: null },
+        receivedEntities: { dates: [], times: [], treatments: [] },
       },
     };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
     return {
       session,
-      reply: getDateListReply('Sure! Let\'s reschedule. What date works for you?'),
+      reply: getDateListReply(`Sure! Let's reschedule your current appointment:\n${currentSummary}\n\nWhat date would you like instead?`),
       replyType: 'list',
     };
   }
@@ -866,7 +878,7 @@ function handleBooked(session, intent) {
   if (intent === 'appointment') {
     session = {
       ...session,
-      state: 'BOOKING_DATE',
+      state: 'BOOKING_COLLECTION',
       previousState: session.state,
       context: resetBookingContext(session.context),
     };
@@ -882,56 +894,149 @@ function handleBooked(session, intent) {
 }
 
 // ───────────────────────────────────────────────
-// SERVICES
+// Back navigation
 // ───────────────────────────────────────────────
-function handleServices(session, intent) {
-  session = { ...session, state: 'SERVICES', previousState: session.state };
+function handleBack(session) {
+  const targetState = getNextState(session.state, 'back') || 'MAIN_MENU';
+  session = { ...session, state: targetState, previousState: session.state };
+  session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
 
-  if (intent === 'appointment') {
-    session = { ...session, state: 'BOOKING_DATE', previousState: session.state };
-    session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+  if (targetState === 'MAIN_MENU') {
     return {
       session,
-      reply: getDateListReply('What date works for you?'),
+      reply: { body: 'What would you like to do?', buttonLabel: 'Menu', sections: mainMenuSections() },
+      replyType: 'list',
+    };
+  }
+  if (targetState === 'BOOKING_COLLECTION') {
+    // When going back from confirmation, clear treatment so user has something
+    // meaningful to re-enter instead of having all 3 fields filled and bouncing
+    // right back to confirmation on any input.
+    if (session.previousState === 'BOOKING_CONFIRMATION' || session.previousState === 'BOOKED') {
+      session.context = {
+        ...session.context,
+        booking: { ...session.context.booking, treatment: null },
+        receivedEntities: { ...session.context.receivedEntities, treatments: [] },
+      };
+    }
+    return {
+      session,
+      reply: {
+        body: 'Okay, going back. Where were we?',
+        buttonLabel: 'Select',
+        sections: getDateListSections(),
+      },
+      replyType: 'list',
+    };
+  }
+  // Fallback — show main menu
+  return {
+    session,
+    reply: { body: 'What would you like to do?', buttonLabel: 'Menu', sections: mainMenuSections() },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Affirm handler — user said "ok", "sure", "great" etc.
+// Don't count as failure — just re-prompt the current state.
+// ───────────────────────────────────────────────
+function handleAffirm(session) {
+  const pending = computePendingFields(session.context, session.context.receivedEntities || {});
+  const currentField = pending[0];
+
+  session = { ...session };
+  session.metrics = { ...session.metrics, messagesInState: 0 }; // Keep state, don't increment failures
+
+  // If all fields are filled and we're in collection, bump to confirmation prompt
+  if (!currentField && session.state === 'BOOKING_COLLECTION') {
+    session = { ...session, state: 'BOOKING_CONFIRMATION', previousState: 'BOOKING_COLLECTION' };
+    session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, currentField: null };
+    return {
+      session,
+      reply: {
+        body: buildConfirmationBody(session.context.booking),
+        buttonLabel: 'Select option',
+        sections: confirmationSectionsWithBack(),
+      },
       replyType: 'list',
     };
   }
 
-  const servicesBullets = CLINIC.treatments.map(t => `• ${t.name}`).join('\n');
+  // In CONFIRMATION, route "ok"/"yes"/"sure" to actually confirm the appointment
+  if (session.state === 'BOOKING_CONFIRMATION') {
+    // Delegate to the confirm handler — "affirm" keywords like "yes" and "ok"
+    // should confirm the appointment, not just re-prompt
+    return handleBookingConfirmation(session, 'confirm', {});
+  }
+
+  // For BOOKING_COLLECTION, re-prompt the current field without failure penalty
+  if (session.state === 'BOOKING_COLLECTION' && currentField) {
+    return {
+      session: { ...session, metrics: { ...session.metrics, failedAttempts: 0 } },
+      ...buildFieldPrompt(currentField, session.context.booking),
+    };
+  }
+
+  // Default: just repeat current prompt
+  return { session, reply: 'Got it! How can I help?', replyType: 'text' };
+}
+
+// ───────────────────────────────────────────────
+// Info section options (shared by Services / Location / Timings)
+// ───────────────────────────────────────────────
+function infoOptionsSections(currentState) {
+  const rows = [];
+  if (currentState === 'MAIN_MENU') {
+    rows.push({ id: 'apt', title: 'Book Appointment', description: 'Schedule a visit' });
+  }
+  rows.push({ id: 'main_menu', title: 'Main Menu', description: 'Back to home' });
+  return [{ title: 'Options', rows }];
+}
+
+// ───────────────────────────────────────────────
+// SERVICES — stays in current state, shows info as list
+// ───────────────────────────────────────────────
+function handleServices(session) {
+  const servicesBullets = CLINIC.treatments.map(t => `\u2022 ${t.name}`).join('\n');
   return {
     session,
-    reply: { body: `🦷 Our Services:\n\n${servicesBullets}`, buttons: ['Book Appointment', 'Main Menu'] },
-    replyType: 'buttons',
+    reply: {
+      body: `\uD83E\uDDB7 Our Services:\n\n${servicesBullets}`,
+      buttonLabel: 'Select option',
+      sections: infoOptionsSections(session.state),
+    },
+    replyType: 'list',
   };
 }
 
 // ───────────────────────────────────────────────
-// LOCATION
+// LOCATION — stays in current state, shows info as list
 // ───────────────────────────────────────────────
 function handleLocation(session) {
-  session = { ...session, state: 'LOCATION', previousState: session.state };
-
-  const address = CLINIC.address;
-  const mapsLink = CLINIC.mapsLink;
-  const mapText = mapsLink && !mapsLink.startsWith('[TO BE FILLED') ? `\n📍 ${mapsLink}` : '';
-
   return {
     session,
-    reply: { body: `📍 ${CLINIC.name}\n${address}\n\nPhone: ${CLINIC.phone}\nMaps: ${CLINIC.mapsLink}`, buttons: ['Main Menu'] },
-    replyType: 'buttons',
+    reply: {
+      body: `\uD83D\uDCCD ${CLINIC.name}\n${CLINIC.address}\n\nPhone: ${CLINIC.phone}\n\uD83D\uDCCD Maps: ${CLINIC.mapsLink}`,
+      buttonLabel: 'Select option',
+      sections: infoOptionsSections(session.state),
+    },
+    replyType: 'list',
   };
 }
 
 // ───────────────────────────────────────────────
-// TIMINGS
+// TIMINGS — stays in current state, shows info as list
 // ───────────────────────────────────────────────
 function handleTimings(session) {
-  session = { ...session, state: 'TIMINGS', previousState: session.state };
-
   return {
     session,
-    reply: { body: `🕐 Clinic Hours\n\n${CLINIC.hours.weekday.label}\n${CLINIC.hours.sunday.label}`, buttons: ['Main Menu'] },
-    replyType: 'buttons',
+    reply: {
+      body: `\uD83D\uDD50 Clinic Hours\n\n${CLINIC.hours.weekday.label}\n${CLINIC.hours.sunday.label}`,
+      buttonLabel: 'Select option',
+      sections: infoOptionsSections(session.state),
+    },
+    replyType: 'list',
   };
 }
 
@@ -941,7 +1046,7 @@ function handleTimings(session) {
 function handleEmergency(session) {
   session = {
     ...session,
-    state: 'EMERGENCY',
+    state: 'MAIN_MENU',
     previousState: session.state,
     isEscalated: true,
     context: { ...session.context, escalationReason: 'EMERGENCY' },
@@ -949,8 +1054,12 @@ function handleEmergency(session) {
 
   return {
     session,
-    reply: `⚠️ *MEDICAL EMERGENCY*\n\nIf this is a medical emergency, please call *${CLINIC.phone}* immediately or visit the nearest hospital.\n\nFor urgent dental issues during clinic hours, call us and we will accommodate you as soon as possible.`,
-    replyType: 'text',
+    reply: {
+      body: `⚠️ *DENTAL EMERGENCY*\n\nIf this is a dental emergency, please call *${CLINIC.phone}* immediately or visit the nearest hospital.\n\nFor any urgent dental concern, call us anytime and we will guide you on the next steps.\n\nHow can I help you today?`,
+      buttonLabel: 'Select option',
+      sections: mainMenuSections(),
+    },
+    replyType: 'list',
   };
 }
 
@@ -1026,14 +1135,9 @@ function handleUnknown(session, normalized) {
 
   // Context-aware reprompt
   const hints = {
-    BOOKING_DATE:         'Try "tomorrow", "next Monday", or "25 May". What date works?',
-    BOOKING_TIME:         'Try "10am", "2:30pm", or "14:00". What time works?',
-    BOOKING_TREATMENT:    'Please tap or type a treatment from the list above.',
+    BOOKING_COLLECTION:   'Try a date, time, or treatment name.',
     BOOKING_CONFIRMATION: 'Reply "confirm" to book, "date" or "time" to change, or "cancel" to start over.',
     MAIN_MENU:            'Tap an option or type what you need (e.g., "book", "services").',
-    SERVICES:             'Tap "Book Appointment" or "Main Menu".',
-    LOCATION:             'Tap "Main Menu" to go back.',
-    TIMINGS:              'Tap "Main Menu" to go back.',
     CANCEL_CONFIRM:       'Tap "Yes, Cancel It" to cancel or "No, Keep It" to keep your appointment.',
   };
 
@@ -1047,6 +1151,11 @@ function handleUnknown(session, normalized) {
 function handleGreeting(session) {
   const isNew = session.state === 'IDLE' || session.state === 'DONE' || session.state === 'ABANDONED';
 
+  // If currently in EMERGENCY, treat greeting as wanting to exit to main menu
+  if (session.state === 'EMERGENCY' || session.state === 'HUMAN_ESCALATION') {
+    return handleMainMenu(session);
+  }
+
   if (isNew) {
     session = { ...session, state: 'MAIN_MENU', previousState: session.state };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
@@ -1057,19 +1166,25 @@ function handleGreeting(session) {
     };
   }
 
-  // Returning user — show interactive list for date selection
-  if (session.state === 'BOOKING_DATE') {
+  // Returning user — show interactive list for field collection
+  if (session.state === 'BOOKING_COLLECTION') {
+    const pending = computePendingFields(session.context, session.context.receivedEntities || {});
     return {
       session,
-      reply: getDateListReply(STATE_GREETING.BOOKING_DATE),
+      reply: {
+        body: STATE_GREETING.BOOKING_COLLECTION,
+        buttonLabel: 'Select',
+        sections: pending.length === 0 ? confirmationSectionsWithBack() :
+          pending[0] === 'date' ? getDateListSections() :
+          pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday) :
+          symptomSectionsWithBack(),
+      },
       replyType: 'list',
     };
   }
 
   const greeting = STATE_GREETING[session.state] || 'Welcome back!';
   const repromptHints = {
-    BOOKING_TIME:         'What time works for you?',
-    BOOKING_TREATMENT:    'Which treatment do you need?',
     BOOKING_CONFIRMATION: 'Your appointment details are ready.',
     MAIN_MENU:            'How can I help you today?',
   };
@@ -1095,7 +1210,7 @@ function handleCancelAppointment(session) {
     session,
     reply: {
       body: 'Are you sure you want to cancel this appointment?',
-      buttonLabel: 'Choose',
+      buttonLabel: 'Select option',
       sections: [{
         title: 'Cancel Appointment',
         rows: [
@@ -1263,13 +1378,68 @@ function handleCancel(session) {
 // ───────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────
-function getFieldForState(state) {
-  switch (state) {
-    case 'BOOKING_DATE': return 'date';
-    case 'BOOKING_TIME': return 'time';
-    case 'BOOKING_TREATMENT': return 'treatment';
-    default: return null;
+
+/**
+ * Build a contextual acknowledgment message after successfully collecting a field.
+ */
+function buildFieldAck(field, value) {
+  if (field === 'date') {
+    const d = new Date(value);
+    const formatted = d.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    return `Great, ${formatted}! 🎉`;
   }
+  if (field === 'time') {
+    const formatted = new Date(`2000-01-01T${value}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return `Got it, ${formatted}! 🎉`;
+  }
+  return '';
+}
+
+/**
+ * Build the reply for prompting the next field to collect.
+ * Returns { reply, replyType } suitable for spreading into the handler result.
+ */
+function buildFieldPrompt(field, booking, ack, suggestion) {
+  const progress = buildProgressSummary(booking);
+  let body = '';
+
+  if (ack) {
+    body = ack;
+  } else if (progress && field !== 'date') {
+    // Show progress summary for non-date fields (date hasn't been set yet at that point)
+    body = progress;
+  }
+
+  if (field === 'date') {
+    const prompt = suggestion || 'What date works for you?';
+    const fullBody = body ? `${body}\n\n${prompt}` : prompt;
+    return {
+      reply: { body: fullBody, buttonLabel: 'Select date', sections: getDateListSections() },
+      replyType: 'list',
+    };
+  }
+  if (field === 'time') {
+    const dateStr = booking?.date;
+    const dayType = dateStr ? (new Date(dateStr).getDay() === 0 ? 'sunday' : 'weekday') : 'weekday';
+    const slots = CLINIC.slots[dayType] || CLINIC.slots.weekday;
+    const prompt = suggestion ? `What time works for you?\n${suggestion}` : 'What time works for you?\nSlots available every 30 minutes.';
+    const fullBody = body ? `${body}\n\n${prompt}` : prompt;
+    return {
+      reply: { body: fullBody, buttonLabel: 'Select time', sections: timeQuickPickSectionsWithBack(slots) },
+      replyType: 'list',
+    };
+  }
+  if (field === 'treatment') {
+    const prompt = suggestion || 'What seems to be the problem? Pick the symptom that fits best.';
+    const fullBody = body ? `${body}\n\n${prompt}` : prompt;
+    return {
+      reply: { body: fullBody, buttonLabel: 'Select symptom', sections: symptomSectionsWithBack() },
+      replyType: 'list',
+    };
+  }
+
+  // Fallback
+  return { reply: body || 'What would you like to do?', replyType: 'text' };
 }
 
 function resetBookingContext(context) {
@@ -1280,7 +1450,9 @@ function resetBookingContext(context) {
     pendingFields: ['date', 'time', 'treatment'],
     receivedEntities: { dates: [], times: [], treatments: [] },
     lastCorrection: { field: null, fromValue: null, toValue: null, timestamp: null },
+    reschedulingLogicalId: null,
     escalationReason: null,
+    awaitingTreatmentHelp: null,
   };
 }
 
@@ -1305,6 +1477,42 @@ function confirmationSections() {
   }];
 }
 
+function confirmationSectionsWithBack() {
+  return [...confirmationSections(), {
+    title: 'Navigation',
+    rows: [
+      { id: 'back', title: '← Back' },
+    ],
+  }];
+}
+
+function buildProgressSummary(booking) {
+  const parts = [];
+  if (booking.date) parts.push(formatDateDisplay(booking.date));
+  if (booking.time) parts.push(formatTime(booking.time));
+  if (booking.treatment) parts.push(booking.treatment);
+  return `📋 ${parts.join(' · ')}`;
+}
+
+function recommendTreatment(text) {
+  const rules = [
+    { keywords: ['pain','ache','hurt','sensitive','sensitivity','cavity','decay','root','nerve','throbbing'], treatment: 'Root Canal' },
+    { keywords: ['clean','scaling','yellow','stain','plaque','tartar','hygiene','dirty'], treatment: 'Teeth Cleaning' },
+    { keywords: ['white','whiten','discolored','bright','smile','cosmetic'], treatment: 'Whitening' },
+    { keywords: ['missing','gap','lost','broken','chip','crack','fracture','damage'], treatment: 'Crowns' },
+    { keywords: ['child','kid','baby','children','pediatric','kids'], treatment: 'Pediatric Dentistry' },
+    { keywords: ['straight','align','crooked','overbite','underbite','orthodontic','braces','aligner'], treatment: 'Braces' },
+    { keywords: ['checkup','routine','exam','annual','general','consultation','check up'], treatment: 'General Dentistry' },
+    { keywords: ['implant','implants','dental implant','false tooth','replacement','missing tooth'], treatment: 'Implants' },
+  ];
+  for (const rule of rules) {
+    if (rule.keywords.some(kw => text.includes(kw))) {
+      return rule.treatment;
+    }
+  }
+  return null;
+}
+
 function formatDateDisplay(dateStr) {
   if (!dateStr) return 'TBD';
   const d = new Date(dateStr);
@@ -1316,14 +1524,9 @@ function formatDateDisplay(dateStr) {
 // ───────────────────────────────────────────────
 function handleHelp(session) {
   const hints = {
-    BOOKING_DATE:         'You can tell me a date like "tomorrow", "next Monday", or "25 May".',
-    BOOKING_TIME:         'You can tell me a time like "10am", "2:30pm", or "14:00".',
-    BOOKING_TREATMENT:    'Tap or type a treatment name from the list.',
+    BOOKING_COLLECTION:   'You can tell me a date, time, or treatment name depending on what\'s needed.',
     BOOKING_CONFIRMATION: 'Reply "confirm" to book, or "cancel" to start over.',
     MAIN_MENU:            'Tap an option or type "book", "services", "location", or "timings".',
-    SERVICES:             'Tap "Book Appointment" to book or "Main Menu" to go back.',
-    LOCATION:             'Tap "Main Menu" to go back.',
-    TIMINGS:              'Tap "Main Menu" to go back.',
     EMERGENCY:            'If this is an emergency, please call us immediately.',
     HUMAN_ESCALATION:     'Our team will be with you shortly.',
     CALLBACK_REQUESTED:   'Please share your 10-digit phone number.',

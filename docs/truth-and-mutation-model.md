@@ -100,19 +100,21 @@ The version column is for **concurrency control**, not audit. It prevents two co
 - The `receivedEntities` accumulator tracks what was seen across fragmented messages
 - `computePendingFields()` derives what's still missing
 
-**Derivation function:**
+
+**Existing implementation:** This function already exists at `src/lib/entities.js:92`. It is called by `accumulateEntities()` (line 84 of the same file) to derive `pendingFields` from the accumulated received entities. The current code in `handlers.js` uses `session.context.pendingFields` (set during entity accumulation) to decide what field to prompt for next.
 
 ```js
-function computePendingFields(booking) {
+// src/lib/entities.js — already live
+function computePendingFields(context, accumulated) {
   const pending = [];
-  if (!booking.date) pending.push('date');
-  if (!booking.time) pending.push('time');
-  if (!booking.treatment) pending.push('treatment');
+  if (!accumulated.date && !context.booking?.date) pending.push('date');
+  if (!accumulated.time && !context.booking?.time) pending.push('time');
+  if (!accumulated.treatment && !context.booking?.treatment) pending.push('treatment');
   return pending;
 }
 ```
 
-This is the **source of structural position** during booking. Not the state machine. The first element of `pending` IS the current field being collected.
+This is the **source of structural position** during booking. Not the state machine. The first element of `pending` IS the current field being collected. The function already accounts for both accumulated entities (fragmented messages within a single turn) and already-stored booking data.
 
 ### 2.4 Committed Business Identity — Appointments
 
@@ -228,6 +230,15 @@ BOOKING_TREATMENT
 ```
 
 But analysis revealed they are **not true behavioral states**. They are **prompt modalities** — derived from which field is next in the collection queue.
+
+### The DB constraint caveat
+
+The current `sessions` table has a `CHECK (state IN (...))` constraint that enumerates every state individually (see `src/db/pool.js:120`). Collapsing `BOOKING_DATE`, `BOOKING_TIME`, `BOOKING_TREATMENT` into `BOOKING_COLLECTION` requires a **multi-step migration** to avoid breaking in-flight conversations:
+
+1. **Add** `BOOKING_COLLECTION` to the CHECK constraint list (allow both old and new values simultaneously)
+2. **Backfill** existing sessions lazily — sessions with `state IN ('BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT')` get mapped to `'BOOKING_COLLECTION'` on their next user activity (not as a bulk UPDATE)
+3. **Update** all code paths (`handlers.js`, `transitions.js`, `states.js`) to write `BOOKING_COLLECTION` instead of the individual states
+4. **Remove** `BOOKING_DATE`, `BOOKING_TIME`, `BOOKING_TREATMENT` from the CHECK constraint after confirming no active sessions still use them
 
 | Concern | BOOKING_DATE | BOOKING_TIME | BOOKING_TREATMENT |
 |---|---|---|---|
@@ -406,6 +417,20 @@ The router classifies *what the user means*, not *what the system should allow*.
 
 This separation prevents the router from becoming state-dependent in ways that leak business logic into classification.
 
+#### Nuance: Entity-derived intents are state-scoped
+
+The router already does **state-guarded entity scoping**: entity-derived intents like `provide_phone` only match in `CALLBACK_REQUESTED`, and `provide_treatment` was recently scoped to fire during `BOOKING_TIME` (for fragmented messages). This is **correct** — entity-derived intents are field-targeted, and the scope reflects which fields are meaningful in which state.
+
+The distinction:
+
+| Intent type | Scope rule | Example |
+|---|---|---|
+| **Behavioral** (greeting, emergency, escalate) | Never scoped — fire from any state | `emergency` works during booking |
+| **Entity-derived** (provide_date, provide_time) | Scoped by field relevance | `provide_phone` only in CALLBACK_REQUESTED |
+| **State-specific** (confirm, edit_date) | Scoped by transition table | `confirm` only in BOOKING_CONFIRMATION |
+
+So the principle is refined: **behavioral intents are never state-scoped; field-targeted intents are.** The router's scoping is limited to the minimum necessary to avoid extracting irrelevant entities.
+
 ### 6.3 Transition Table: Permission, Not Progression
 
 The transition table's role shifts from *"what state comes next"* to *"is this combination valid at all."*
@@ -442,7 +467,23 @@ Each step is a pure function or a separated module. The handler just wires them 
 
 ### 6.5 Transition Guards: Invariant Enforcement
 
-An entry guard function validates that a transition is **business-valid**:
+An entry guard function validates that a transition is **business-valid**. It is a **secondary safety net** — not the primary progression mechanism. The primary mechanism is: *handlers own state transitions, and the engine never overrides them.*
+
+**Complete entry guard table:**
+
+| Target state | Precondition | Rationale |
+|---|---|---|
+| `BOOKING_CONFIRMATION` | `booking.date`, `booking.time`, `booking.treatment` all set | Cannot confirm incomplete booking |
+| `BOOKED` | Only from `BOOKING_CONFIRMATION` | Must go through explicit confirmation |
+| `HUMAN_ESCALATION` | No precondition (can escalate from any state) | Always allowed |
+| `EMERGENCY` | No precondition | Always allowed — highest priority |
+| `CALLBACK_REQUESTED` | None — phone is collected inside the state | State handles its own collection |
+| `MAIN_MENU` | No precondition | Always reachable |
+| `BOOKING_COLLECTION` | No precondition | Can enter from menu or re-entry |
+
+Most states **do not need guards**. Only states where an invariant must hold before entry (like `BOOKING_CONFIRMATION`) require explicit checks.
+
+**Example implementation:**
 
 ```js
 function isTransitionSafe(session, nextState) {
@@ -453,11 +494,11 @@ function isTransitionSafe(session, nextState) {
   if (nextState === 'BOOKED') {
     return session.state === 'BOOKING_CONFIRMATION';
   }
-  return true;
+  return true; // Most states have no precondition
 }
 ```
 
-This is a **secondary safety net** — not the primary progression mechanism. It catches architectural violations during development. The primary mechanism is: *handlers own state transitions, and the engine never overrides them.*
+The guard is an assertion, not a flow controller. If it fires during development (e.g., in a replay test), it signals an architectural violation — the handler allowed a transition that should be impossible.
 
 **Entry guard model** (preferred over exit guard):
 
@@ -509,7 +550,7 @@ Introduce explicit event history only when a concrete consumer demands it — e.
 - **Messages table** — append-only by design. No changes needed.
 - **Session table** — mutable operational state. `version` column for optimistic locking is already added.
 - **Booking data accumulation** — progressive fill in handlers is the right pattern.
-- **Router** — classifies meaning, not permission. Correct separation.
+- **Router** — classifies meaning, not permission (with state-scoping for field-targeted entity intents). Correct separation with the nuance described in §6.2.
 
 ### 8.2 Immediate Fixes (Stage 1)
 
@@ -529,8 +570,8 @@ Introduce explicit event history only when a concrete consumer demands it — e.
 ### 8.4 Medium-term Changes (Stage 3)
 
 - Rename field-collection states to single `BOOKING_COLLECTION` (or alias in state enum)
-- Create `computePendingFields()` pure function
-- Create `buildPromptForField()` function
+- `computePendingFields()` already exists at `src/lib/entities.js:92` — reuse as the progression driver
+- Create `buildPromptForField()` function — derives the UI prompt from the current missing field
 - Refactor `handleBookingDate`, `handleBookingTime`, `handleBookingTreatment` into a single `handleBookingCollection` with field-dispatching helpers
 - Update transition table to remove state-specific entries for field collection
 
@@ -544,4 +585,24 @@ Introduce explicit event history only when a concrete consumer demands it — e.
 
 ---
 
-*Derived from architecture review session — 2026-05-26*
+### 8.6 Validation: The Replay Test Suite
+
+The invariants, mutation policies, and progression rules described in this document are enforced by the **replay test suite** at `tests/replay/`.
+
+The replay suite processes conversation fixtures through the real engine pipeline and asserts:
+- Expected state transitions at each step
+- Expected intent classification
+- No unexpected state changes (e.g., implicit progression from engine override)
+
+Every architectural change (collapse states, add guards, change mutation regime) should include:
+1. A fixture that exercises the new behavior
+2. A fixture that exercises the edge case (what should NOT happen)
+3. Running the full suite: `node --experimental-loader ./tests/replay/path-loader.js tests/replay/runner.js`
+
+The replay suite is the **validation mechanism** for the truth-type model. If a change violates an invariant (e.g., entering BOOKING_CONFIRMATION without a time), the test suite catches it immediately.
+
+This is why the split-brain bug was found: the replay suite detected that the engine was applying a structural transition (`provide_treatment → BOOKING_CONFIRMATION`) that the handler had not explicitly authorized. The fixture captured the exact scenario — a fragmented message delivering a treatment entity while in BOOKING_TIME — and the assertion failure exposed the architectural violation.
+
+---
+
+*Derived from architecture review session — 2026-05-26. Validated by `tests/replay/runner.js`.*

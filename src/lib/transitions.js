@@ -9,7 +9,7 @@ export function isValidTransition(state, intent) {
 
   // Correction intents are valid during any booking-related state
   if (CORRECTION_INTENT_NAMES.includes(intent)) {
-    const bookingStates = ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION', 'BOOKED'];
+    const bookingStates = ['BOOKING_COLLECTION', 'BOOKING_CONFIRMATION', 'BOOKED'];
     return bookingStates.includes(state);
   }
 
@@ -31,9 +31,9 @@ export function getNextState(state, intent, entities) {
     case 'back':
       // Back from within booking flow
       switch (state) {
-        case 'BOOKING_TIME':         return 'BOOKING_DATE';
-        case 'BOOKING_TREATMENT':    return 'BOOKING_TIME';
-        case 'BOOKING_CONFIRMATION': return 'BOOKING_TREATMENT';
+        case 'BOOKING_COLLECTION':   return 'MAIN_MENU';
+        case 'BOOKING_CONFIRMATION': return 'BOOKING_COLLECTION';
+        case 'BOOKED':               return 'BOOKING_CONFIRMATION';
         default:                     return 'MAIN_MENU';
       }
     case 'greeting':
@@ -41,38 +41,33 @@ export function getNextState(state, intent, entities) {
     case 'callback':
       return 'CALLBACK_REQUESTED';
     case 'appointment':
-      return 'BOOKING_DATE';
+      return 'BOOKING_COLLECTION';
     case 'services':
-      return 'SERVICES';
     case 'location':
-      return 'LOCATION';
     case 'timings':
-      return 'TIMINGS';
+      // Info queries don't change state — handler shows info and stays in current state
+      return null;
     case 'provide_date':
-      return 'BOOKING_TIME';
     case 'provide_time':
-      return 'BOOKING_TREATMENT';
     case 'provide_treatment':
-      return 'BOOKING_CONFIRMATION';
+      // Handler manages collection state progression — engine should not override
+      return null;
     case 'confirm':
       return 'BOOKED';
     case 'confirm_cancel':
       return 'MAIN_MENU';
     case 'edit_date':
-      return 'BOOKING_DATE';
+      return 'BOOKING_COLLECTION';
     case 'edit_time':
-      return 'BOOKING_TIME';
+      return 'BOOKING_COLLECTION';
     case 'provide_phone':
       return 'DONE';
 
-    // Correction intents — redirect to the appropriate field collection state
+    // Correction intents — handled by the booking collection handler
     case 'correction_date':
-      // If currently collecting something else, redirect to date
-      return 'BOOKING_DATE';
     case 'correction_time':
-      return 'BOOKING_TIME';
     case 'correction_treatment':
-      return 'BOOKING_TREATMENT';
+      return null; // Handler manages state internally
 
     default:
       return null; // Stay in current state

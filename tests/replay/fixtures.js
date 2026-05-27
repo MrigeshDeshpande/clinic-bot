@@ -130,7 +130,7 @@ export const FIXTURES = [
       { text: 'Book', intent: 'appointment' },
     ],
     expectations: {
-      finalState: 'BOOKING_DATE',
+      finalState: 'BOOKING_COLLECTION',
     },
   },
 

@@ -33,10 +33,13 @@ export function extractEntities(text) {
     entities.date = dateResult.parsed;
   }
 
-  if (timeResult.valid && timeResult.parsed) {
+  // Include parsed time even if validation failed (e.g., "9pm" parses to "21:00"
+  // but is after closing hours). The handler will show the suggestion.
+  if (timeResult.parsed) {
     entities.time = timeResult.parsed;
   }
 
+  // validateTreatment only sets parsed when valid, so this is safe
   if (treatmentResult.valid && treatmentResult.parsed) {
     entities.treatment = treatmentResult.parsed;
   }
@@ -89,7 +92,7 @@ export function accumulateEntities(sessionContext, newEntities) {
  * Determine which fields are still pending based on accumulated entities
  * and what's already set in the booking context.
  */
-function computePendingFields(context, accumulated) {
+export function computePendingFields(context, accumulated) {
   const booking = context.booking || {};
   const pending = [];
 

@@ -195,7 +195,7 @@ export async function processEvent(payload) {
       // Step 2e-ii: Explicit correction detection (for non-booking states where router may miss it)
       // Only needed if classifyIntent didn't already catch it as correction_* intent
       if (!intentResult.intent.startsWith('correction_') && intentResult.intent === 'unknown') {
-        const bookingStates = ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION', 'BOOKED'];
+        const bookingStates = ['BOOKING_COLLECTION', 'BOOKING_CONFIRMATION', 'BOOKED'];
         if (bookingStates.includes(session.state)) {
           const entitiesForCorrection = extractEntities(normalized.textClean);
           const correction = detectCorrection({ ...normalized, _entities: entitiesForCorrection }, session);
@@ -254,8 +254,13 @@ export async function processEvent(payload) {
         ];
       }
 
-      // Step 2i: saveMessages
-      await createMessage({
+      // Step 2j: saveSession FIRST — session state must be persisted
+      // before message rows reference it. If message persistence fails,
+      // the session state is already saved and the conversation continues.
+      await save(handlerResult.session);
+
+      // Step 2i: saveMessages — fire-and-forget (errors logged, never abort pipeline)
+      createMessage({
         msgId: normalized.msgId,
         sessionId: handlerResult.session.id,
         waId: normalized.waId,
@@ -263,22 +268,20 @@ export async function processEvent(payload) {
         content: normalized.textClean || normalized.text,
         intent: intentResult.intent,
         metadata: { stateBefore: session.state, stateAfter: handlerResult.session.state },
-      });
+      }).catch(() => {});
 
-      if (sentMsgId) {
-        await createMessage({
-          msgId: sentMsgId,
-          sessionId: handlerResult.session.id,
-          waId: normalized.waId,
-          role: 'bot',
-          content: typeof handlerResult.reply === 'string' ? handlerResult.reply : handlerResult.reply.body,
-          intent: intentResult.intent,
-          metadata: { replyType: handlerResult.replyType },
-        });
-      }
-
-      // Step 2j: saveSession
-      await save(handlerResult.session);
+      // Always save bot messages — use a generated ID if sendReply returned null
+      // (API failure, replay mode mock, etc.) to prevent silent data loss.
+      const botMsgId = sentMsgId || `bot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      createMessage({
+        msgId: botMsgId,
+        sessionId: handlerResult.session.id,
+        waId: normalized.waId,
+        role: 'bot',
+        content: typeof handlerResult.reply === 'string' ? handlerResult.reply : handlerResult.reply.body,
+        intent: intentResult.intent,
+        metadata: { replyType: handlerResult.replyType },
+      }).catch(() => {});
 
       // Step 2k: log completion
       logger.info('MESSAGE_PROCESSED', {

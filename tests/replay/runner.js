@@ -16,6 +16,7 @@
 
 import { processEvent } from '../../src/lib/engine.js';
 import { FIXTURES } from './fixtures.js';
+import { getSql, runMigrations } from '../../src/db/pool.js';
 
 process.env.REPLAY_MODE = 'true';
 process.env.LOG_LEVEL = 'error';
@@ -163,6 +164,20 @@ function evaluateResult(result) {
   return { pass: false, name: result.name, details: issues.join('\n') };
 }
 
+async function cleanupStaleSessions(waIds) {
+  // Delete any existing sessions for these waIds to ensure fixture isolation
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    // Use ANY() for array matching — postgres.js/neon handles arrays natively
+    await sql`DELETE FROM messages WHERE wa_id = ANY(${waIds})`;
+    await sql`DELETE FROM appointments WHERE wa_id = ANY(${waIds})`;
+    await sql`DELETE FROM sessions WHERE wa_id = ANY(${waIds})`;
+  } catch (error) {
+    // Non-fatal — sessions may not exist yet
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const listOnly = args.includes('--list');
@@ -181,6 +196,13 @@ async function main() {
   const fixturesToRun = filter
     ? FIXTURES.filter(f => f.name === filter)
     : FIXTURES;
+
+  // Run DB migrations to ensure schema (including state constraint) is up to date
+  await runMigrations().catch(() => {});
+
+  // Pre-clean all fixture waIds to avoid stale session state
+  const activeFixtures = fixturesToRun.filter(f => !f.skip);
+  await cleanupStaleSessions(activeFixtures.map((_, i) => `r_${1000 + i}`));
 
   console.log('\n\x1b[1mReplay Conversation Tests\x1b[0m\n');
   console.log('-'.repeat(58));

@@ -32,7 +32,10 @@ function emptySession(waId, phoneNumberId, profileName) {
       messageSequence: 0,
       lastMessageIds: [],
       appointmentId: null,
+      logicalId: null,
+      reschedulingLogicalId: null,
       escalationReason: null,
+      awaitingTreatmentHelp: null,
     },
     metrics: { failedAttempts: 0, totalFailedAttempts: 0, messagesInState: 0, frustrationScore: 0, currentField: null },
     isEscalated: false,
@@ -80,12 +83,16 @@ function rowToSession(row) {
       messageSequence: contextRaw.messageSequence || 0,
       lastMessageIds: Array.isArray(contextRaw.lastMessageIds) ? contextRaw.lastMessageIds : [],
       appointmentId: contextRaw.appointmentId || null,
+      logicalId: contextRaw.logicalId || null,
+      reschedulingLogicalId: contextRaw.reschedulingLogicalId || null,
       escalationReason: contextRaw.escalationReason || null,
     },
     metrics: {
       failedAttempts: metricsRaw.failedAttempts || 0,
       totalFailedAttempts: metricsRaw.totalFailedAttempts || 0,
-      messagesInState: (metricsRaw.messagesInState || 0) + 1,
+      // Do NOT increment here — the handler increments messagesInState once per process.
+      // Incrementing here would double-count: DB load (N) + handler (N+1) = N+2 instead of N+1.
+      messagesInState: (metricsRaw.messagesInState || 0),
       frustrationScore: metricsRaw.frustrationScore || 0,
       currentField: metricsRaw.currentField || null,
     },

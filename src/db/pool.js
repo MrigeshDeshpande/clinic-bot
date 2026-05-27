@@ -2,8 +2,29 @@ import { neon } from '@neondatabase/serverless';
 import { logger } from '@/lib/logger';
 
 const DATABASE_URL = process.env.DATABASE_URL;
+const MAX_QUERY_RETRIES = 2;
 
+let rawSql;
 let sql;
+
+function isNetworkError(error) {
+  return error?.sourceError || error?.message?.includes('fetch failed') || error?.message?.includes('Error connecting to database');
+}
+
+function wrapWithRetry(fn) {
+  const retryWrapper = async (...args) => {
+    for (let attempt = 1; attempt <= MAX_QUERY_RETRIES; attempt++) {
+      try {
+        return await fn(...args);
+      } catch (error) {
+        if (attempt === MAX_QUERY_RETRIES || !isNetworkError(error)) throw error;
+        logger.warn('DB_QUERY_RETRY', { attempt, maxRetries: MAX_QUERY_RETRIES, error: error.message });
+        await sleep(500 * attempt);
+      }
+    }
+  };
+  return retryWrapper;
+}
 
 export function getSql() {
   if (sql) return sql;
@@ -14,18 +35,31 @@ export function getSql() {
     return sql;
   }
 
-  sql = neon(DATABASE_URL);
+  rawSql = neon(DATABASE_URL);
+  const retried = wrapWithRetry(rawSql);
+  retried.query = wrapWithRetry(rawSql.query.bind(rawSql));
+  retried.unsafe = wrapWithRetry(rawSql.unsafe.bind(rawSql));
+  retried.transaction = (...args) => wrapWithRetry(rawSql.transaction.bind(rawSql))(...args);
+  sql = retried;
   return sql;
 }
 
-export async function runMigrations() {
-  const db = getSql();
-  if (!db) {
-    logger.warn('DB_MIGRATIONS_SKIPPED', { reason: 'DATABASE_URL not configured' });
-    return;
-  }
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-  try {
+export async function runMigrations() {
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 1000;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const db = getSql();
+    if (!db) {
+      logger.warn('DB_MIGRATIONS_SKIPPED', { reason: 'DATABASE_URL not configured' });
+      return;
+    }
+
+    try {
     await db`
       CREATE TABLE IF NOT EXISTS sessions (
         id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -72,6 +106,10 @@ export async function runMigrations() {
     await db`
       CREATE TABLE IF NOT EXISTS appointments (
         id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        logical_id          UUID NOT NULL DEFAULT gen_random_uuid(),
+        version             INTEGER NOT NULL DEFAULT 1,
+        replaces_version    INTEGER,
+        superseded_at       TIMESTAMPTZ,
         session_id          UUID REFERENCES sessions(id),
         wa_id               VARCHAR(20) NOT NULL,
         patient_name        VARCHAR(100),
@@ -101,6 +139,39 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(255);
     `;
 
+    // Migration: Add versioned identity columns for appointments (supersession model)
+    // logical_id — stable identity across versions (same value across reschedules)
+    // version — monotonically increasing, starts at 1
+    // replaces_version — previous version this supersedes
+    // superseded_at — when this version was superseded
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS logical_id UUID DEFAULT gen_random_uuid(),
+        ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS replaces_version INTEGER,
+        ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ;
+    `;
+    // Backfill existing rows: set logical_id = id (each existing row becomes its own chain)
+    await db`
+      UPDATE appointments SET logical_id = id WHERE logical_id IS NULL;
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_appointments_logical_id ON appointments(logical_id);
+    `;
+    // Unique constraint on (logical_id, version) prevents duplicate versions
+    // in concurrent reschedule attempts
+    await db`
+      ALTER TABLE appointments DROP CONSTRAINT IF EXISTS unique_appointment_version;
+    `;
+    await db`
+      ALTER TABLE appointments ADD CONSTRAINT unique_appointment_version UNIQUE (logical_id, version);
+    `;
+    // Ensure appointments CREATE TABLE includes new columns for fresh installations
+    // (table is created with IF NOT EXISTS, so new installs get the base columns first)
+    // The ALTER TABLE above adds them for existing installations.
+    // For fresh installs, update the CREATE TABLE statement.
+    // For existing, the ALTER TABLE handles it.
+
     // Widen wa_id columns for existing installations (support replay test IDs)
     await db`
       ALTER TABLE sessions ALTER COLUMN wa_id TYPE VARCHAR(50);
@@ -118,15 +189,24 @@ export async function runMigrations() {
     `;
     await db`
       ALTER TABLE sessions ADD CONSTRAINT valid_state CHECK (
-        state IN ('IDLE','MAIN_MENU','BOOKING_DATE','BOOKING_TIME','BOOKING_TREATMENT',
+        state IN ('IDLE','MAIN_MENU','BOOKING_COLLECTION','BOOKING_DATE','BOOKING_TIME','BOOKING_TREATMENT',
                   'BOOKING_CONFIRMATION','BOOKED','SERVICES','LOCATION','TIMINGS',
                   'EMERGENCY','HUMAN_ESCALATION','CALLBACK_REQUESTED','CANCEL_CONFIRM',
                   'DONE','ABANDONED')
       );
     `;
 
-    logger.info('DB_MIGRATIONS_COMPLETE');
-  } catch (error) {
-    logger.error('DB_MIGRATIONS_FAILED', { error: error.message });
+      logger.info('DB_MIGRATIONS_COMPLETE');
+      return;
+    } catch (error) {
+      logger.error('DB_MIGRATIONS_FAILED', { attempt, maxRetries: MAX_RETRIES, error: error.message });
+      if (attempt < MAX_RETRIES) {
+        const delay = BASE_DELAY_MS * attempt;
+        logger.info('DB_MIGRATIONS_RETRY', { attempt, nextAttempt: attempt + 1, delayMs: delay });
+        await sleep(delay);
+      } else {
+        throw error;
+      }
+    }
   }
 }

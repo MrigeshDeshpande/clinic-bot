@@ -33,6 +33,9 @@ const ID_TO_INTENT = {
   'resched': 'reschedule',
   'confirm_cancel_yes': 'confirm_cancel',
   'confirm_cancel_no': 'back',
+  'back': 'back',
+  'main_menu': 'main_menu',
+  'treatment_help': 'treatment_help',
 };
 
 function resolveDateId(id) {
@@ -81,6 +84,12 @@ export function classifyIntent(normalized, session) {
     if (ID_TO_INTENT[id]) {
       return { intent: ID_TO_INTENT[id], confidence: 1.0, source: 'interactive_id' };
     }
+
+    // Treatment/symptom selection via interactive list — ID is the treatment id
+    const treatment = CLINIC.treatments.find(t => t.id === id);
+    if (treatment) {
+      return { intent: 'provide_treatment', confidence: 1.0, source: 'interactive_id', entities: { treatment: treatment.name } };
+    }
   }
 
   const text = normalized.textLower;
@@ -94,7 +103,7 @@ export function classifyIntent(normalized, session) {
 
   // Priority 1b: Correction intent detection (before state-specific, after global)
   // Only check corrections if session has booking state context
-  const bookingStates = ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION', 'BOOKED'];
+  const bookingStates = ['BOOKING_COLLECTION', 'BOOKING_CONFIRMATION', 'BOOKED'];
   if (bookingStates.includes(session.state)) {
     const entitiesForCorrection = extractEntities(text);
     const correction = detectCorrection({ ...normalized, _entities: entitiesForCorrection }, session);
@@ -132,22 +141,25 @@ export function classifyIntent(normalized, session) {
   }
 
   // Priority 3: Entity-derived intents (state-guarded)
+  // Includes MAIN_MENU for "Back from booking" flows and HUMAN_ESCALATION
+  // for recovery — user can still provide booking data to resume.
+  const entityStates = ['BOOKING_COLLECTION', 'BOOKING_CONFIRMATION', 'MAIN_MENU', 'HUMAN_ESCALATION'];
   const entities = extractEntities(text);
-  if (entities.date && ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION', 'IDLE', 'MAIN_MENU'].includes(session.state)) {
+  if (entities.date && entityStates.includes(session.state)) {
     return { intent: 'provide_date', confidence: 0.9, source: 'entity', entities };
   }
-  if (entities.time && ['BOOKING_DATE', 'BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION'].includes(session.state)) {
+  if (entities.time && entityStates.includes(session.state)) {
     return { intent: 'provide_time', confidence: 0.9, source: 'entity', entities };
   }
-  if (entities.treatment && ['BOOKING_TIME', 'BOOKING_TREATMENT', 'BOOKING_CONFIRMATION'].includes(session.state)) {
+  if (entities.treatment && entityStates.includes(session.state)) {
     return { intent: 'provide_treatment', confidence: 0.9, source: 'entity', entities };
   }
   if (entities.phone && session.state === 'CALLBACK_REQUESTED') {
     return { intent: 'provide_phone', confidence: 0.9, source: 'entity', entities };
   }
 
-  // Priority 4: For BOOKING_TREATMENT state, check if it's a number
-  if (state === 'BOOKING_TREATMENT') {
+  // Priority 4: For BOOKING_COLLECTION state, check if it's a number
+  if (state === 'BOOKING_COLLECTION') {
     const num = text.trim().match(/^(\d+)$/);
     if (num) {
       const idx = parseInt(num[1], 10) - 1;
