@@ -1180,16 +1180,50 @@ function handleUnknown(session, normalized) {
   return { session, reply: `Sorry, I didn't catch that. ${hint}`, replyType: 'text' };
 }
 
+function buildResumePrompt(booking, pendingFields) {
+  const progress = booking ? buildProgressSummary(booking) : '';
+  const nextField = pendingFields && pendingFields[0];
+
+  if (!nextField) {
+    return progress ? `${progress}\n\nAll set! Ready to confirm?` : 'Ready to confirm your appointment?';
+  }
+
+  const fieldHints = {
+    date: 'What date works for you?',
+    time: 'What time works for you?',
+    treatment: 'What seems to be the problem?',
+  };
+
+  const hint = fieldHints[nextField] || 'Where were we?';
+
+  if (progress && progress !== '📋 ') {
+    return `${progress}\n\n${hint}`;
+  }
+
+  return `We were setting up your appointment. ${hint}`;
+}
+
 // ───────────────────────────────────────────────
 // Greeting (handles greeting intent globally)
 // ───────────────────────────────────────────────
 function handleGreeting(session) {
-  const isNew = session.state === 'IDLE' || session.state === 'DONE' || session.state === 'ABANDONED';
-
   // If currently in EMERGENCY, treat greeting as wanting to exit to main menu
   if (session.state === 'EMERGENCY' || session.state === 'HUMAN_ESCALATION') {
     return handleMainMenu(session);
   }
+
+  // ABANDONED — check for partial booking to resume
+  if (session.state === 'ABANDONED') {
+    const hasPartialBooking = session.context?.booking?.date || session.context?.booking?.time || session.context?.booking?.treatment;
+    if (hasPartialBooking && session.previousState) {
+      session = { ...session, state: session.previousState, previousState: 'ABANDONED' };
+      session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+      return handleGreeting(session);
+    }
+    // No partial booking — fall through to isNew below
+  }
+
+  const isNew = session.state === 'IDLE' || session.state === 'DONE';
 
   if (isNew) {
     session = { ...session, state: 'MAIN_MENU', previousState: session.state };
@@ -1217,7 +1251,7 @@ function handleGreeting(session) {
     return {
       session,
       reply: {
-        body: STATE_GREETING.BOOKING_COLLECTION,
+        body: `Welcome back! ${buildResumePrompt(session.context.booking, pending)}`,
         buttonLabel: 'Select',
         sections: pending[0] === 'date' ? getDateQuickPickSections() :
           pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday) :
@@ -1233,7 +1267,7 @@ function handleGreeting(session) {
     return {
       session,
       reply: {
-        body: `${greeting}\n\n${buildConfirmationBody(session.context.booking)}`,
+        body: `Welcome back! ${buildConfirmationBody(session.context.booking)}`,
         buttons: confirmationButtons(),
       },
       replyType: 'buttons',

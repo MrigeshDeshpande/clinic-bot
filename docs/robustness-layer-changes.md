@@ -754,3 +754,62 @@ Reliability hardening for WhatsApp API calls and reducing Neon DB dependency in 
 | Confirmation buttons | 3 (Confirm, Change, Cancel) |
 | Symptom aliases added | ~30 new keywords across 8 treatments |
 | Lint status | ✅ Clean |
+
+---
+
+## 14. Date Picker Optimization & Returning User Resume (2026-05-27)
+
+> **Theme:** Reduce friction, preserve partial progress, keep messages short
+> **Files changed:** `src/lib/handlers.js`, `src/lib/router.js`, `src/config/states.js`
+
+### Date Picker: Three-tier drill-down
+
+**Before:** Single list with 10 rows across 4 sections (3 Quick Picks + ≤4 Upcoming Dates + Custom + Navigation). Users scrolled past options on mobile.
+
+**After:** Two-mode design:
+
+| Mode | Sections | Rows | When shown |
+|------|----------|------|------------|
+| **Quick Pick** (`getDateQuickPickSections`) | 1 | 4 (Today, Tomorrow, Next Monday, More dates…) | First prompt, returning users, edit flows |
+| **More** (`getDateMoreSections`) | 3 | ≤7 (≤4 Upcoming + Custom + Nav) | User taps "More dates…" |
+
+- Tap "More dates…" → `date_more` intent → `handleBookingCollection` returns expanded list
+- Back button in expanded list returns to quick pick
+- Old `getDateListSections()` (10-row list) removed
+
+### Returning User Resume
+
+**Before:** ABANDONED sessions were treated as brand-new → main menu, context wiped. BOOKING_COLLECTION returning users got a generic greeting without progress.
+
+**After:**
+
+| Scenario | Previous behavior | New behavior |
+|----------|------------------|--------------|
+| **ABANDONED + partial booking** + user says "hi" | Main menu, context lost | Restores `previousState` (BOOKING_COLLECTION or BOOKING_CONFIRMATION), shows contextual greeting with progress |
+| **ABANDONED + no partial booking** + "hi" | Main menu (unchanged) | Main menu (same) |
+| **ABANDONED + direct booking input** ("tomorrow") | handleIdle → wiped context → main menu | Entity-derived intent routes to `handleBookingCollection` with context preserved |
+| **BOOKING_COLLECTION** returning user | Generic "Hi! We were setting up..." | `"Welcome back! 📋 date · time · treatment\n\nWhat seems to be the problem?"` |
+| **BOOKING_CONFIRMATION** returning user | "Hello! Your appointment details..." | `"Welcome back! [full summary]"` + buttons |
+
+New helper `buildResumePrompt(booking, pendingFields)` generates contextual greeting:
+- Progress filled → `"📋 Mon 28 May · 10:00 AM\n\nWhat seems to be the problem?"`
+- Nothing filled → `"We were setting up your appointment. What date works for you?"`
+- All filled → `"📋 ...\n\nAll set! Ready to confirm?"`
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/lib/handlers.js` | `getDateQuickPickSections()`, `getDateMoreSections()`, `buildResumePrompt()` added. `getDateListSections()` removed. `handleGreeting` handles ABANDONED resume + contextual greeting. `date_more` intent handler in `handleBookingCollection`. All 5 callers updated to quick pick. |
+| `src/lib/router.js` | Added `'date_more': 'date_more'` to `ID_TO_INTENT` |
+| `src/config/states.js` | Added `'date_more'` to `BOOKING_COLLECTION` transitions |
+
+### Summary Statistics
+
+| Metric | Value |
+|--------|-------|
+| Date picker rows shown (before) | ≤10 |
+| Date picker rows shown (after) | 4 (expandable to ≤7) |
+| ABANDONED resume states handled | BOOKING_COLLECTION, BOOKING_CONFIRMATION |
+| Greeting message sources | `buildResumePrompt` (dynamic) + `STATE_GREETING` (static fallback) |
+| Lint status | ✅ Clean |
