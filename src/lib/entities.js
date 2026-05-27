@@ -96,14 +96,14 @@ export function computePendingFields(context, accumulated) {
   const booking = context.booking || {};
   const pending = [];
 
+  if (!booking.treatment && (!accumulated.treatments || accumulated.treatments.length === 0)) {
+    pending.push('treatment');
+  }
   if (!booking.date && (!accumulated.dates || accumulated.dates.length === 0)) {
     pending.push('date');
   }
   if (!booking.time && (!accumulated.times || accumulated.times.length === 0)) {
     pending.push('time');
-  }
-  if (!booking.treatment && (!accumulated.treatments || accumulated.treatments.length === 0)) {
-    pending.push('treatment');
   }
 
   return pending;

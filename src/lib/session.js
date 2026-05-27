@@ -46,7 +46,7 @@ function emptySession(waId, phoneNumberId, profileName) {
     context: {
       booking: { date: null, time: null, treatment: null, patientName: null, patientPhone: null, notes: null },
       bookingTimestamps: { date: null, time: null, treatment: null },
-      pendingFields: ['date', 'time', 'treatment'],
+      pendingFields: ['treatment', 'date', 'time'],
       receivedEntities: { dates: [], times: [], treatments: [] },
       lastCorrection: { field: null, fromValue: null, toValue: null, timestamp: null },
       messageSequence: 0,

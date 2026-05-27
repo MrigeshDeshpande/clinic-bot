@@ -1202,14 +1202,49 @@ function handleGreeting(session) {
   }
 
   const greeting = STATE_GREETING[session.state] || 'Welcome back!';
-  const repromptHints = {
-    BOOKING_CONFIRMATION: 'Your appointment details are ready.',
-    MAIN_MENU:            'How can I help you today?',
-  };
+
+  if (session.state === 'BOOKING_CONFIRMATION') {
+    return {
+      session,
+      reply: {
+        body: `${greeting}\n\n${buildConfirmationBody(session.context.booking)}`,
+        buttons: confirmationButtons(),
+      },
+      replyType: 'buttons',
+    };
+  }
+
+  if (session.state === 'BOOKED') {
+    return {
+      session,
+      reply: {
+        body: greeting,
+        buttonLabel: 'Options',
+        sections: [{
+          title: 'Manage Booking',
+          rows: [
+            { id: 'book_another', title: 'Book Another', description: 'Schedule a new appointment' },
+            { id: 'resched', title: 'Reschedule', description: 'Change date, time, or treatment' },
+            { id: 'cancel_appt', title: 'Cancel', description: 'Cancel this appointment' },
+            { id: 'main_menu', title: 'Main Menu', description: 'Back to home' },
+          ],
+        }],
+      },
+      replyType: 'list',
+    };
+  }
+
+  if (session.state === 'MAIN_MENU') {
+    return {
+      session,
+      reply: { body: greeting, buttonLabel: 'Select option', sections: mainMenuSections() },
+      replyType: 'list',
+    };
+  }
 
   return {
     session,
-    reply: `${greeting}\n\n${repromptHints[session.state] || ''}`,
+    reply: `${greeting}`,
     replyType: 'text',
   };
 }
