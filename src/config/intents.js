@@ -36,4 +36,6 @@ export const STATE_INTENTS = {
                           reschedule: ['reschedule','change appointment','change date','change time','rebook'] },
   CANCEL_CONFIRM:       { confirm_cancel: ['yes','confirm','cancel it','yes cancel'],
                           back:         ['no','keep','back','dont cancel'] },
+  DOCTOR_APPOINTMENT_DETAIL: { doctor_mark_completed: ['done','complete','finished','mark done','completed'],
+                               doctor_mark_noshow:    ['no show',"didn't come","did not come","missed","noshow"] },
 };

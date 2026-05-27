@@ -126,6 +126,72 @@ export async function findUpcomingByWaId(waId) {
 //
 // Returns the new version row on success, null on failure.
 // ───────────────────────────────────────────────
+// ───────────────────────────────────────────────
+// Fetch confirmed appointments for a given date (doctor view)
+// ───────────────────────────────────────────────
+export async function fetchAppointmentsByDate(date) {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const rows = await sql`
+      SELECT DISTINCT ON (logical_id) *
+      FROM appointments
+      WHERE status = 'confirmed'
+        AND date = ${date}
+      ORDER BY logical_id, version DESC
+    `;
+    // Sort by time after dedup
+    rows.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    return rows;
+  } catch (error) {
+    logger.error('APPOINTMENT_FETCH_BY_DATE_ERROR', { date, error: error.message });
+    return [];
+  }
+}
+
+// ───────────────────────────────────────────────
+// Update appointment status (doctor actions: completed, no_show)
+// ───────────────────────────────────────────────
+export async function updateAppointmentStatus(id, status) {
+  const sql = getSql();
+  if (!sql) return null;
+
+  try {
+    const rows = await sql`
+      UPDATE appointments
+      SET status = ${status},
+          updated_at = NOW()
+      WHERE id = ${id}
+        AND status = 'confirmed'
+      RETURNING *
+    `;
+    return rows[0] || null;
+  } catch (error) {
+    logger.error('APPOINTMENT_UPDATE_STATUS_ERROR', { id, status, error: error.message });
+    return null;
+  }
+}
+
+// ───────────────────────────────────────────────
+// Count appointments by status for a date range (doctor stats)
+// ───────────────────────────────────────────────
+export async function countAppointmentsByDateRange(startDate, endDate, status) {
+  const sql = getSql();
+  if (!sql) return 0;
+
+  try {
+    const query = status
+      ? sql`SELECT COUNT(DISTINCT logical_id) as count FROM appointments WHERE date >= ${startDate} AND date <= ${endDate} AND status = ${status}`
+      : sql`SELECT COUNT(DISTINCT logical_id) as count FROM appointments WHERE date >= ${startDate} AND date <= ${endDate}`;
+    const rows = await query;
+    return parseInt(rows[0]?.count || '0', 10);
+  } catch (error) {
+    logger.error('APPOINTMENT_COUNT_ERROR', { startDate, endDate, error: error.message });
+    return 0;
+  }
+}
+
 export async function supersedeAppointment(logicalId, { date, time, treatment }, maxRetries = 3) {
   const sql = getSql();
   if (!sql) return null;

@@ -2,7 +2,9 @@ export const STATES = [
   'IDLE','MAIN_MENU','BOOKING_COLLECTION',
   'BOOKING_CONFIRMATION','BOOKED','SERVICES','LOCATION','TIMINGS',
   'EMERGENCY','HUMAN_ESCALATION','CALLBACK_REQUESTED','CANCEL_CONFIRM',
-  'DONE','ABANDONED'
+  'DONE','ABANDONED',
+  'DOCTOR_MAIN_MENU','DOCTOR_VIEW_DATE','DOCTOR_APPOINTMENT_LIST',
+  'DOCTOR_APPOINTMENT_DETAIL','DOCTOR_MANAGE_SCHEDULE','DOCTOR_STATS',
 ];
 
 export const TRANSITIONS = {
@@ -22,4 +24,11 @@ export const TRANSITIONS = {
   CANCEL_CONFIRM:       ['confirm_cancel','back','main_menu','emergency','escalate'],
   ABANDONED:            ['main_menu','greeting'],
   DONE:                 ['main_menu','greeting'],
+  DOCTOR_MAIN_MENU:     ['doctor_view_today','doctor_view_by_date','doctor_manage_schedule',
+                          'doctor_view_stats','emergency','escalate','back','greeting'],
+  DOCTOR_VIEW_DATE:     ['provide_date','date_custom','back','emergency','escalate'],
+  DOCTOR_APPOINTMENT_LIST: ['doctor_appt_detail','back','emergency','escalate'],
+  DOCTOR_APPOINTMENT_DETAIL: ['doctor_mark_completed','doctor_mark_noshow','back','emergency','escalate'],
+  DOCTOR_MANAGE_SCHEDULE: ['doctor_block_date','doctor_view_blocked','back','emergency','escalate'],
+  DOCTOR_STATS:         ['back','emergency','escalate'],
 };

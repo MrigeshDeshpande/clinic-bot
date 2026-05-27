@@ -34,6 +34,12 @@ export function getNextState(state, intent, entities) {
         case 'BOOKING_COLLECTION':   return 'MAIN_MENU';
         case 'BOOKING_CONFIRMATION': return 'BOOKING_COLLECTION';
         case 'BOOKED':               return 'BOOKING_CONFIRMATION';
+        // Doctor back navigation
+        case 'DOCTOR_APPOINTMENT_LIST':
+        case 'DOCTOR_VIEW_DATE':
+        case 'DOCTOR_STATS':
+        case 'DOCTOR_MANAGE_SCHEDULE': return 'DOCTOR_MAIN_MENU';
+        case 'DOCTOR_APPOINTMENT_DETAIL': return 'DOCTOR_APPOINTMENT_LIST';
         default:                     return 'MAIN_MENU';
       }
     case 'greeting':
@@ -60,6 +66,23 @@ export function getNextState(state, intent, entities) {
       return 'BOOKING_COLLECTION';
     case 'edit_time':
       return 'BOOKING_COLLECTION';
+
+    // Doctor transitions
+    case 'doctor_view_today':
+    case 'doctor_view_by_date':
+      return 'DOCTOR_APPOINTMENT_LIST';
+    case 'doctor_view_stats':
+      return 'DOCTOR_STATS';
+    case 'doctor_manage_schedule':
+      return 'DOCTOR_MANAGE_SCHEDULE';
+    case 'doctor_appt_detail':
+      return 'DOCTOR_APPOINTMENT_DETAIL';
+    case 'doctor_mark_completed':
+    case 'doctor_mark_noshow':
+      return 'DOCTOR_APPOINTMENT_LIST';
+    case 'doctor_block_date':
+    case 'doctor_view_blocked':
+      return 'DOCTOR_MANAGE_SCHEDULE';
     case 'provide_phone':
       return 'DONE';
 

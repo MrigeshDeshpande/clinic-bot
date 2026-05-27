@@ -183,7 +183,18 @@ export async function runMigrations() {
       ALTER TABLE messages ALTER COLUMN wa_id TYPE VARCHAR(50);
     `;
 
-    // Ensure the valid_state constraint includes CANCEL_CONFIRM
+    // Blocked dates table for doctor schedule management
+    await db`
+      CREATE TABLE IF NOT EXISTS blocked_dates (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        date       DATE NOT NULL UNIQUE,
+        reason     VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    // Ensure the valid_state constraint covers ALL states (patient + doctor)
+    // Drop first to allow constraint redefinition across deploys
     await db`
       ALTER TABLE sessions DROP CONSTRAINT IF EXISTS valid_state;
     `;
@@ -192,7 +203,9 @@ export async function runMigrations() {
         state IN ('IDLE','MAIN_MENU','BOOKING_COLLECTION','BOOKING_DATE','BOOKING_TIME','BOOKING_TREATMENT',
                   'BOOKING_CONFIRMATION','BOOKED','SERVICES','LOCATION','TIMINGS',
                   'EMERGENCY','HUMAN_ESCALATION','CALLBACK_REQUESTED','CANCEL_CONFIRM',
-                  'DONE','ABANDONED')
+                  'DONE','ABANDONED',
+                  'DOCTOR_MAIN_MENU','DOCTOR_VIEW_DATE','DOCTOR_APPOINTMENT_LIST',
+                  'DOCTOR_APPOINTMENT_DETAIL','DOCTOR_MANAGE_SCHEDULE','DOCTOR_STATS')
       );
     `;
 

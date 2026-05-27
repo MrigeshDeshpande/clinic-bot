@@ -15,6 +15,10 @@ export const CLINIC = {
               '18:00','18:30','19:00','19:30'],
     sunday:  ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30'],
   },
+  doctor: {
+    name: 'Dr. Vishnu Vardhan',
+    waId: process.env.DOCTOR_WA_ID || '',
+  },
   treatments: [
     { id: 'general',   name: 'General Dentistry',  aliases: ['checkup','consultation','general dentistry','dental checkup','exam','routine','annual'], symptom: 'Routine checkup' },
     { id: 'cleaning',  name: 'Teeth Cleaning',     aliases: ['cleaning','scaling','teeth cleaning','clean','bleeding gums','bad breath','plaque','tartar','gum'], symptom: 'Bleeding gums or plaque' },

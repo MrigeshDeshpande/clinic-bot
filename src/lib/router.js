@@ -38,6 +38,14 @@ const ID_TO_INTENT = {
   'treatment_help': 'treatment_help',
   'change': 'change_booking',
   'date_more': 'date_more',
+  'doc_today': 'doctor_view_today',
+  'doc_by_date': 'doctor_view_by_date',
+  'doc_schedule': 'doctor_manage_schedule',
+  'doc_stats': 'doctor_view_stats',
+  'mark_done': 'doctor_mark_completed',
+  'mark_noshow': 'doctor_mark_noshow',
+  'block_date': 'doctor_block_date',
+  'view_blocked': 'doctor_view_blocked',
 };
 
 function resolveDateId(id) {
@@ -79,6 +87,22 @@ export function classifyIntent(normalized, session) {
       const date = resolveDateId(id);
       if (date) {
         return { intent: 'provide_date', confidence: 1.0, source: 'interactive_id', entities: { date } };
+      }
+    }
+
+    // Doctor appointment detail tap: doc_appt_<uuid>
+    if (id.startsWith('doc_appt_')) {
+      const apptId = id.replace('doc_appt_', '');
+      if (apptId) {
+        return { intent: 'doctor_appt_detail', confidence: 1.0, source: 'interactive_id', entities: { appointmentId: apptId } };
+      }
+    }
+
+    // Doctor unblock date: unblock_<date>
+    if (id.startsWith('unblock_')) {
+      const dateStr = id.replace('unblock_', '');
+      if (dateStr) {
+        return { intent: 'unblock_date', confidence: 1.0, source: 'interactive_id', entities: { date: dateStr } };
       }
     }
 

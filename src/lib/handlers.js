@@ -1,8 +1,10 @@
 import { CLINIC } from '@/config/clinic';
 import { validateDate, validateTime, validateTreatment, validatePhone } from '@/lib/validators';
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
-import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppointment } from '@/db/repositories/appointmentRepository';
-import { sendList } from '@/lib/whatsapp';
+import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppointment,
+         fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange } from '@/db/repositories/appointmentRepository';
+import { fetchBlockedDates, blockDate, unblockDate } from '@/db/repositories/blockedDateRepository';
+import { sendList, sendText } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 import { evaluateOverwrite, applyFieldOverwrite, getTargetState } from '@/lib/overwrite-policy';
 import { accumulateEntities, computePendingFields } from '@/lib/entities';
@@ -96,8 +98,18 @@ export async function handle(state, { session, normalized, entities, intent }) {
   if (intent === 'emergency') return handleEmergency(session);
   if (intent === 'escalate') return handleHumanEscalation(session);
   if (intent === 'cancel') return handleCancel(session);
-  if (intent === 'main_menu') return handleMainMenu(session);
-  if (intent === 'greeting') return handleGreeting(session);
+  if (intent === 'main_menu') {
+    if (session.context?.role === 'doctor') {
+      return handleDoctorDispatch(session, normalized, entities, intent);
+    }
+    return handleMainMenu(session);
+  }
+  if (intent === 'greeting') {
+    if (session.context?.role === 'doctor') {
+      return handleDoctorDispatch(session, normalized, entities, intent);
+    }
+    return handleGreeting(session);
+  }
   if (intent === 'thanks') return { session, reply: "You're welcome! Let me know if you need anything else.", replyType: 'text' };
   if (intent === 'help') return handleHelp(session);
   if (intent === 'affirm') return handleAffirm(session);
@@ -105,7 +117,13 @@ export async function handle(state, { session, normalized, entities, intent }) {
   if (intent === 'timings') return handleTimings(session);
   if (intent === 'services') return handleServices(session);
   if (intent === 'my_appointments') return handleMyAppointments(session);
-  if (intent === 'back') return handleBack(session);
+  if (intent === 'back') {
+    // Doctor back handled via dispatch; patient back uses handleBack
+    if (session.context?.role === 'doctor') {
+      return handleDoctorDispatch(session, normalized, entities, intent);
+    }
+    return handleBack(session);
+  }
 
   // Entity-derived booking intents — route from ANY state to booking collection.
   // This handles "Back from booking" (state=MAIN_MENU) and escalation recovery
@@ -196,6 +214,11 @@ export async function handle(state, { session, normalized, entities, intent }) {
       },
       replyType: 'list',
     };
+  }
+
+  // Doctor routing — role is set on session by getOrCreate()
+  if (session.context?.role === 'doctor') {
+    return handleDoctorDispatch(session, normalized, entities, intent);
   }
 
   // State-specific routing
@@ -803,12 +826,25 @@ async function handleBookingConfirmation(session, intent, entities) {
     };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
 
+    // Fire-and-forget doctor notification
+    if (appointment) {
+      if (isReschedule) {
+        const oldBooking = session.context.previousBooking || {};
+        notifyDoctorReschedule(appointment, oldBooking.date, oldBooking.time);
+        delete session.context.previousBooking;
+      } else {
+        notifyDoctorNewBooking(appointment);
+      }
+    }
+
     const header = isReschedule ? '✅ Rescheduled!' : '✅ Confirmed!';
+
+    const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
 
     return {
       session,
       reply: {
-        body: `${header}\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}\n\nWe look forward to seeing you!`,
+        body: `${header}\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}${doctorSuffix}\n\nWe look forward to seeing you!`,
         buttonLabel: 'Options',
         sections: [{
           title: 'Manage Booking',
@@ -890,7 +926,7 @@ function handleBooked(session, intent) {
   }
 
   if (intent === 'reschedule') {
-    // Capture current booking summary BEFORE resetting context
+    // Capture current booking summary BEFORE resetting context (for doctor notification)
     const currentSummary = buildProgressSummary(session.context.booking);
     session = {
       ...session,
@@ -899,6 +935,7 @@ function handleBooked(session, intent) {
       context: {
         ...session.context,
         reschedulingLogicalId: session.context.logicalId,
+        previousBooking: { date: session.context.booking?.date, time: session.context.booking?.time },
         booking: { date: null, time: null, treatment: null },
         receivedEntities: { dates: [], times: [], treatments: [] },
       },
@@ -1360,6 +1397,12 @@ async function handleCancelConfirm(session, intent) {
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
 
     if (cancelled) {
+      // Fire-and-forget doctor notification
+      if (appointmentId) {
+        const appt = session.context.booking || {};
+        notifyDoctorCancellation({ ...appt, id: appointmentId, patient_name: session.profileName, patient_phone: session.waId });
+      }
+
       // Fire-and-forget the main menu after a short delay so the empathetic
       // cancellation message lands first and breathes before options appear
       setTimeout(() => {
@@ -1399,10 +1442,11 @@ function showBookedSummary(session) {
   const booking = session.context.booking;
   session = { ...session, state: 'BOOKED', previousState: session.state };
   session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+  const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
   return {
     session,
     reply: {
-      body: `📋 Your Appointment\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}`,
+      body: `📋 Your Appointment\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}${doctorSuffix}`,
       buttonLabel: 'Options',
       sections: [{
         title: 'Manage Booking',
@@ -1440,11 +1484,12 @@ async function handleMyAppointments(session) {
       };
     }
 
+    const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
     let body = '📋 *Your Upcoming Appointments*\n\n';
     appointments.forEach((apt, i) => {
       const d = new Date(apt.date + 'T' + apt.time);
       body += `${i + 1}. ${d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} at ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}\n`;
-      body += `   Treatment: ${apt.treatment || 'N/A'}\n`;
+      body += `   Treatment: ${apt.treatment || 'N/A'}${doctorSuffix}\n`;
       body += `   Status: ${apt.status}\n\n`;
     });
     body += 'Tap "Main Menu" to continue.';
@@ -1570,11 +1615,12 @@ function resetBookingContext(context) {
 }
 
 function buildConfirmationBody(booking) {
+  const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
   let body = '📋 Appointment Summary\n';
   body += '━━━━━━━━━━━━━━━━\n';
   body += `Date: ${formatDateDisplay(booking.date)}\n`;
   body += `Time: ${formatTime(booking.time)}\n`;
-  body += `Treatment: ${booking.treatment}`;
+  body += `Treatment: ${booking.treatment}${doctorSuffix}`;
   return body;
 }
 
@@ -1673,4 +1719,523 @@ function escalateForFailure(session) {
     reply: `I'm having trouble understanding. Let me connect you to our team at *${CLINIC.phone}*.`,
     replyType: 'text',
   };
+}
+
+// ───────────────────────────────────────────────
+// Notify doctor proactively (fire-and-forget)
+// ───────────────────────────────────────────────
+async function notifyDoctor(body) {
+  if (!CLINIC.doctor?.waId) return;
+  try {
+    await sendText(CLINIC.doctor.waId, body);
+  } catch (error) {
+    logger.error('DOCTOR_NOTIFY_ERROR', { error: error.message });
+  }
+}
+
+// ───────────────────────────────────────────────
+// Doctor dispatch
+// ───────────────────────────────────────────────
+function handleDoctorDispatch(session, normalized, entities, intent) {
+  // Back navigation handled first
+  if (intent === 'back') return handleDoctorBack(session);
+
+  switch (session.state) {
+    case 'DOCTOR_MAIN_MENU':
+      return handleDoctorMainMenu(session, intent);
+    case 'DOCTOR_VIEW_DATE':
+      return handleDoctorViewDate(session, entities, intent);
+    case 'DOCTOR_APPOINTMENT_LIST':
+      return handleDoctorAppointmentList(session, entities, intent);
+    case 'DOCTOR_APPOINTMENT_DETAIL':
+      return handleDoctorAppointmentDetail(session, entities, intent);
+    case 'DOCTOR_MANAGE_SCHEDULE':
+      return handleDoctorManageSchedule(session, intent, entities);
+    case 'DOCTOR_STATS':
+      return handleDoctorStats(session);
+    default:
+      return handleDoctorGreeting(session);
+  }
+}
+
+function handleDoctorBack(session) {
+  const targetState = getNextState(session.state, 'back') || 'DOCTOR_MAIN_MENU';
+  session = { ...session, state: targetState, previousState: session.state };
+  session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+
+  if (targetState === 'DOCTOR_MAIN_MENU') {
+    return handleDoctorMainMenu(session);
+  }
+
+  return handleDoctorMainMenu(session);
+}
+
+// ───────────────────────────────────────────────
+// Doctor greeting — triggered on first message
+// ───────────────────────────────────────────────
+async function handleDoctorGreeting(session) {
+  session = { ...session, state: 'DOCTOR_MAIN_MENU' };
+  return handleDoctorMainMenuWithGreeting(session);
+}
+
+function formatDatePretty(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthIdx = parseInt(parts[1], 10) - 1;
+  return `${parseInt(parts[2], 10)} ${months[monthIdx]}`;
+}
+
+function formatDayName(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return days[d.getDay()];
+}
+
+async function buildDoctorMainMenuBody(session, includeGreeting = false) {
+  const doctorName = CLINIC.doctor?.name || 'Doctor';
+  let body = '';
+
+  if (includeGreeting) {
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    body += `${greeting}, ${doctorName}! 👋\n\n`;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const appointments = await fetchAppointmentsByDate(today);
+  const count = appointments.length;
+
+  body += `*📅 Today's Summary*\n`;
+  body += `Appointments: ${count}\n\n`;
+
+  body += `*Choose an option:*`;
+
+  return body;
+}
+
+async function handleDoctorMainMenuWithGreeting(session) {
+  const body = await buildDoctorMainMenuBody(session, true);
+  return {
+    session,
+    reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+function getDoctorMenuSections() {
+  return [
+    {
+      title: 'Appointments',
+      rows: [
+        { id: 'doc_today', title: '📋 Today\'s Appointments' },
+        { id: 'doc_by_date', title: '📅 View by Date' },
+      ],
+    },
+    {
+      title: 'Schedule & Reports',
+      rows: [
+        { id: 'doc_schedule', title: '⚙️ Manage Schedule' },
+        { id: 'doc_stats', title: '📊 View Stats' },
+      ],
+    },
+  ];
+}
+
+// ───────────────────────────────────────────────
+// Doctor main menu handler
+// ───────────────────────────────────────────────
+async function handleDoctorMainMenu(session, intent) {
+  if (intent === 'doctor_view_today') {
+    return handleDoctorViewToday(session);
+  }
+  if (intent === 'doctor_view_by_date') {
+    session = { ...session, state: 'DOCTOR_VIEW_DATE' };
+    return {
+      session,
+      reply: 'Enter a date (DD-MM-YYYY) or select from the options below:',
+      replyType: 'list',
+      buttonLabel: 'Quick pick',
+      sections: getDateQuickPickSections(),
+    };
+  }
+  if (intent === 'doctor_manage_schedule') {
+    session = { ...session, state: 'DOCTOR_MANAGE_SCHEDULE' };
+    return handleDoctorManageSchedule(session);
+  }
+  if (intent === 'doctor_view_stats') {
+    session = { ...session, state: 'DOCTOR_STATS' };
+    return handleDoctorStats(session);
+  }
+
+  const body = await buildDoctorMainMenuBody(session, false);
+  return {
+    session,
+    reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// View today's appointments
+// ───────────────────────────────────────────────
+async function handleDoctorViewToday(session) {
+  const today = new Date().toISOString().slice(0, 10);
+  const appointments = await fetchAppointmentsByDate(today);
+
+  session = { ...session, state: 'DOCTOR_APPOINTMENT_LIST', context: { ...session.context, doctorDate: today } };
+
+  if (appointments.length === 0) {
+    return {
+      session,
+      reply: { body: `*No appointments today.* 🎉`, buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back to Menu' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const rows = appointments.map((a) => ({
+    id: `doc_appt_${a.id}`,
+    title: `${a.time} — ${a.patient_name || 'Patient'}`,
+    description: a.treatment || '',
+  }));
+
+  const dayName = formatDayName(today);
+  const datePretty = formatDatePretty(today);
+  const body = `*📋 Appointments for ${dayName}, ${datePretty}*\n${appointments.length} total\n\nSelect an appointment:`;
+
+  return {
+    session,
+    reply: { body, buttonLabel: 'Appointments', sections: [{ title: 'Appointments', rows }] },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// View by date — user picks a date
+// ───────────────────────────────────────────────
+async function handleDoctorViewDate(session, entities, intent) {
+  if (intent === 'date_selected') {
+    const dateStr = entities.date;
+    if (dateStr) {
+      session = { ...session, state: 'DOCTOR_APPOINTMENT_LIST', context: { ...session.context, doctorDate: dateStr } };
+      return handleDoctorAppointmentListForDate(session, dateStr);
+    }
+  }
+
+  if (intent === 'doctor_view_today') {
+    return handleDoctorViewToday(session);
+  }
+
+  // Free-text date input (unknown/empty intent with date entities)
+  if ((!intent || intent === 'unknown') && entities?.date) {
+    const dateStr = entities.date;
+    session = { ...session, state: 'DOCTOR_APPOINTMENT_LIST', context: { ...session.context, doctorDate: dateStr } };
+    return handleDoctorAppointmentListForDate(session, dateStr);
+  }
+
+  return {
+    session,
+    reply: { body: 'Please enter a valid date in DD-MM-YYYY format or select one below:', buttonLabel: 'Quick pick', sections: getDateQuickPickSections() },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Appointment list for a specific date
+// ───────────────────────────────────────────────
+async function handleDoctorAppointmentList(session, entities, intent) {
+  // Appointment detail tap from the list
+  if (intent === 'doctor_appt_detail' || (!intent && entities?.appointmentId)) {
+    const apptId = entities?.appointmentId;
+    if (apptId) {
+      // Find the appointment in the list (already fetched for this date)
+      const dateStr = session.context?.doctorDate || new Date().toISOString().slice(0, 10);
+      const appointments = await fetchAppointmentsByDate(dateStr);
+      const appt = appointments.find((a) => a.id === apptId);
+
+      session = {
+        ...session,
+        state: 'DOCTOR_APPOINTMENT_DETAIL',
+        context: {
+          ...session.context,
+          selectedAppointmentId: apptId,
+          selectedAppointment: appt || null,
+        },
+      };
+
+      return handleDoctorAppointmentDetail(session, entities, intent);
+    }
+  }
+
+  const dateStr = session.context?.doctorDate || new Date().toISOString().slice(0, 10);
+  return handleDoctorAppointmentListForDate(session, dateStr);
+}
+
+async function handleDoctorAppointmentListForDate(session, dateStr) {
+  const appointments = await fetchAppointmentsByDate(dateStr);
+
+  if (appointments.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: `*No appointments on ${formatDatePretty(dateStr)}.*`, buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back to Menu' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const rows = appointments.map((a) => ({
+    id: `doc_appt_${a.id}`,
+    title: `${a.time} — ${a.patient_name || 'Patient'}`,
+    description: a.treatment || '',
+  }));
+
+  const dayName = formatDayName(dateStr);
+  const datePretty = formatDatePretty(dateStr);
+  const body = `*📋 Appointments for ${dayName}, ${datePretty}*\n${appointments.length} total\n\nSelect an appointment:`;
+
+  return {
+    session,
+    reply: { body, buttonLabel: 'Appointments', sections: [{ title: 'Appointments', rows }] },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Appointment detail
+// ───────────────────────────────────────────────
+function handleDoctorAppointmentDetail(session, entities, intent) {
+  const apptId = session.context?.selectedAppointmentId;
+
+  if (intent === 'doctor_mark_completed') {
+    return handleMarkAppointment(session, apptId, 'completed');
+  }
+  if (intent === 'doctor_mark_noshow') {
+    return handleMarkAppointment(session, apptId, 'no_show');
+  }
+  if (!apptId) {
+    return handleDoctorMainMenu(session);
+  }
+
+  // If we have the appointment in context, show detail
+  const appt = session.context?.selectedAppointment;
+
+  let body = '';
+  if (appt) {
+    body += `*🧑‍⚕️ Appointment Detail*\n\n`;
+    body += `*Patient:* ${appt.patient_name || 'N/A'}\n`;
+    body += `*Phone:* ${appt.patient_phone || 'N/A'}\n`;
+    body += `*Date:* ${formatDate(appt.date)} ${formatDayName(appt.date)}\n`;
+    body += `*Time:* ${appt.time}\n`;
+    body += `*Treatment:* ${appt.treatment || 'N/A'}\n`;
+    body += `*Status:* ${appt.status}\n`;
+  } else {
+    body += `*Appointment Details*\n`;
+  }
+
+  return {
+    session,
+    reply: { body, buttons: [
+      { id: 'mark_done', title: '✅ Completed' },
+      { id: 'mark_noshow', title: '❌ No Show' },
+      { id: 'back', title: '🔙 Back' },
+    ]},
+    replyType: 'buttons',
+  };
+}
+
+async function handleMarkAppointment(session, apptId, status) {
+  if (!apptId) {
+    return { session, reply: 'No appointment selected.', replyType: 'text' };
+  }
+
+  const result = await updateAppointmentStatus(apptId, status);
+
+  if (!result) {
+    return {
+      session,
+      reply: { body: 'Could not update appointment. It may have already been modified.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const statusLabel = status === 'completed' ? '✅ Completed' : '❌ No Show';
+  const patientName = result.patient_name || 'Patient';
+
+  session = {
+    ...session,
+    state: 'DOCTOR_MAIN_MENU',
+    context: { ...session.context, selectedAppointmentId: undefined, selectedAppointment: undefined },
+  };
+
+  return {
+    session,
+    reply: { body: `*${patientName}* marked as *${statusLabel}*.\n\nAppointment updated successfully.`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Manage schedule — blocked dates
+// ───────────────────────────────────────────────
+async function handleDoctorManageSchedule(session, intent, entities) {
+  // Handle unblock action when a specific date is returned
+  if (intent === 'unblock_date' && entities?.date) {
+    const dateStr = entities.date;
+    const result = await unblockDate(dateStr);
+    return {
+      session: {
+        ...session,
+        context: { ...session.context, doctorDate: undefined },
+      },
+      reply: { body: result ? `*${formatDatePretty(dateStr)}* has been unblocked. ✅` : `Could not unblock *${formatDatePretty(dateStr)}*.`, buttonLabel: 'Manage', sections: getDoctorScheduleSections() },
+      replyType: 'list',
+    };
+  }
+
+  // Show blocked dates list so doctor can pick one to unblock
+  if (intent === 'unblock_date') {
+    const blocked = await fetchBlockedDates();
+    if (blocked.length === 0) {
+      return {
+        session,
+        reply: { body: '*No blocked dates.* All dates are available.', buttonLabel: 'Back', sections: getDoctorScheduleSections() },
+        replyType: 'list',
+      };
+    }
+
+    const rows = blocked.map((b) => ({
+      id: `unblock_${b.date}`,
+      title: `${formatDatePretty(b.date)} ${formatDayName(b.date)}`,
+      description: b.reason || '',
+    }));
+
+    return {
+      session,
+      reply: { body: '*Select a date to unblock:*', buttonLabel: 'Blocked dates', sections: [{ title: 'Blocked Dates', rows }] },
+      replyType: 'list',
+    };
+  }
+
+  if (intent === 'doctor_block_date') {
+    return {
+      session: { ...session, state: 'DOCTOR_MANAGE_SCHEDULE', context: { ...session.context, doctorScheduleAction: 'blocking' } },
+      reply: { body: 'Enter the date you want to block (DD-MM-YYYY) or tap "Pick a date":', buttonLabel: 'Pick a date', sections: getDateMoreSections() },
+      replyType: 'list',
+    };
+  }
+
+  if (intent === 'doctor_view_blocked') {
+    const blocked = await fetchBlockedDates();
+    if (blocked.length === 0) {
+      return {
+        session,
+        reply: { body: '*No blocked dates.*', buttonLabel: 'Back', sections: getDoctorScheduleSections() },
+        replyType: 'list',
+      };
+    }
+
+    let body = '*📅 Blocked Dates*\n\n';
+    blocked.forEach((b) => {
+      body += `• ${formatDatePretty(b.date)} ${formatDayName(b.date)}`;
+      if (b.reason) body += ` — ${b.reason}`;
+      body += '\n';
+    });
+
+    return {
+      session,
+      reply: { body, buttonLabel: 'Manage', sections: getDoctorScheduleSections() },
+      replyType: 'list',
+    };
+  }
+
+  // Handle date selection for blocking
+  if (session.context?.doctorScheduleAction === 'blocking' && intent === 'date_selected') {
+    const dateStr = session.context?.doctorDate;
+    if (dateStr) {
+      const result = await blockDate(dateStr, null);
+      return {
+        session: {
+          ...session,
+          state: 'DOCTOR_MANAGE_SCHEDULE',
+          context: { ...session.context, doctorScheduleAction: undefined, doctorDate: undefined },
+        },
+        reply: { body: result ? `*${formatDatePretty(dateStr)}* has been blocked.` : `Could not block *${formatDatePretty(dateStr)}*. It may already be blocked.`, buttonLabel: 'Manage', sections: getDoctorScheduleSections() },
+        replyType: 'list',
+      };
+    }
+  }
+
+  return {
+    session,
+    reply: { body: '*Manage Schedule*\n\nBlock dates when the clinic is closed.', buttonLabel: 'Manage', sections: getDoctorScheduleSections() },
+    replyType: 'list',
+  };
+}
+
+function getDoctorScheduleSections() {
+  return [
+    { title: 'Schedule', rows: [
+      { id: 'block_date', title: '🔒 Block a Date' },
+      { id: 'view_blocked', title: '📋 View Blocked Dates' },
+      { id: 'unblock_date', title: '🔓 Unblock a Date' },
+      { id: 'back', title: '🔙 Back to Menu' },
+    ]},
+  ];
+}
+
+// ───────────────────────────────────────────────
+// Stats view
+// ───────────────────────────────────────────────
+async function handleDoctorStats(session) {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekStart = weekAgo.toISOString().slice(0, 10);
+  const monthAgo = new Date(now);
+  monthAgo.setMonth(monthAgo.getMonth() - 1);
+  const monthStart = monthAgo.toISOString().slice(0, 10);
+
+  const [todayCount, weekCount, monthCount] = await Promise.all([
+    countAppointmentsByDateRange(today, today),
+    countAppointmentsByDateRange(weekStart, today),
+    countAppointmentsByDateRange(monthStart, today),
+  ]);
+
+  let body = `*📊 Appointment Stats*\n\n`;
+  body += `*Today:* ${todayCount} appointments\n`;
+  body += `*This Week:* ${weekCount} appointments\n`;
+  body += `*This Month:* ${monthCount} appointments\n`;
+
+  return {
+    session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+    reply: { body, buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back to Menu' }]) },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Single-row section helper
+// ───────────────────────────────────────────────
+function singleRowSection(rows) {
+  return [{ title: 'Options', rows }];
+}
+
+// ───────────────────────────────────────────────
+// Proactive notification fire points (called from outside)
+// ───────────────────────────────────────────────
+export async function notifyDoctorNewBooking(appointment) {
+  const body = `*🆕 New Appointment Booked*\n\nPatient: ${appointment.patient_name || 'N/A'}\nPhone: ${appointment.patient_phone || 'N/A'}\nDate: ${formatDate(appointment.date)} ${formatDayName(appointment.date)}\nTime: ${appointment.time}\nTreatment: ${appointment.treatment || 'N/A'}`;
+  await notifyDoctor(body);
+}
+
+export async function notifyDoctorCancellation(appointment) {
+  const body = `*❌ Appointment Cancelled*\n\nPatient: ${appointment.patient_name || 'N/A'}\nDate: ${formatDate(appointment.date)} ${formatDayName(appointment.date)}\nTime: ${appointment.time}\nTreatment: ${appointment.treatment || 'N/A'}`;
+  await notifyDoctor(body);
+}
+
+export async function notifyDoctorReschedule(appointment, oldDate, oldTime) {
+  const body = `*🔄 Appointment Rescheduled*\n\nPatient: ${appointment.patient_name || 'N/A'}\nOld: ${formatDate(oldDate)} at ${oldTime}\nNew: ${formatDate(appointment.date)} at ${appointment.time}\nTreatment: ${appointment.treatment || 'N/A'}`;
+  await notifyDoctor(body);
 }

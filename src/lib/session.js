@@ -1,4 +1,5 @@
 import { findSessionByWaId, upsertSession, saveSession } from '@/db/repositories/sessionRepository';
+import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
 
 // In-memory session cache for replay mode and no-DB scenarios.
@@ -130,22 +131,35 @@ function rowToSession(row) {
 }
 
 export async function getOrCreate(waId, phoneNumberId, profileName) {
+  // Detect role: doctor waId is configured in clinic.js
+  // Strip leading + from both sides for reliable comparison
+  const cleanWaId = waId.replace(/^\+/, '');
+  const cleanDoctorWaId = (CLINIC.doctor?.waId || '').replace(/^\+/, '');
+  const role = cleanDoctorWaId && cleanWaId === cleanDoctorWaId ? 'doctor' : 'patient';
+
   // Layer 1: In-memory cache (replay mode, no-DB, or between saves)
   // Cached sessions are in internal format — return a shallow copy directly
   const cached = getCached(waId);
-  if (cached) return cached;
+  if (cached) {
+    // Always set role for doctor waId (overwrites stale 'patient' from pre-feature sessions)
+    cached.context = { ...cached.context, role };
+    return cached;
+  }
 
   // Layer 2: Database
   const existing = await findSessionByWaId(waId);
 
   if (existing) {
     const session = rowToSession(existing);
+    // Always set role (rowToSession drops non-standard context fields)
+    session.context = { ...session.context, role };
     cacheSession(session);
     return session;
   }
 
   // Layer 3: New session — create via upsert or fallback to in-memory
   const session = emptySession(waId, phoneNumberId, profileName);
+  session.context = { ...session.context, role };
   const created = await upsertSession({
     waId: session.waId,
     phoneNumberId: session.phoneNumberId,
