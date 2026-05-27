@@ -37,6 +37,7 @@ const ID_TO_INTENT = {
   'main_menu': 'main_menu',
   'treatment_help': 'treatment_help',
   'change': 'change_booking',
+  'date_more': 'date_more',
 };
 
 function resolveDateId(id) {

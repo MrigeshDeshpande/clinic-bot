@@ -267,7 +267,7 @@ function handleMainMenu(session, intent) {
       reply: {
         body: 'What date works for you?',
         buttonLabel: 'Select date',
-        sections: getDateListSections(),
+        sections: getDateQuickPickSections(),
       },
       replyType: 'list',
     };
@@ -307,6 +307,16 @@ function handleBookingCollection(session, entities, normalized, intent) {
       session,
       reply: 'Please type the date you\'d like.\n\nExamples: "tomorrow", "next Monday", "28 May"',
       replyType: 'text',
+    };
+  }
+  if (intent === 'date_more') {
+    const pending = computePendingFields(session.context, session.context.receivedEntities || {});
+    const currentField = pending[0];
+    const body = currentField === 'date' ? 'Here are more available dates:' : 'Pick a date:';
+    return {
+      session,
+      reply: { body, buttonLabel: 'Select date', sections: getDateMoreSections() },
+      replyType: 'list',
     };
   }
   if (intent === 'time_custom') {
@@ -581,7 +591,36 @@ function getTimeListReply(session) {
 // ───────────────────────────────────────────────
 // Date list sections
 // ───────────────────────────────────────────────
-function getDateListSections() {
+function getDateQuickPickSections() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function fmt(d) {
+    return `${dayNames[d.getDay()]} ${d.getDate()} ${monthNames[d.getMonth()]}`;
+  }
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const nextMon = new Date(today);
+  nextMon.setDate(nextMon.getDate() + 1);
+  while (nextMon.getDay() !== 1) nextMon.setDate(nextMon.getDate() + 1);
+
+  return [{
+    title: 'Quick Picks',
+    rows: [
+      { id: 'date_today', title: `Today (${fmt(today)})` },
+      { id: 'date_tomorrow', title: `Tomorrow (${fmt(tomorrow)})` },
+      { id: 'date_next_mon', title: `Next Monday (${fmt(nextMon)})` },
+      { id: 'date_more', title: 'More dates…' },
+    ],
+  }];
+}
+
+function getDateMoreSections() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -606,7 +645,6 @@ function getDateListSections() {
   nextMon.setDate(nextMon.getDate() + 1);
   while (nextMon.getDay() !== 1) nextMon.setDate(nextMon.getDate() + 1);
 
-  // Quick pick dates for deduplication
   const quickPickDates = [today, tomorrow, nextMon];
   function isQuickPick(d) {
     return quickPickDates.some(qd => qd.getTime() === d.getTime());
@@ -614,22 +652,12 @@ function getDateListSections() {
 
   const sections = [];
 
-  // Section 1: Quick Picks
-  sections.push({
-    title: 'Quick Picks',
-    rows: [
-      { id: 'date_today', title: `Today (${fmt(today)})` },
-      { id: 'date_tomorrow', title: `Tomorrow (${fmt(tomorrow)})` },
-      { id: 'date_next_mon', title: `Next Monday (${fmt(nextMon)})` },
-    ],
-  });
-
-  // Section 2: Upcoming Dates (capped at 4 for WhatsApp 10-row limit)
+  // Upcoming Dates (capped at 4 for WhatsApp 10-row limit)
   const upcomingRows = [];
   for (let i = 1; i <= 14; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    if (d.getDay() === 0 || d.getDay() === 6) continue; // Skip weekends
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
     if (isQuickPick(d)) continue;
     upcomingRows.push({ id: toId(d), title: fmt(d) });
     if (upcomingRows.length >= 4) break;
@@ -639,7 +667,6 @@ function getDateListSections() {
     sections.push({ title: 'Upcoming Dates', rows: upcomingRows });
   }
 
-  // Section 3: Custom
   sections.push({
     title: 'Custom',
     rows: [
@@ -647,7 +674,6 @@ function getDateListSections() {
     ],
   });
 
-  // Section 4: Navigation
   sections.push({
     title: 'Navigation',
     rows: [
@@ -663,7 +689,7 @@ function getDateListReply(body) {
   return {
     body,
     buttonLabel: 'Select date',
-    sections: getDateListSections(),
+    sections: getDateQuickPickSections(),
   };
 }
 
@@ -934,7 +960,7 @@ function handleBack(session) {
       reply: {
         body: 'Okay, going back. Where were we?',
         buttonLabel: 'Select',
-        sections: getDateListSections(),
+        sections: getDateQuickPickSections(),
       },
       replyType: 'list',
     };
@@ -1193,7 +1219,7 @@ function handleGreeting(session) {
       reply: {
         body: STATE_GREETING.BOOKING_COLLECTION,
         buttonLabel: 'Select',
-        sections: pending[0] === 'date' ? getDateListSections() :
+        sections: pending[0] === 'date' ? getDateQuickPickSections() :
           pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday) :
           symptomSectionsWithBack(),
       },
@@ -1467,7 +1493,7 @@ function buildFieldPrompt(field, booking, ack, suggestion) {
     const prompt = suggestion || 'What date works for you?';
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;
     return {
-      reply: { body: fullBody, buttonLabel: 'Select date', sections: getDateListSections() },
+      reply: { body: fullBody, buttonLabel: 'Select date', sections: getDateQuickPickSections() },
       replyType: 'list',
     };
   }
