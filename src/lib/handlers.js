@@ -335,10 +335,9 @@ function handleBookingCollection(session, entities, normalized, intent) {
         session: filledSession,
         reply: {
           body: buildConfirmationBody(filledSession.context.booking),
-          buttonLabel: 'Select option',
-          sections: confirmationSectionsWithBack(),
+          buttons: confirmationButtons(),
         },
-        replyType: 'list',
+        replyType: 'buttons',
       };
     }
     session.metrics = { ...session.metrics };
@@ -404,10 +403,9 @@ function handleBookingCollection(session, entities, normalized, intent) {
       session: filledSession,
       reply: {
         body: buildConfirmationBody(filledSession.context.booking),
-        buttonLabel: 'Select option',
-        sections: confirmationSectionsWithBack(),
+        buttons: confirmationButtons(),
       },
-      replyType: 'list',
+      replyType: 'buttons',
     };
   }
 
@@ -482,10 +480,10 @@ function handleBookingCollection(session, entities, normalized, intent) {
         return {
           session: filledSession,
           reply: {
-            body: buildConfirmationBody(filledSession.context.booking),          buttonLabel: 'Select option',
-          sections: confirmationSectionsWithBack(),
-        },
-        replyType: 'list',
+            body: buildConfirmationBody(filledSession.context.booking),
+            buttons: confirmationButtons(),
+          },
+          replyType: 'buttons',
         };
       }
 
@@ -831,6 +829,18 @@ async function handleBookingConfirmation(session, intent, entities) {
     return { session, reply: 'What time works better?', replyType: 'text' };
   }
 
+  if (intent === 'change_booking') {
+    return {
+      session,
+      reply: {
+        body: 'What would you like to change?',
+        buttonLabel: 'Select option',
+        sections: changeOptionsSections(),
+      },
+      replyType: 'list',
+    };
+  }
+
   // Cancel
   session = {
     ...session,
@@ -956,10 +966,9 @@ function handleAffirm(session) {
       session,
       reply: {
         body: buildConfirmationBody(session.context.booking),
-        buttonLabel: 'Select option',
-        sections: confirmationSectionsWithBack(),
+        buttons: confirmationButtons(),
       },
-      replyType: 'list',
+      replyType: 'buttons',
     };
   }
 
@@ -1169,13 +1178,22 @@ function handleGreeting(session) {
   // Returning user — show interactive list for field collection
   if (session.state === 'BOOKING_COLLECTION') {
     const pending = computePendingFields(session.context, session.context.receivedEntities || {});
+    if (pending.length === 0) {
+      return {
+        session,
+        reply: {
+          body: buildConfirmationBody(session.context.booking),
+          buttons: confirmationButtons(),
+        },
+        replyType: 'buttons',
+      };
+    }
     return {
       session,
       reply: {
         body: STATE_GREETING.BOOKING_COLLECTION,
         buttonLabel: 'Select',
-        sections: pending.length === 0 ? confirmationSectionsWithBack() :
-          pending[0] === 'date' ? getDateListSections() :
+        sections: pending[0] === 'date' ? getDateListSections() :
           pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday) :
           symptomSectionsWithBack(),
       },
@@ -1486,6 +1504,25 @@ function confirmationSectionsWithBack() {
   }];
 }
 
+function confirmationButtons() {
+  return [
+    { id: 'confirm', title: 'Confirm ✓' },
+    { id: 'change',  title: 'Change' },
+    { id: 'cancel',  title: 'Cancel' },
+  ];
+}
+
+function changeOptionsSections() {
+  return [{
+    title: 'What would you like to change?',
+    rows: [
+      { id: 'edit_date', title: 'Change Date' },
+      { id: 'edit_time', title: 'Change Time' },
+      { id: 'back',      title: '← Back' },
+    ],
+  }];
+}
+
 function buildProgressSummary(booking) {
   const parts = [];
   if (booking.date) parts.push(formatDateDisplay(booking.date));
@@ -1495,22 +1532,14 @@ function buildProgressSummary(booking) {
 }
 
 function recommendTreatment(text) {
-  const rules = [
-    { keywords: ['pain','ache','hurt','sensitive','sensitivity','cavity','decay','root','nerve','throbbing'], treatment: 'Root Canal' },
-    { keywords: ['clean','scaling','yellow','stain','plaque','tartar','hygiene','dirty'], treatment: 'Teeth Cleaning' },
-    { keywords: ['white','whiten','discolored','bright','smile','cosmetic'], treatment: 'Whitening' },
-    { keywords: ['missing','gap','lost','broken','chip','crack','fracture','damage'], treatment: 'Crowns' },
-    { keywords: ['child','kid','baby','children','pediatric','kids'], treatment: 'Pediatric Dentistry' },
-    { keywords: ['straight','align','crooked','overbite','underbite','orthodontic','braces','aligner'], treatment: 'Braces' },
-    { keywords: ['checkup','routine','exam','annual','general','consultation','check up'], treatment: 'General Dentistry' },
-    { keywords: ['implant','implants','dental implant','false tooth','replacement','missing tooth'], treatment: 'Implants' },
-  ];
-  for (const rule of rules) {
-    if (rule.keywords.some(kw => text.includes(kw))) {
-      return rule.treatment;
-    }
-  }
-  return null;
+  const lower = text.toLowerCase();
+  const matches = CLINIC.treatments.map(t => {
+    const matched = t.aliases.filter(a => lower.includes(a.toLowerCase())).length;
+    return { treatment: t.name, score: matched };
+  }).filter(m => m.score > 0);
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => b.score - a.score);
+  return matches[0].treatment;
 }
 
 function formatDateDisplay(dateStr) {

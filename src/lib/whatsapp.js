@@ -82,10 +82,15 @@ export async function sendText(to, text) {
 
 export async function sendButtons(to, bodyText, buttons) {
   // WhatsApp allows max 3 buttons, each title max 20 chars
-  const btns = buttons.slice(0, 3).map((label, i) => ({
-    type: 'reply',
-    reply: { id: `btn_${i}`, title: label.length > 20 ? label.slice(0, 20) : label },
-  }));
+  // buttons can be strings (legacy) or { id, title } objects
+  const btns = buttons.slice(0, 3).map((b, i) => {
+    const id = typeof b === 'string' ? `btn_${i}` : (b.id || `btn_${i}`);
+    const title = typeof b === 'string' ? b : (b.title || String(b));
+    return {
+      type: 'reply',
+      reply: { id, title: title.length > 20 ? title.slice(0, 20) : title },
+    };
+  });
 
   return apiPost(to, {
     type: 'interactive',

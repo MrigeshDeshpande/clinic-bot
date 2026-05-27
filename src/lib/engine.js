@@ -7,7 +7,7 @@ import { getNextState } from '@/lib/transitions';
 import { detectCorrection } from '@/lib/correction-detector';
 import { evaluateOverwrite } from '@/lib/overwrite-policy';
 import { sendText, sendButtons, sendList, markAsRead } from '@/lib/whatsapp';
-import { createMessage } from '@/db/repositories/messageRepository';
+import { createMessage, createMessages } from '@/db/repositories/messageRepository';
 import { logger } from '@/lib/logger';
 
 export const PIPELINE_HALT = Symbol('PIPELINE_HALT');
@@ -108,10 +108,22 @@ function normalizeMessage(msg, context) {
 // ───────────────────────────────────────────────
 async function sendReply(waId, reply, replyType) {
   switch (replyType) {
-    case 'buttons':
-      return sendButtons(waId, reply.body, reply.buttons);
-    case 'list':
-      return sendList(waId, reply.body, reply.buttonLabel, reply.sections);
+    case 'list': {
+      const sent = await sendList(waId, reply.body, reply.buttonLabel, reply.sections);
+      if (sent) return sent;
+      logger.warn('SEND_LIST_FAILED_FALLING_BACK', { waId });
+      const textBody = reply.body + '\n\n' + reply.sections.map(s =>
+        s.rows.map((r, i) => `${i + 1}. ${r.title}${r.description ? ` (${r.description})` : ''}`).join('\n')
+      ).join('\n');
+      return sendText(waId, textBody);
+    }
+    case 'buttons': {
+      const sent = await sendButtons(waId, reply.body, reply.buttons);
+      if (sent) return sent;
+      logger.warn('SEND_BUTTONS_FAILED_FALLING_BACK', { waId });
+      const btnLabels = reply.buttons.map(b => typeof b === 'string' ? b : b.title);
+      return sendText(waId, reply.body + '\n\n' + btnLabels.map((b, i) => `${i + 1}. ${b}`).join('\n'));
+    }
     case 'text':
     default:
       return sendText(waId, reply);
@@ -161,7 +173,7 @@ export async function processEvent(payload) {
   for (const msg of event.messages) {
     try {
       // Step 2a: deduplicate
-      if (await isDuplicate(msg.id)) {
+      if (isDuplicate(msg.id)) {
         logger.debug('DUPLICATE_SKIPPED', { msgId: msg.id });
         continue;
       }
@@ -254,34 +266,33 @@ export async function processEvent(payload) {
         ];
       }
 
-      // Step 2j: saveSession FIRST — session state must be persisted
-      // before message rows reference it. If message persistence fails,
-      // the session state is already saved and the conversation continues.
-      await save(handlerResult.session);
+      // Step 2j: saveSession — cache is updated synchronously inside save();
+      // DB write is fire-and-forget. Subsequent reads hit the in-memory cache
+      // (getOrCreate checks sessionCache first), so eventual consistency is fine.
+      save(handlerResult.session).catch(() => {});
 
-      // Step 2i: saveMessages — fire-and-forget (errors logged, never abort pipeline)
-      createMessage({
-        msgId: normalized.msgId,
-        sessionId: handlerResult.session.id,
-        waId: normalized.waId,
-        role: 'user',
-        content: normalized.textClean || normalized.text,
-        intent: intentResult.intent,
-        metadata: { stateBefore: session.state, stateAfter: handlerResult.session.state },
-      }).catch(() => {});
-
-      // Always save bot messages — use a generated ID if sendReply returned null
-      // (API failure, replay mode mock, etc.) to prevent silent data loss.
+      // Step 2i: saveMessages — batch both messages in a single INSERT
       const botMsgId = sentMsgId || `bot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      createMessage({
-        msgId: botMsgId,
-        sessionId: handlerResult.session.id,
-        waId: normalized.waId,
-        role: 'bot',
-        content: typeof handlerResult.reply === 'string' ? handlerResult.reply : handlerResult.reply.body,
-        intent: intentResult.intent,
-        metadata: { replyType: handlerResult.replyType },
-      }).catch(() => {});
+      createMessages([
+        {
+          msgId: normalized.msgId,
+          sessionId: handlerResult.session.id,
+          waId: normalized.waId,
+          role: 'user',
+          content: normalized.textClean || normalized.text,
+          intent: intentResult.intent,
+          metadata: { stateBefore: session.state, stateAfter: handlerResult.session.state },
+        },
+        {
+          msgId: botMsgId,
+          sessionId: handlerResult.session.id,
+          waId: normalized.waId,
+          role: 'bot',
+          content: typeof handlerResult.reply === 'string' ? handlerResult.reply : handlerResult.reply.body,
+          intent: intentResult.intent,
+          metadata: { replyType: handlerResult.replyType },
+        },
+      ]).catch(() => {});
 
       // Step 2k: log completion
       logger.info('MESSAGE_PROCESSED', {

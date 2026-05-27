@@ -5,6 +5,16 @@ import { logger } from '@/lib/logger';
 // Ensures session continuity when Neon persistence is unavailable.
 const sessionCache = new Map();
 const MAX_CACHE_SIZE = 500;
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+// Periodic cleanup of expired cache entries
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of sessionCache) {
+    if (now > entry.expiresAt) sessionCache.delete(key);
+  }
+}, CLEANUP_INTERVAL_MS).unref();
 
 function cacheSession(session) {
   if (!session.waId) return;
@@ -12,7 +22,17 @@ function cacheSession(session) {
     const firstKey = sessionCache.keys().next().value;
     if (firstKey) sessionCache.delete(firstKey);
   }
-  sessionCache.set(session.waId, session);
+  sessionCache.set(session.waId, { session, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+function getCached(waId) {
+  const entry = sessionCache.get(waId);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    sessionCache.delete(waId);
+    return null;
+  }
+  return { ...entry.session, metrics: { ...entry.session.metrics } };
 }
 
 function emptySession(waId, phoneNumberId, profileName) {
@@ -112,10 +132,8 @@ function rowToSession(row) {
 export async function getOrCreate(waId, phoneNumberId, profileName) {
   // Layer 1: In-memory cache (replay mode, no-DB, or between saves)
   // Cached sessions are in internal format — return a shallow copy directly
-  if (sessionCache.has(waId)) {
-    const cached = sessionCache.get(waId);
-    return { ...cached, metrics: { ...cached.metrics } };
-  }
+  const cached = getCached(waId);
+  if (cached) return cached;
 
   // Layer 2: Database
   const existing = await findSessionByWaId(waId);

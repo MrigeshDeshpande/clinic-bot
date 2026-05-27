@@ -662,3 +662,95 @@ Intermittent TCP connection timeouts from this machine to the Neon API endpoint.
 | DB connection retries | 3 (1s, 2s linear backoff) |
 | Fetch timeout | 15s |
 | Lint status | ✅ Clean |
+
+---
+
+## 13. WhatsApp & DB Roundtrip Optimization (2026-05-27)
+
+### Theme
+Reliability hardening for WhatsApp API calls and reducing Neon DB dependency in the hot path.
+
+### Problems Fixed
+
+1. **Silent send failures** — `sendList` didn't truncate section titles (24-char limit). A 36-char title caused `400 Section title is too long`. The pipeline logged success (200) but the user never got a reply — only saw "read" receipts.
+
+2. **No retry on WhatsApp network errors** — `fetch failed` to `graph.facebook.com` returned `null` from `apiPost()`, silently dropping the reply.
+
+3. **DB hit on every webhook** — 5 DB calls per message (dedup INSERT, session SELECT, session UPSERT, 2× message INSERT). With 8–12s Neon response times, this added 40–60s latency per interaction.
+
+4. **No fallback when interactive list send fails** — User gets nothing, not even plain text.
+
+### Changes
+
+#### `src/lib/whatsapp.js` — Send resilience
+
+- **Section title truncation** (line 109): `s.title.length > 24 ? s.title.slice(0, 24) : s.title` — same defensive guard that already existed for row titles. Prevents 400 errors from any section title.
+
+- **Network retry** (line 24–74): `apiPost()` now retries up to 2 times with 500ms/1s backoff on `fetch failed` (network errors) and 5xx/429 (server errors). 4xx validation errors are NOT retried — they fail fast.
+
+- **Custom button IDs** (line 88): `sendButtons()` accepts both string arrays (legacy) and `{ id, title }` objects. Enables confirmation buttons with meaningful IDs like `confirm`, `change`, `cancel` instead of `btn_0`, `btn_1`, `btn_2`.
+
+#### `src/lib/deduplicate.js` — Remove DB roundtrip
+
+- Removed the `INSERT INTO messages ... ON CONFLICT DO NOTHING` DB call entirely. Dedup is now purely the in-memory `Set` (10,000 entries, LRU eviction). Saves 1 DB call per webhook. On server restart, a few duplicates may slip through — harmless.
+
+#### `src/lib/session.js` — Cache TTL
+
+- Added 30-minute TTL to in-memory session cache entries. Periodic cleanup via `setInterval` every 5 minutes (`.unref()` so it doesn't block shutdown). Previously the cache only evicted by LRU count (500 entries) — now entries also expire by time.
+
+#### `src/lib/engine.js` — Text fallback + deferred DB writes
+
+- **Text fallback** (line 109–131): When `sendList()` returns null (all retries exhausted), falls back to `sendText()` with a numbered list of options. When `sendButtons()` fails, same thing. User always gets a reply.
+
+- **Deferred session save** (line 272): `save(session)` is now fire-and-forget (`.catch(() => {})`). The in-memory cache is updated synchronously inside `save()`; `getOrCreate()` reads cache first. DB persistence is eventual. Removes 1 `await` from the hot path.
+
+- **Batch message writes** (line 275–289): Both user and bot messages written in a single `createMessages()` multi-row INSERT instead of two separate `createMessage()` calls. Saves 1 DB call per webhook.
+
+#### `src/lib/handlers.js` — Confirmation buttons + symptom-first booking
+
+- **Confirmation via buttons** (line 1488–1501): Replaced the 5-option interactive list (Confirm, Change Date, Change Time, Cancel, Back) with 3 buttons: `Confirm ✓`, `Change`, `Cancel`. "Change" opens a compact 3-option list (Change Date, Change Time, ← Back). Reduces WhatsApp API surface area — buttons are simpler and less likely to fail validation.
+
+- **`change_booking` intent** (line 847): New intent handler returns the change options list when the "Change" button is tapped.
+
+- **Symptom-first booking** (line 696–716): New `symptomSections()` / `symptomSectionsWithBack()` functions show symptoms instead of treatment names during booking. Treatment name shown as `description` (72-char limit). Interactive IDs still map to treatment IDs — nothing downstream changes.
+
+- **`recommendTreatment` refactored** (line 1510): No longer hardcoded. Uses `CLINIC.treatments` aliases directly with score-based matching (counts matching aliases). Single source of truth with entity extraction.
+
+#### `src/config/clinic.js` — Symptom keywords
+
+- Added symptom keywords to every treatment's `aliases` array (e.g. `"bleeding gums"`, `"tooth pain"`, `"cracked"`, `"missing tooth"`). Entity extraction now matches typed symptoms directly without needing the interactive list.
+
+- Added `symptom` field to each treatment (≤23 chars) for the symptom-first list.
+
+#### `src/lib/router.js` — Change button intent
+
+- Added `'change': 'change_booking'` to `ID_TO_INTENT` mapping. Enables the "Change" button on confirmation.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/lib/whatsapp.js` | Section title truncation, network retry, custom button IDs |
+| `src/lib/deduplicate.js` | Removed DB INSERT — purely in-memory now |
+| `src/lib/session.js` | 30-min cache TTL with periodic cleanup |
+| `src/lib/engine.js` | Text fallback on send failure, deferred session save, batch message writes |
+| `src/lib/handlers.js` | Confirmation buttons, symptom-first booking, change intent, recommender refactor |
+| `src/config/clinic.js` | Symptom keywords in aliases, new `symptom` field |
+| `src/lib/router.js` | `change` → `change_booking` intent mapping |
+| `src/db/repositories/messageRepository.js` | New `createMessages()` batch insert function |
+
+### Summary Statistics
+
+| Metric | Value |
+|--------|-------|
+| DB calls per webhook (before) | 5 |
+| DB calls per webhook (after) | 3 |
+| WhatsApp send retry attempts | 2 (500ms, 1s backoff) |
+| Send failure fallback | list → text, buttons → text |
+| Section title truncation | 24 chars (defensive) |
+| Session cache TTL | 30 min |
+| In-memory dedup capacity | 10,000 entries |
+| Batch message INSERT | 2 rows per call |
+| Confirmation buttons | 3 (Confirm, Change, Cancel) |
+| Symptom aliases added | ~30 new keywords across 8 treatments |
+| Lint status | ✅ Clean |
