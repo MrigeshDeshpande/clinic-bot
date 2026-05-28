@@ -253,6 +253,19 @@ export function validateTime(text, date) {
     return { valid: false, reason: 'SLOT_UNAVAILABLE', parsed: parsedTime, suggestion: `Try one of: ${slots.slice(0, 5).join(', ')}.` };
   }
 
+  // Reject if the time has already passed for today
+  if (date) {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const dateStr = date instanceof Date ? date.toISOString().slice(0, 10) : String(date);
+    if (dateStr === today) {
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      if (timeMinutes <= nowMinutes) {
+        return { valid: false, reason: 'TIME_PASSED', parsed: parsedTime, suggestion: `That time has already passed. Please choose a later time.` };
+      }
+    }
+  }
+
   return { valid: true, parsed: parsedTime };
 }
 

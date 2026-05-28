@@ -1544,11 +1544,11 @@ function buildFieldAck(field, value) {
   if (field === 'date') {
     const d = new Date(value);
     const formatted = d.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    return `Great, ${formatted}! 🎉`;
+    return `Great, ${formatted}! ✅`;
   }
   if (field === 'time') {
     const formatted = new Date(`2000-01-01T${value}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-    return `Got it, ${formatted}! 🎉`;
+    return `Got it, ${formatted}! ✅`;
   }
   return '';
 }

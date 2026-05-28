@@ -20,8 +20,6 @@ export const CLINIC = {
     waId: process.env.DOCTOR_WA_ID || '',
   },
   treatments: [
-    { id: 'general',   name: 'General Dentistry',  aliases: ['checkup','consultation','general dentistry','dental checkup','exam','routine','annual'], symptom: 'Routine checkup' },
-    { id: 'cleaning',  name: 'Teeth Cleaning',     aliases: ['cleaning','scaling','teeth cleaning','clean','bleeding gums','bad breath','plaque','tartar','gum'], symptom: 'Bleeding gums or plaque' },
     { id: 'rootcanal', name: 'Root Canal',         aliases: ['root canal','rct','rc','nerve treatment','root canal treatment','tooth pain','toothache','sensitive','decay','cavity','nerve','throbbing'], symptom: 'Tooth pain when chewing' },
     { id: 'whitening', name: 'Whitening',          aliases: ['whitening','teeth whitening','bleaching','stain','yellow','discolored','bright','smile','cosmetic'], symptom: 'Stained or yellow teeth' },
     { id: 'implants',  name: 'Implants',           aliases: ['implant','implants','dental implant','missing tooth','replacement','gap'], symptom: 'Missing tooth' },
