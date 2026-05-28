@@ -62,11 +62,12 @@ export async function saveSession(session) {
         expires_at = NOW() + INTERVAL '30 minutes',
         version = version + 1
       WHERE wa_id = ${session.waId}
+        AND version = ${session.version || 0}
       RETURNING *
     `;
 
     if (rows.length === 0) {
-      logger.warn('SESSION_SAVE_NO_ROWS', { waId: session.waId });
+      logger.warn('SESSION_SAVE_CONFLICT', { waId: session.waId, expectedVersion: session.version });
       return null;
     }
 

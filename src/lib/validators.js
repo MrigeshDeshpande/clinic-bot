@@ -192,6 +192,7 @@ export function validateTime(text, date) {
     const halfPast = lower.match(/\bhalf\s+past\s+(\d{1,2})\b/);
     if (halfPast) {
       let h = parseInt(halfPast[1], 10);
+      if (h >= 1 && h <= 6) h += 12;
       parsedTime = `${String(h).padStart(2, '0')}:30`;
     }
   }
@@ -200,6 +201,7 @@ export function validateTime(text, date) {
     const quarterPast = lower.match(/\bquarter\s+past\s+(\d{1,2})\b/);
     if (quarterPast) {
       let h = parseInt(quarterPast[1], 10);
+      if (h >= 1 && h <= 6) h += 12;
       parsedTime = `${String(h).padStart(2, '0')}:15`;
     }
   }
@@ -208,6 +210,7 @@ export function validateTime(text, date) {
     const quarterTo = lower.match(/\bquarter\s+to\s+(\d{1,2})\b/);
     if (quarterTo) {
       let h = parseInt(quarterTo[1], 10);
+      if (h >= 1 && h <= 6) h += 12;
       h = h === 12 ? 1 : h + 1;
       parsedTime = `${String(h).padStart(2, '0')}:45`;
     }
@@ -217,6 +220,7 @@ export function validateTime(text, date) {
     const oclock = lower.match(/\b(\d{1,2})\s*o['\"]?\s*clock\b/i);
     if (oclock) {
       let h = parseInt(oclock[1], 10);
+      if (h >= 1 && h <= 6) h += 12;
       parsedTime = `${String(h).padStart(2, '0')}:00`;
     }
   }

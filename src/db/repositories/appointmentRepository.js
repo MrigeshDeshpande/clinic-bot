@@ -192,6 +192,25 @@ export async function countAppointmentsByDateRange(startDate, endDate, status) {
   }
 }
 
+export async function countAppointmentsBySlot(date, time) {
+  const sql = getSql();
+  if (!sql) return 0;
+
+  try {
+    const rows = await sql`
+      SELECT COUNT(DISTINCT logical_id) as count
+      FROM appointments
+      WHERE date = ${date}
+        AND time = ${time}
+        AND status = 'confirmed'
+    `;
+    return parseInt(rows[0]?.count || '0', 10);
+  } catch (error) {
+    logger.error('APPOINTMENT_COUNT_BY_SLOT_ERROR', { date, time, error: error.message });
+    return 0;
+  }
+}
+
 export async function supersedeAppointment(logicalId, { date, time, treatment }, maxRetries = 3) {
   const sql = getSql();
   if (!sql) return null;

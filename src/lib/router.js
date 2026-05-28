@@ -25,6 +25,7 @@ const ID_TO_INTENT = {
   'confirm': 'confirm',
   'edit_date': 'edit_date',
   'edit_time': 'edit_time',
+  'edit_treatment': 'edit_treatment',
   'cancel': 'cancel',
   'time_other': 'time_custom',
   'my_appts': 'my_appointments',
@@ -142,12 +143,18 @@ export function classifyIntent(normalized, session) {
     // If correction requires edit flow and we're in BOOKING_CONFIRMATION or BOOKED,
     // map to the standard edit intent
     if (correction && correction.isCorrection && correction.requiresEditFlow) {
-      if (session.state === 'BOOKING_CONFIRMATION' || session.state === 'BOOKED') {
+      if (session.state === 'BOOKING_CONFIRMATION') {
+        const editIntent = `edit_${correction.field}`;
+        if (['edit_date', 'edit_time', 'edit_treatment'].includes(editIntent)) {
+          return { intent: editIntent, confidence: 0.8, source: 'correction_edit_redirect', entities: entitiesForCorrection };
+        }
+      }
+      if (session.state === 'BOOKED') {
+        // From BOOKED, route treatment changes to reschedule; date/time to edit
         const editIntent = `edit_${correction.field}`;
         if (editIntent === 'edit_date' || editIntent === 'edit_time') {
           return { intent: editIntent, confidence: 0.8, source: 'correction_edit_redirect', entities: entitiesForCorrection };
         }
-        // For treatment changes in BOOKED, route to reschedule
         if (editIntent === 'edit_treatment') {
           return { intent: 'reschedule', confidence: 0.8, source: 'correction_edit_redirect' };
         }

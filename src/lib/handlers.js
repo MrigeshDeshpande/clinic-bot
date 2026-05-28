@@ -2,8 +2,9 @@ import { CLINIC } from '@/config/clinic';
 import { validateDate, validateTime, validateTreatment, validatePhone } from '@/lib/validators';
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
 import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppointment,
-         fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange } from '@/db/repositories/appointmentRepository';
-import { fetchBlockedDates, blockDate, unblockDate } from '@/db/repositories/blockedDateRepository';
+         fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange,
+         countAppointmentsBySlot } from '@/db/repositories/appointmentRepository';
+import { isDateBlocked, fetchBlockedDates, blockDate, unblockDate } from '@/db/repositories/blockedDateRepository';
 import { sendList, sendText } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 import { evaluateOverwrite, applyFieldOverwrite, getTargetState } from '@/lib/overwrite-policy';
@@ -25,7 +26,7 @@ const STATE_GREETING = {
 // ───────────────────────────────────────────────
 function calculateFrustration(session, textLower) {
   let score = 0;
-  if (/no|stop|wrong|ugh|stupid|bad/.test(textLower)) score += 2;
+  if (/\b(?:no|stop|wrong|ugh|stupid|bad)\b/i.test(textLower)) score += 2;
   if (session.metrics.messagesInState > 4) score += 1;
   if (textLower.length < 3 && session.metrics.messagesInState > 2) score += 1;
   if (session.metrics.failedAttempts >= 2) score += 2;
@@ -42,7 +43,16 @@ function progressiveFieldFill(session, justSetField, entities) {
   const booking = session.context.booking;
   const accumulated = session.context.receivedEntities || {};
 
-  // Step 1: After setting date, check if we have a valid time in entities or accumulated
+  // Step 1: After setting date, re-validate existing time against the new date's day type
+  if (justSetField === 'date' && booking.time) {
+    const result = validateTime(booking.time, new Date(booking.date));
+    if (!result.valid) {
+      booking.time = null;
+      session.context.bookingTimestamps.time = null;
+    }
+  }
+
+  // Step 2: After setting date, check if we have a valid time in entities or accumulated
   if (justSetField === 'date' && !booking.time) {
     const timeEntity = entities?.time || (accumulated.times && accumulated.times.length > 0 ? accumulated.times[accumulated.times.length - 1] : null);
     if (timeEntity) {
@@ -60,7 +70,7 @@ function progressiveFieldFill(session, justSetField, entities) {
     }
   }
 
-  // Step 2: After setting time, check if we have a valid treatment
+  // Step 3: After setting time, check if we have a valid treatment
   if (justSetField === 'time' && !booking.treatment) {
     const treatmentEntity = entities?.treatment || (accumulated.treatments && accumulated.treatments.length > 0 ? accumulated.treatments[accumulated.treatments.length - 1] : null);
     if (treatmentEntity) {
@@ -680,7 +690,7 @@ function getDateMoreSections() {
   for (let i = 1; i <= 14; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    if (d.getDay() === 0) continue;
     if (isQuickPick(d)) continue;
     upcomingRows.push({ id: toId(d), title: fmt(d) });
     if (upcomingRows.length >= 4) break;
@@ -772,6 +782,27 @@ async function handleBookingConfirmation(session, intent, entities) {
     let appointment;
     let isReschedule = false;
 
+    // Blocked date check
+    if (booking.date && await isDateBlocked(booking.date)) {
+      return {
+        session,
+        reply: 'Sorry, that date is no longer available. Please choose a different date.',
+        replyType: 'text',
+      };
+    }
+
+    // Overbooking check — limit 1 patient per time slot
+    if (booking.date && booking.time) {
+      const slotCount = await countAppointmentsBySlot(booking.date, booking.time);
+      if (slotCount >= 1) {
+        return {
+          session,
+          reply: 'Sorry, that time slot is already booked. Please choose a different time.',
+          replyType: 'text',
+        };
+      }
+    }
+
     // Check if this is a reschedule — supersede the existing appointment chain
     if (session.context.reschedulingLogicalId) {
       appointment = await supersedeAppointment(session.context.reschedulingLogicalId, {
@@ -819,6 +850,15 @@ async function handleBookingConfirmation(session, intent, entities) {
       }
     }
 
+    if (!appointment) {
+      session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, messagesInState: 0 };
+      return {
+        session,
+        reply: 'Sorry, we couldn\u2019t save your appointment due to a technical issue. Please try again.',
+        replyType: 'text',
+      };
+    }
+
     session = {
       ...session,
       state: 'BOOKED',
@@ -827,14 +867,12 @@ async function handleBookingConfirmation(session, intent, entities) {
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
 
     // Fire-and-forget doctor notification
-    if (appointment) {
-      if (isReschedule) {
-        const oldBooking = session.context.previousBooking || {};
-        notifyDoctorReschedule(appointment, oldBooking.date, oldBooking.time);
-        delete session.context.previousBooking;
-      } else {
-        notifyDoctorNewBooking(appointment);
-      }
+    if (isReschedule) {
+      const oldBooking = session.context.previousBooking || {};
+      notifyDoctorReschedule(appointment, oldBooking.date, oldBooking.time);
+      delete session.context.previousBooking;
+    } else {
+      notifyDoctorNewBooking(appointment);
     }
 
     const header = isReschedule ? '✅ Rescheduled!' : '✅ Confirmed!';
@@ -891,6 +929,27 @@ async function handleBookingConfirmation(session, intent, entities) {
     return { session, reply: 'What time works better?', replyType: 'text' };
   }
 
+  if (intent === 'edit_treatment') {
+    session = {
+      ...session,
+      state: 'BOOKING_COLLECTION',
+      context: {
+        ...session.context,
+        booking: { ...session.context.booking, treatment: null },
+      },
+    };
+    session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+    return {
+      session,
+      reply: {
+        body: 'Which treatment would you like instead?',
+        buttonLabel: 'Select treatment',
+        sections: treatmentSections(),
+      },
+      replyType: 'list',
+    };
+  }
+
   if (intent === 'change_booking') {
     return {
       session,
@@ -903,17 +962,28 @@ async function handleBookingConfirmation(session, intent, entities) {
     };
   }
 
-  // Cancel
-  session = {
-    ...session,
-    state: 'MAIN_MENU',
-    context: resetBookingContext(session.context),
-  };
-  session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+  if (intent === 'cancel' || intent === 'cancel_appointment') {
+    session = {
+      ...session,
+      state: 'MAIN_MENU',
+      context: resetBookingContext(session.context),
+    };
+    session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+    return {
+      session,
+      reply: { body: 'No problem. What would you like to do instead?', buttonLabel: 'Menu', sections: mainMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  // Fallthrough — re-prompt the confirmation instead of cancelling
   return {
     session,
-    reply: { body: 'No problem. What would you like to do instead?', buttonLabel: 'Menu', sections: mainMenuSections() },
-    replyType: 'list',
+    reply: {
+      body: buildConfirmationBody(session.context.booking),
+      buttons: confirmationButtons(),
+    },
+    replyType: 'buttons',
   };
 }
 
@@ -1659,6 +1729,7 @@ function changeOptionsSections() {
     rows: [
       { id: 'edit_date', title: 'Change Date' },
       { id: 'edit_time', title: 'Change Time' },
+      { id: 'edit_treatment', title: 'Change Treatment' },
       { id: 'back',      title: '← Back' },
     ],
   }];
@@ -1675,7 +1746,7 @@ function buildProgressSummary(booking) {
 function recommendTreatment(text) {
   const lower = text.toLowerCase();
   const matches = CLINIC.treatments.map(t => {
-    const matched = t.aliases.filter(a => lower.includes(a.toLowerCase())).length;
+    const matched = t.aliases.filter(a => new RegExp('\\b' + a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(lower)).length;
     return { treatment: t.name, score: matched };
   }).filter(m => m.score > 0);
   if (matches.length === 0) return null;
@@ -2226,7 +2297,7 @@ function singleRowSection(rows) {
 // Proactive notification fire points (called from outside)
 // ───────────────────────────────────────────────
 export async function notifyDoctorNewBooking(appointment) {
-  const body = `*🆕 New Appointment Booked*\n\nPatient: ${appointment.patient_name || 'N/A'}\nPhone: ${appointment.patient_phone || 'N/A'}\nDate: ${formatDate(appointment.date)} ${formatDayName(appointment.date)}\nTime: ${appointment.time}\nTreatment: ${appointment.treatment || 'N/A'}`;
+  const body = `*🆕 New Appointment Booked*\n\nPatient: ${appointment.patient_name || 'N/A'}\nPhone: ${appointment.wa_id || 'N/A'}\nDate: ${formatDate(appointment.date)} ${formatDayName(appointment.date)}\nTime: ${appointment.time}\nTreatment: ${appointment.treatment || 'N/A'}`;
   await notifyDoctor(body);
 }
 

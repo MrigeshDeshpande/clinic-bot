@@ -63,8 +63,8 @@ export function getNextState(state, intent, entities) {
     case 'confirm_cancel':
       return 'MAIN_MENU';
     case 'edit_date':
-      return 'BOOKING_COLLECTION';
     case 'edit_time':
+    case 'edit_treatment':
       return 'BOOKING_COLLECTION';
 
     // Doctor transitions

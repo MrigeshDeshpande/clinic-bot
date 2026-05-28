@@ -134,29 +134,29 @@ Bot: What date works for you?
      [Today] [Tomorrow] [Next Monday] + upcoming dates + [Type a different date]
 
 User: "Tomorrow"                        → provide_date
-Bot: Great, Wednesday 27 May! 🎉
+Bot: Great, Wednesday 27 May! ✅
      What time works for you? Slots every 30 minutes.
      [09:00] [14:00] [19:30] [Type a different time]
 
 User: "10am"                            → provide_time
-Bot: Got it, 10:00 AM! 🎉
+Bot: Got it, 10:00 AM! ✅
      Which treatment do you need?
-     [1. General Dentistry] [2. Teeth Cleaning] ... [8. Pediatric Dentistry]
+     [1. Root Canal] [2. Whitening] ... [6. Pediatric Dentistry]
      [I'm not sure — help me choose]
 
-User: "Cleaning" / "2"                  → provide_treatment
+User: "Root Canal" / "1"               → provide_treatment
 Bot: 📋 Appointment Summary
      ─────────────────────
      Date: Wednesday 27 May 2026
      Time: 10:00 AM
-     Treatment: Teeth Cleaning
-     [Confirm] [Change Date] [Change Time] [Cancel] [← Back]
+     Treatment: Root Canal
+     [Confirm] [Change] [Cancel]
 
 User: "Confirm"                         → confirm       → BOOKED
 Bot: ✅ Confirmed!
      Date: Wednesday 27 May 2026
      Time: 10:00 AM
-     Treatment: Teeth Cleaning
+     Treatment: Root Canal
 
      We look forward to seeing you!
      [Book Another] [Reschedule] [Cancel] [Main Menu]
@@ -167,13 +167,13 @@ Bot: ✅ Confirmed!
 ```
 User (in BOOKED): "Reschedule"          → reschedule  → BOOKING_COLLECTION
 Bot: Sure! Let's reschedule your current appointment:
-     📋 Wed 27 May · 10:00 AM · Teeth Cleaning
+     📋 Wed 27 May · 10:00 AM · Root Canal
 
      What date would you like instead?
 
 User: "Next Monday"                     → provide_date
 User: "2pm"                             → provide_time
-User: "Cleaning"                        → provide_treatment
+User: "Root Canal"                      → provide_treatment
 User: "Confirm"                         → confirm
 Bot: ✅ Rescheduled!
      [summary, same sections as BOOKED]
@@ -188,14 +188,14 @@ User: "Book"                            → BOOKING_COLLECTION
 User: "Tomorrow"                        → date set
 User: "2"                               → services  → stays in BOOKING_COLLECTION
 Bot: 🦷 Our Services:
-     • General Dentistry
-     • Teeth Cleaning
+     • Root Canal
+     • Whitening
      • ...
      [Book Appointment] [Main Menu]
 
 User: "Back" / "1"                      → back / appointment → BOOKING_COLLECTION
 User: "2pm"                             → provide_time
-User: "Cleaning" / "1"                  → provide_treatment
+User: "Root Canal" / "1"               → provide_treatment
 User: "Confirm"                         → confirm  → BOOKED
 ```
 
@@ -316,17 +316,15 @@ Bot: [keyword matching] → matches "pain", "sensitive", "cavity", "root", "nerv
      → progresses to next field or confirmation
 ```
 
-**ℹ️** Symptom matching is keyword-based (`recommendTreatment()` in handlers.js):
+**ℹ️** Symptom matching is keyword-based (`recommendTreatment()` in handlers.js) using word-boundary matching to avoid false positives (e.g. "cap" no longer matches "caption"):
 
 | Keywords | Treatment |
 |---|---|
 | `pain`, `ache`, `hurt`, `sensitive`, `cavity`, `decay`, `root`, `nerve`, `throbbing` | Root Canal |
-| `clean`, `scaling`, `yellow`, `stain`, `plaque`, `tartar`, `hygiene`, `dirty` | Teeth Cleaning |
 | `white`, `whiten`, `discolored`, `bright`, `smile`, `cosmetic` | Whitening |
 | `missing`, `gap`, `lost`, `broken`, `chip`, `crack`, `fracture`, `damage` | Crowns |
 | `child`, `kid`, `baby`, `children`, `pediatric`, `kids` | Pediatric Dentistry |
 | `straight`, `align`, `crooked`, `overbite`, `underbite`, `orthodontic`, `braces`, `aligner` | Braces |
-| `checkup`, `routine`, `exam`, `annual`, `general`, `consultation`, `check up` | General Dentistry |
 | `implant`, `implants`, `dental implant`, `false tooth`, `replacement`, `missing tooth` | Implants |
 
 If no keywords match, the bot shows the full treatment list again.
@@ -388,7 +386,7 @@ User: "Book"                            → BOOKING_COLLECTION
 User: "Tomorrow"                        → date = 2026-05-27
 User: "10am"                            → time = 10:00
 User: "2pm"                             → time = 14:00 (overwrites — latest valid entity wins)
-User: "Cleaning"                        → treatment = Teeth Cleaning
+User: "Root Canal"                      → treatment = Root Canal
 ```
 
 **ℹ️** When the user sends `"10am"` then immediately `"2pm"` without waiting for a bot reply, both messages are processed in sequence. The second `provide_time` overwrites the first via `applyFieldOverwrite()` — latest valid entity wins during active collection.
@@ -486,7 +484,19 @@ Bot: "Slots are every 30 minutes. Try 11:00."
                                          [failedAttempts = 1]
 ```
 
-### Flow U: Unknown Treatment
+### Flow U: Time Already Passed (Today)
+
+```
+User: "Book" + "Today" (date set)       → provide_date
+User: "7:30pm"                          → provide_time
+     [But current time is 7:45pm — time has passed]
+Bot: "That time has already passed. Please choose a later time."
+                                          [failedAttempts = 1]
+```
+
+**ℹ️** If booking for today, `validateTime()` compares the parsed time against `now()`. Times at or before the current moment are rejected with `TIME_PASSED`.
+
+### Flow W: Unknown Treatment
 
 ```
 User: "Book" + date + time set
@@ -498,13 +508,17 @@ User: "Dental implant"                  → provide_treatment → "Implants" ✓
 
 **ℹ️** Treatment matching is alias-based, not AI. `CLINIC.treatments` has explicit aliases per treatment. If the alias doesn't match, it returns `unknown`, which no longer increments `failedAttempts`.
 
-### Flow V: Correction at Confirmation
+### Flow X: Correction at Confirmation
 
 ```
 User: [all fields set → BOOKING_CONFIRMATION]
-Bot: 📋 Appointment Summary [Confirm] [Change Date] [Change Time] [Cancel] [← Back]
+Bot: 📋 Appointment Summary [Confirm] [Change] [Cancel]
 
-User: "Change date" / "Date"            → edit_date → BOOKING_COLLECTION
+User: "Change"                          → change_booking
+Bot: What would you like to change?
+     [Change Date] [Change Time] [Change Treatment] [← Back]
+
+User: "Change Date" / "Date"            → edit_date → BOOKING_COLLECTION
 Bot: What date would you like instead? [Date list]
      (booking.date cleared; booking.time and booking.treatment preserved)
 
@@ -512,9 +526,9 @@ User: "Next Monday"                     → provide_date → new date
 User: "Confirm"                         → confirm → BOOKED
 ```
 
-**⚠️** `edit_date` only clears `date` — it no longer clears `time`. If the new date is a Sunday, time validation catches it during confirmation.
+**⚠️** `edit_date` only clears `date` — it no longer clears `time`. The time is re-validated against the new date's day type automatically. `edit_treatment` is also available from the change menu.
 
-### Flow W: Correction in BOOKED State
+### Flow Y: Correction in BOOKED State
 
 ```
 User (in BOOKED): "Change date"         → correction intent detected
@@ -525,7 +539,7 @@ Bot: Your appointment is already confirmed. Would you like to reschedule instead
 
 **ℹ️** The correction detector sets `requiresEditFlow: true` when the session is in `BOOKED` or `BOOKING_CONFIRMATION`. The router then maps to `edit_date` / `edit_time` / `reschedule` intents instead of `correction_*` intents.
 
-### Flow X: Affirm During Collection
+### Flow Z: Affirm During Collection
 
 ```
 User (in BOOKING_COLLECTION, partially filled): "Okay" → affirm
@@ -534,7 +548,7 @@ Bot: [re-prompts current pending field — no penalty]
 
 User (in BOOKING_COLLECTION, ALL fields filled): "Okay" → affirm
 Bot: [auto-advances to BOOKING_CONFIRMATION]
-     📋 Appointment Summary [Confirm] [Change Date] [Change Time] [Cancel]
+     📋 Appointment Summary [Confirm] [Change] [Cancel]
 
 User (in BOOKING_CONFIRMATION): "Yes" / "Okay" → affirm → confirm
 Bot: ✅ Confirmed! [BOOKED]
@@ -542,7 +556,7 @@ Bot: ✅ Confirmed! [BOOKED]
 
 **⚠️** `affirm` in `BOOKING_CONFIRMATION` delegates to `confirm` — saying "yes" at the summary screen books the appointment.
 
-### Flow Y: Escalation from Frustration (Unknown State)
+### Flow AA: Escalation from Frustration (Unknown State)
 
 ```
 User (in any state, frustrated): "This is stupid" / "You're useless" → unknown
@@ -552,17 +566,17 @@ Bot: [calculateFrustration() detects keywords]
      with our team? Call +91 91833 74850 or type 'agent' to speak with someone."
 ```
 
-**Frustration scoring** (`calculateFrustration()` in handlers.js):
+**Frustration scoring** (`calculateFrustration()` in handlers.js) — uses word-boundary regex `\b(?:no|stop|wrong|ugh|stupid|bad)\b` to prevent false positives (e.g. "November" no longer triggers):
 
 | Signal | Score added |
 |---|---|
-| Text contains `no`, `stop`, `wrong`, `ugh`, `stupid`, `bad` | +2 |
+| Text matches `\b(?:no|stop|wrong|ugh|stupid|bad)\b` | +2 |
 | `messagesInState > 4` | +1 |
 | Text < 3 chars AND `messagesInState > 2` | +1 |
 | `failedAttempts >= 2` | +2 |
 | **Threshold to offer escalation** | **≥ 4** |
 
-### Flow Z: Session Expiry → Abandoned
+### Flow AB: Session Expiry → Abandoned
 
 ```
 User returns after session expires:
@@ -572,7 +586,7 @@ Bot: Welcome to Shri Balaji Dental Clinic 🦷
      How can I help today? [Menu]
 ```
 
-### Flow AA: Repeated Greetings
+### Flow AC: Repeated Greetings
 
 ```
 User: "Hi"                              → greeting → MAIN_MENU
@@ -583,7 +597,7 @@ User: "Book"                            → BOOKING_COLLECTION
 
 **ℹ️** Greetings from `MAIN_MENU` just re-show the main menu. Repeated greetings are harmless — no state progression, no penalties.
 
-### Flow AB: Back Navigation Transitions
+### Flow AD: Back Navigation Transitions
 
 ```
 From BOOKING_COLLECTION       → back → MAIN_MENU (context preserved, but if
@@ -607,7 +621,7 @@ case 'back':
 
 **⚠️** Going back from `BOOKING_CONFIRMATION` clears treatment to avoid a bounce-back loop where all 3 fields are filled and any input re-triggers confirmation.
 
-### Flow AC: Empty / Whitespace Messages
+### Flow AE: Empty / Whitespace Messages
 
 ```
 User sends blank text → type='text', body=''
@@ -616,7 +630,7 @@ User sends blank text → type='text', body=''
 → re-prompt with current state's hint
 ```
 
-### Flow AD: Interactive ID Tap for Date
+### Flow AF: Interactive ID Tap for Date
 
 ```
 User taps "Tomorrow" from date list     → interactiveId='date_tomorrow'
@@ -624,19 +638,19 @@ User taps "Tomorrow" from date list     → interactiveId='date_tomorrow'
 → Same as typing "tomorrow" but deterministic (no NLP needed)
 ```
 
-### Flow AE: Irrelevant / Off-Topic Input
+### Flow AG: Irrelevant / Off-Topic Input
 
 ```
 User: "What's the weather?"             → unknown (no intent matches)
 
 Bot (in BOOKING_COLLECTION): [re-prompt current field — no penalty]
 Bot (in MAIN_MENU): "Sorry, I didn't catch that. Tap an option or type what you need."
-Bot (in BOOKING_CONFIRMATION): "... reply 'confirm' to book, 'date' or 'time' to change..."
+Bot (in BOOKING_CONFIRMATION): [Re-shows confirmation summary with [Confirm] [Change] [Cancel] buttons — unrecognized input no longer cancels the booking]
 Bot (in CANCEL_CONFIRM): "... Tap 'Yes, Cancel It' or 'No, Keep It'..."
 Bot (in any state): "Sorry, I didn't catch that. Type '0' for the menu or tell me what you need."
 ```
 
-### Flow AF: Contradictory Date → Time Sequence
+### Flow AH: Contradictory Date → Time Sequence
 
 ```
 User: "10am" before setting a date      → no date set yet
@@ -669,10 +683,11 @@ Bot: provide_time intent detected, but date is pending
 | `BOOKING_CONFIRMATION` | `confirm` | `BOOKED` | DB create or supersede |
 | `BOOKING_CONFIRMATION` | `edit_date` | `BOOKING_COLLECTION` | Date cleared, time/treatment preserved |
 | `BOOKING_CONFIRMATION` | `edit_time` | `BOOKING_COLLECTION` | Time cleared |
+| `BOOKING_CONFIRMATION` | `edit_treatment` | `BOOKING_COLLECTION` | Treatment cleared, date/time preserved |
 | `BOOKING_CONFIRMATION` | `back` | `BOOKING_COLLECTION` | Treatment cleared (bounce-back prevention) |
 | `BOOKING_CONFIRMATION` | `cancel` | `MAIN_MENU` | Context reset |
 | `BOOKING_CONFIRMATION` | `affirm` | `BOOKED` | Affirm → confirm delegation |
-| `BOOKING_CONFIRMATION` | `correction_date` / `correction_time` | `BOOKING_COLLECTION` | Correction → edit flow (requiresEditFlow = true) |
+| `BOOKING_CONFIRMATION` | `correction_date` / `correction_time` / `correction_treatment` | `BOOKING_COLLECTION` | Correction → edit flow (requiresEditFlow = true) |
 | `BOOKED` | `reschedule` | `BOOKING_COLLECTION` | Sets `reschedulingLogicalId` |
 | `BOOKED` | `cancel_appointment` | `CANCEL_CONFIRM` | |
 | `BOOKED` | `appointment` / `book_another` | `BOOKING_COLLECTION` | New booking (fresh context) |
@@ -720,6 +735,7 @@ Bot: provide_time intent detected, but date is pending
 | Criteria | Rule |
 |---|---|
 | **Within hours** | Mon–Sat: 09:00–20:00, Sun: 10:00–14:00 |
+| **Not in the past** | If booking for today, time must not have already passed (rejected with `TIME_PASSED`) |
 | **Slot alignment** | Must be on 30-min boundary (`:00` or `:30`) |
 | **Slot availability** | Must be in `CLINIC.slots[dayType]` array |
 
@@ -733,17 +749,15 @@ Bot: provide_time intent detected, but date is pending
 | `morning` / `breakfast` | → 10:00 |
 | `afternoon` / `lunch` | → 14:00 |
 | `evening` / `night` / `dinner` | → 17:00 |
-| `half past 2` | → 02:30 |
-| `quarter past 2` | → 02:15 |
-| `quarter to 3` | → 02:45 |
-| `2 o'clock` | → 02:00 |
+| `half past 2` | → 14:30 (hours 1-6 default to PM) |
+| `quarter past 2` | → 14:15 (hours 1-6 default to PM) |
+| `quarter to 3` | → 14:45 (hours 1-6 default to PM) |
+| `2 o'clock` | → 14:00 (hours 1-6 default to PM) |
 
 ### Treatment Validation (`validateTreatment()` in `validators.js`)
 
 | Treatment | Aliases |
 |---|---|
-| General Dentistry | `checkup`, `consultation`, `general dentistry`, `dental checkup` |
-| Teeth Cleaning | `cleaning`, `scaling`, `teeth cleaning`, `clean` |
 | Root Canal | `root canal`, `rct`, `rc`, `nerve treatment` |
 | Whitening | `whitening`, `teeth whitening`, `bleaching` |
 | Implants | `implant`, `implants`, `dental implant` |
@@ -797,6 +811,16 @@ Bot: provide_time intent detected, but date is pending
 10. **Session save before message persistence** — In the engine pipeline, `save(handlerResult.session)` runs **before** `createMessage()`. Message persistence is fire-and-forget with `.catch(() => {})`. This ensures session state is never lost due to DB message errors.
 
 11. **Emergency exits to MAIN_MENU immediately** — After showing emergency info + phone number, the bot transitions to `MAIN_MENU` and attaches an interactive menu. The user is never stuck — they can book, check services, or do anything else in the same turn. The `isEscalated` flag is set for audit trail.
+
+12. **Unrecognized input at confirmation re-prompts instead of cancelling** — Previously, any unrecognized intent at `BOOKING_CONFIRMATION` silently cancelled the booking. Now only explicit `cancel` or `cancel_appointment` intents cancel; everything else re-shows the confirmation summary.
+
+13. **DB persistence failure no longer creates phantom bookings** — `createAppointment()` / `supersedeAppointment()` returning `null` aborts the transition to `BOOKED` and returns an error message instead of falsely saying "Confirmed!".
+
+14. **Time re-validated when date changes** — If a time was set (e.g. 14:00) and the date is later changed to Sunday, the time is re-validated against Sunday's hours (which close at 14:00) and cleared if invalid.
+
+15. **Blocked-date and overbooking checks** — Before confirming, the handler checks `isDateBlocked()` and `countAppointmentsBySlot()`. Blocked dates or double-booked slots are rejected with a message prompting a different choice.
+
+16. **Oral time patterns default to PM** — "half past 2", "quarter to 3", "2 o'clock" etc. default hours 1-6 to PM (14:30, 14:45, 14:00) instead of AM, matching clinic operating hours.
 
 ---
 

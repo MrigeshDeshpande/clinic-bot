@@ -13,7 +13,7 @@ export const TRANSITIONS = {
   BOOKING_COLLECTION:   ['provide_date','provide_time','provide_treatment','cancel','emergency','escalate','back',
                           'correction_date','correction_time','correction_treatment',
                           'affirm','date_custom','date_more','time_custom','treatment_help'],
-  BOOKING_CONFIRMATION: ['confirm','edit_date','edit_time','cancel','emergency','escalate'],
+  BOOKING_CONFIRMATION: ['confirm','edit_date','edit_time','edit_treatment','cancel','emergency','escalate'],
   BOOKED:               ['appointment','cancel_appointment','reschedule','main_menu','emergency','escalate'],
   SERVICES:             ['appointment','main_menu','emergency','escalate'],
   LOCATION:             ['main_menu','emergency','escalate'],
