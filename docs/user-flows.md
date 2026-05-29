@@ -300,6 +300,57 @@ Bot: You have an appointment coming up.
 
 **ℹ️** The greeting uses `firstName()` to personalise the message when a profile name is available. Returning users in active states see a context-aware prompt rather than the generic welcome.
 
+### Flow I-B: 24h Appointment Reminder (Proactive — Cron)
+
+This flow is **outbound only** — triggered by the cron job at 10:00 AM, not by a patient message.
+
+```
+[Cron fires at 10:00 AM]
+→ fetchAppointmentsForReminder() — confirmed, tomorrow, reminder_sent_at IS NULL
+→ For each appointment:
+
+Bot → Patient:
+  Hi Priya! 👋 Just a reminder:
+
+  📅 Tomorrow — Tuesday, 28 May at 10:00 AM
+  🦷 Root Canal with Dr. Vishnu Vardhan
+  📍 Shri Balaji Dental Clinic, Bhilai
+
+  Reply confirm to keep it or cancel to cancel.
+
+→ markReminderSent(appt.id) — stamps reminder_sent_at to prevent duplicate
+
+Patient: "confirm"                      → affirm intent → no state change needed
+Patient: "cancel"                       → cancel intent → cancel flow (if BOOKED) or MAIN_MENU
+```
+
+**ℹ️** Patient replies re-enter the normal webhook pipeline. No new state or intent needed — `confirm` maps to `affirm`, `cancel` maps to `cancel`. The `reminder_sent_at` column prevents the cron from re-sending if it runs again on the same day.
+
+### Flow I-C: Doctor Daily Summary (Proactive — Cron)
+
+Outbound only — triggered at 08:00 AM daily.
+
+```
+[Cron fires at 08:00 AM]
+→ fetchTodayAppointments()
+
+Bot → Doctor:
+  ☀️ Good morning, Dr. Vishnu Vardhan!
+
+  Today — Monday, 27 May
+  09:00  Rajesh Kumar        Root Canal
+  10:30  Priya Sharma        Whitening
+  14:00  Anand Rao           Braces
+
+  Total: 3 appointments
+
+[If no appointments]
+  ☀️ Good morning, Dr. Vishnu Vardhan!
+  No appointments today (Monday, 27 May).
+```
+
+**ℹ️** Always sent even when empty — confirms the bot is alive. Doctor can reply with any intent to open the dashboard.
+
 ### Flow J: Treatment Number Selection
 
 ```
@@ -946,9 +997,9 @@ Prioritised by impact. "Very High" items should be tackled first.
 
 ### 🔴 Very High Impact
 
-#### #14 — Daily Morning Summary (Doctor)
+#### #14 — Daily Morning Summary (Doctor) ✅ IMPLEMENTED 2026-05-29
 **What:** Every morning at 8:00 AM the bot proactively sends the doctor their full day schedule.
-**Why missing:** No cron/scheduler exists — `notifyDoctorNewBooking` is reactive only.
+**Route:** `GET /api/cron/daily-summary` — scheduled via `vercel.json` at `30 2 * * *` (08:00 IST). Secured with `CRON_SECRET`.
 **Implementation notes:**
 - Add a scheduled job (cron, Vercel cron, or external scheduler) that calls a `/api/cron/daily-summary` route at 08:00 IST.
 - Route fetches today's appointments via `fetchAppointmentsByDate(today)` and calls `notifyDoctor(body)`.
@@ -968,9 +1019,9 @@ Prioritised by impact. "Very High" items should be tackled first.
 
 ---
 
-#### #1 — Appointment Reminder 24h Before (Patient)
+#### #1 — Appointment Reminder 24h Before (Patient) ✅ IMPLEMENTED 2026-05-29
 **What:** Patient receives a WhatsApp reminder the day before their appointment.
-**Why:** Reduces no-shows. Most impactful single patient-side feature.
+**Route:** `GET /api/cron/reminders` — scheduled via `vercel.json` at `30 4 * * *` (10:00 IST). Secured with `CRON_SECRET`. Stamps `reminder_sent_at` after send to prevent duplicates.
 **Implementation notes:**
 - Scheduled job runs daily (e.g. 10:00 AM) and queries appointments for `tomorrow`.
 - Sends via `sendText(appointment.wa_id, body)` — no session state needed.

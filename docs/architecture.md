@@ -1817,3 +1817,91 @@ Step 9:  Load test with ngrok + real WhatsApp       (validated)
 ```
 
 Each step is **deployable and testable**. No step leaves the bot in a broken state because `route.js` always returns 200, and unhandled intents gracefully fall back to `MAIN_MENU`.
+
+---
+
+## 21. Cron Jobs (Proactive Notifications)
+
+Added 2026-05-29. Two scheduled routes handle outbound messages that are not triggered by incoming webhooks.
+
+### Routes
+
+| Route | Schedule (UTC) | IST | Purpose |
+|---|---|---|---|
+| `GET /api/cron/daily-summary` | `30 2 * * *` | 08:00 AM | Doctor morning schedule digest |
+| `GET /api/cron/reminders` | `30 4 * * *` | 10:00 AM | Patient 24h appointment reminders |
+
+Both routes are defined in `vercel.json` and executed by Vercel Cron. They are secured with `CRON_SECRET` — requests without a matching `x-cron-secret` header or `?secret=` query param return 401.
+
+### Auth
+
+```
+CRON_SECRET=<random string>   # set in .env.local and Vercel env vars
+```
+
+Vercel passes this automatically for its own cron invocations. For manual testing:
+```
+curl "https://your-domain/api/cron/daily-summary?secret=<CRON_SECRET>"
+```
+
+### Daily Summary (`/api/cron/daily-summary`)
+
+Fetches today's confirmed appointments via `fetchTodayAppointments()` and sends a formatted digest to `CLINIC.doctor.waId` via `sendText()`.
+
+Sample output:
+```
+☀️ Good morning, Dr. Vishnu Vardhan!
+
+*Today — Monday, 27 May*
+```
+09:00  Rajesh Kumar        Root Canal
+10:30  Priya Sharma        Whitening
+14:00  Anand Rao           Braces
+```
+Total: 3 appointments
+```
+
+If no appointments: `"☀️ Good morning! No appointments today."` — still sent so the doctor knows the bot is alive.
+
+### Reminders (`/api/cron/reminders`)
+
+Fetches confirmed appointments for **tomorrow** where `reminder_sent_at IS NULL` via `fetchAppointmentsForReminder()`. Sends each patient a WhatsApp message, then stamps `reminder_sent_at = NOW()` via `markReminderSent(id)` to prevent duplicate sends.
+
+Sample output to patient:
+```
+Hi Priya! 👋 Just a reminder:
+
+📅 Tomorrow — Tuesday, 28 May at 10:00 AM
+🦷 Root Canal with Dr. Vishnu Vardhan
+📍 Shri Balaji Dental Clinic, Bhilai
+
+Reply confirm to keep it or cancel to cancel.
+```
+
+Patient replies re-enter the normal webhook pipeline — `confirm` → `affirm` intent, `cancel` → `cancel` intent. No new state needed.
+
+### DB Change
+
+`appointments` table gained one column (added via `runMigrations()` in `pool.js`):
+
+```sql
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
+```
+
+### New Repository Functions
+
+| Function | File | Purpose |
+|---|---|---|
+| `fetchAppointmentsForReminder()` | `appointmentRepository.js` | Confirmed tomorrow, `reminder_sent_at IS NULL` |
+| `markReminderSent(id)` | `appointmentRepository.js` | Stamps `reminder_sent_at = NOW()` |
+| `fetchTodayAppointments()` | `appointmentRepository.js` | Alias for `fetchAppointmentsByDate(today)` |
+
+### Folder Structure Addition
+
+```
+src/app/api/
+├── webhook/whatsapp/route.js   # existing
+└── cron/
+    ├── daily-summary/route.js  # doctor morning digest
+    └── reminders/route.js      # patient 24h reminders
+```

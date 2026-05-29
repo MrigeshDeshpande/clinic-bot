@@ -26,10 +26,9 @@ export async function GET(req) {
     if (appointments.length === 0) {
       body = `☀️ Good morning, ${CLINIC.doctor.name}!\n\nNo appointments today (${today}).`;
     } else {
-      const lines = appointments.map(a => {
-        const name = a.patient_name || 'Patient';
-        return `${a.time}  ${name.padEnd(18)}  ${a.treatment || ''}`;
-      }).join('\n');
+      const lines = appointments
+        .map(a => `${a.time}  ${(a.patient_name || 'Patient').padEnd(18)}  ${a.treatment || ''}`)
+        .join('\n');
       body = `☀️ Good morning, ${CLINIC.doctor.name}!\n\n*Today — ${today}*\n\`\`\`\n${lines}\n\`\`\`\nTotal: ${appointments.length} appointment${appointments.length !== 1 ? 's' : ''}`;
     }
 
