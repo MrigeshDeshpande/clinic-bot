@@ -5,8 +5,15 @@ import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
 
 export async function GET(req) {
-  const secret = req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('secret');
-  if (secret !== process.env.CRON_SECRET) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    logger.error('CRON_SECRET_NOT_SET');
+    return Response.json({ error: 'Server misconfiguration' }, { status: 500 });
+  }
+  const authHeader = req.headers.get('authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const secret = bearerToken || req.headers.get('x-cron-secret') || new URL(req.url).searchParams.get('secret');
+  if (secret !== cronSecret) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

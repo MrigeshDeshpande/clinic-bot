@@ -386,7 +386,7 @@ function handleBookingCollection(session, entities, normalized, intent) {
       return {
         session: filledSession,
         reply: {
-          body: buildConfirmationBody(filledSession.context.booking),
+          body: buildConfirmationBody(filledSession.context.booking, filledSession),
           buttons: confirmationButtons(),
         },
         replyType: 'buttons',
@@ -454,7 +454,7 @@ function handleBookingCollection(session, entities, normalized, intent) {
     return {
       session: filledSession,
       reply: {
-        body: buildConfirmationBody(filledSession.context.booking),
+        body: buildConfirmationBody(filledSession.context.booking, filledSession),
         buttons: confirmationButtons(),
       },
       replyType: 'buttons',
@@ -532,7 +532,7 @@ function handleBookingCollection(session, entities, normalized, intent) {
         return {
           session: filledSession,
           reply: {
-            body: buildConfirmationBody(filledSession.context.booking),
+            body: buildConfirmationBody(filledSession.context.booking, filledSession),
             buttons: confirmationButtons(),
           },
           replyType: 'buttons',
@@ -989,7 +989,7 @@ async function handleBookingConfirmation(session, intent, entities) {
   return {
     session,
     reply: {
-      body: buildConfirmationBody(session.context.booking),
+      body: buildConfirmationBody(session.context.booking, session),
       buttons: confirmationButtons(),
     },
     replyType: 'buttons',
@@ -1107,7 +1107,7 @@ function handleAffirm(session) {
     return {
       session,
       reply: {
-        body: buildConfirmationBody(session.context.booking),
+        body: buildConfirmationBody(session.context.booking, session),
         buttons: confirmationButtons(),
       },
       replyType: 'buttons',
@@ -1358,7 +1358,7 @@ function handleGreeting(session) {
       return {
         session,
         reply: {
-          body: buildConfirmationBody(session.context.booking),
+          body: buildConfirmationBody(session.context.booking, session),
           buttons: confirmationButtons(),
         },
         replyType: 'buttons',
@@ -1383,7 +1383,7 @@ function handleGreeting(session) {
     return {
       session,
       reply: {
-        body: `Welcome back! ${buildConfirmationBody(session.context.booking)}`,
+        body: buildConfirmationBody(session.context.booking, session),
         buttons: confirmationButtons(),
       },
       replyType: 'buttons',
