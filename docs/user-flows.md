@@ -3,7 +3,7 @@
 > **Audience:** Developers and maintainers  
 > **Purpose:** Document every conversational path — positive, negative, and edge case — with exact bot responses.  
 > **Source:** Derived from `src/lib/*.js`, `src/config/*.js`, and `tests/replay/fixtures.js`.  
-> **Date:** 2026-05-26
+> **Date:** 2026-05-29 (updated — conversational tone improvements)
 
 ---
 
@@ -51,8 +51,9 @@
 | `back` | `back`, `previous`, `go back`, `return` | Context-dependent navigation |
 | `affirm` | `ok`, `okay`, `sure`, `right`, `fine`, `good`, `yep`, `yeah`, `alright`, `that works`, `perfect`, `great`, `got it`, `cool`, `done with this` | Re-prompt or confirm |
 | `greeting` | `hi`, `hello`, `hey`, `namaste`, `good morning`, `good afternoon`, `good evening` | State-appropriate greeting |
-| `thanks` | `thanks`, `thank you`, `thx`, `ty`, `appreciate` | Replies `"You're welcome!"` |
+| `thanks` | `thanks`, `thank you`, `thx`, `ty`, `appreciate` | Replies `"You're welcome! Let me know if you need anything else."` |
 | `help` | `help`, `?`, `what can you do` | State-appropriate help text |
+| `small_talk` | `how are you`, `how r u`, `what's up`, `wassup`, `sup`, `you there`, `anyone there` | Warm one-liner reply, then shows menu |
 
 ### State-Specific Intents
 
@@ -126,39 +127,45 @@ Detected via correction markers + existing booking context. Fires at Priority 1b
 
 ```
 User: "Hi"                              → greeting      → MAIN_MENU
-Bot: 🦷 Welcome to Shri Balaji Dental Clinic. How can I help today?
+Bot: Hi Priya! 👋 Welcome to Shri Balaji Dental Clinic.
+     How can we help you today?
      [Book Appointment] [Dental Services] [Clinic Location] [Clinic Timings]
 
 User: "1" / "Book"                      → appointment   → BOOKING_COLLECTION
-Bot: What date works for you?
+Bot: When would you like to come in? 😊
+     You can tell me everything at once — e.g. "tomorrow at 3pm for a root canal"
+     — or just pick a date below.
      [Today] [Tomorrow] [Next Monday] + upcoming dates + [Type a different date]
 
 User: "Tomorrow"                        → provide_date
-Bot: Great, Wednesday 27 May! ✅
-     What time works for you? Slots every 30 minutes.
+Bot: Wednesday 28 May — perfect! 📅
+     What time works for you?
+     Slots available every 30 minutes.
      [09:00] [14:00] [19:30] [Type a different time]
 
 User: "10am"                            → provide_time
-Bot: Got it, 10:00 AM! ✅
-     Which treatment do you need?
-     [1. Root Canal] [2. Whitening] ... [6. Pediatric Dentistry]
+Bot: 10:00 AM it is! ⏰
+     What seems to be the problem? Pick the symptom that fits best.
+     [Tooth pain when chewing] [Stained or yellow teeth] ... [Child's dental visit]
      [I'm not sure — help me choose]
 
 User: "Root Canal" / "1"               → provide_treatment
-Bot: 📋 Appointment Summary
-     ─────────────────────
-     Date: Wednesday 27 May 2026
-     Time: 10:00 AM
-     Treatment: Root Canal
-     [Confirm] [Change] [Cancel]
+Bot: Root Canal — got it. 🦷
+
+     📋 Priya, here's your booking:
+
+     📅 Wednesday, 28 May 2026
+     ⏰ 10:00 AM
+     🦷 Root Canal with Dr. Vishnu Vardhan
+     [Confirm ✓] [Change] [Cancel]
 
 User: "Confirm"                         → confirm       → BOOKED
-Bot: ✅ Confirmed!
-     Date: Wednesday 27 May 2026
-     Time: 10:00 AM
-     Treatment: Root Canal
+Bot: ✅ You're all set, Priya!
 
-     We look forward to seeing you!
+     📅 Wed, 28 May at 10:00 AM
+     🦷 Root Canal with Dr. Vishnu Vardhan
+
+     See you then! If anything changes, just message us here.
      [Book Another] [Reschedule] [Cancel] [Main Menu]
 ```
 
@@ -279,15 +286,19 @@ Bot: 📋 Appointment Summary [Confirm] [Change Date] [Change Time] [Cancel] [�
 
 ```
 User: "Hi" (while in BOOKING_COLLECTION with partial booking)
-Bot: Hi! We were setting up your appointment. What works for you?
+Bot: We were setting up your appointment — let's pick up where we left off.
      [Date list / Time list / Treatment list based on computePendingFields()]
 
 User: "Hi" (while in BOOKING_CONFIRMATION with all fields set)
-Bot: Hello! Your appointment details are ready to confirm.
+Bot: Your appointment details are ready to confirm.
+     [Confirm ✓] [Change] [Cancel]
 
 User: "Hi" (while in BOOKED)
-Bot: Hi! You have an appointment booked.
+Bot: You have an appointment coming up.
+     [Book Another] [Reschedule] [Cancel] [Main Menu]
 ```
+
+**ℹ️** The greeting uses `firstName()` to personalise the message when a profile name is available. Returning users in active states see a context-aware prompt rather than the generic welcome.
 
 ### Flow J: Treatment Number Selection
 
@@ -373,7 +384,7 @@ User: "2am"                             → BEFORE_OPENING
 Bot: "We open at 09:00."                → [failedAttempts = 2]
 
 User: "3am"                             → BEFORE_OPENING
-Bot: "I'm having trouble understanding."
+Bot: "Having trouble finding a time that works? Let me get someone to help."
      → HUMAN_ESCALATION                  → [failedAttempts = 3]
 ```
 
@@ -644,11 +655,14 @@ User taps "Tomorrow" from date list     → interactiveId='date_tomorrow'
 User: "What's the weather?"             → unknown (no intent matches)
 
 Bot (in BOOKING_COLLECTION): [re-prompt current field — no penalty]
-Bot (in MAIN_MENU): "Sorry, I didn't catch that. Tap an option or type what you need."
-Bot (in BOOKING_CONFIRMATION): [Re-shows confirmation summary with [Confirm] [Change] [Cancel] buttons — unrecognized input no longer cancels the booking]
-Bot (in CANCEL_CONFIRM): "... Tap 'Yes, Cancel It' or 'No, Keep It'..."
-Bot (in any state): "Sorry, I didn't catch that. Type '0' for the menu or tell me what you need."
+     "Hmm, I didn't quite get that. What date works for you?"
+Bot (in MAIN_MENU): "I didn't catch that — tap an option or type what you need."
+Bot (in BOOKING_CONFIRMATION): [Re-shows confirmation summary — unrecognized input no longer cancels the booking]
+Bot (in CANCEL_CONFIRM): "I didn't catch that. Tap 'Yes, Cancel It' or 'No, Keep It'."
+Bot (in any state): "I didn't catch that. Type '0' for the menu or tell me what you need."
 ```
+
+**ℹ️** All unknown-input re-prompts are prefixed with a "didn't catch that" phrase to acknowledge the user's message before re-asking. This avoids the bot appearing to silently ignore input.
 
 ### Flow AH: Contradictory Date → Time Sequence
 
@@ -813,6 +827,101 @@ Bot: provide_time intent detected, but date is pending
 11. **Emergency exits to MAIN_MENU immediately** — After showing emergency info + phone number, the bot transitions to `MAIN_MENU` and attaches an interactive menu. The user is never stuck — they can book, check services, or do anything else in the same turn. The `isEscalated` flag is set for audit trail.
 
 12. **Unrecognized input at confirmation re-prompts instead of cancelling** — Previously, any unrecognized intent at `BOOKING_CONFIRMATION` silently cancelled the booking. Now only explicit `cancel` or `cancel_appointment` intents cancel; everything else re-shows the confirmation summary.
+
+---
+
+## 9. Conversational Tone Improvements (2026-05-29)
+
+These changes reduce the robotic feel without altering any state machine logic.
+
+### Greeting — personalised and context-aware
+
+| Scenario | Before | After |
+|---|---|---|
+| First visit | `Welcome to Shri Balaji Dental Clinic 🦷\nHow can I help you today?` | `Hi {name}! 👋 Welcome to Shri Balaji Dental Clinic.\nHow can we help you today?` |
+| Returning, in `BOOKING_COLLECTION` | `Hi! We were setting up your appointment. What works for you?` | `We were setting up your appointment — let's pick up where we left off.` |
+| Returning, in `BOOKED` | `Hi! You have an appointment booked.` | `You have an appointment coming up.` |
+
+`firstName()` helper extracts the first word of `session.profileName`. Falls back gracefully to no name if unavailable.
+
+### Field acknowledgments — varied, not robotic
+
+`buildFieldAck()` now rotates through 2–3 variants per field using `pick()`:
+
+| Field | Variants |
+|---|---|
+| Date | `"{date} — perfect! 📅"` / `"{date} works great."` / `"Got it — {date}. 📅"` |
+| Time | `"{time} it is! ⏰"` / `"{time} — noted."` / `"Great, {time}. ⏰"` |
+| Treatment | `"{treatment} — got it. 🦷"` / `"{treatment}, noted!"` |
+
+### Booking prompt — invites full request upfront
+
+The opening booking prompt (when user taps "Book Appointment") now reads:
+
+> When would you like to come in? 😊
+> You can tell me everything at once — e.g. *"tomorrow at 3pm for a root canal"* — or just pick a date below.
+
+This reduces back-and-forth for users who already know what they want.
+
+### Confirmation message — personal, not a data dump
+
+`buildConfirmationBody()` now accepts `session` and uses `firstName()`:
+
+```
+📋 Priya, here's your booking:
+
+📅 Wednesday, 28 May 2026
+⏰ 10:00 AM
+🦷 Root Canal with Dr. Vishnu Vardhan
+```
+
+Booked success message:
+
+```
+✅ You're all set, Priya!
+
+📅 Wed, 28 May at 10:00 AM
+🦷 Root Canal with Dr. Vishnu Vardhan
+
+See you then! If anything changes, just message us here.
+```
+
+### Softer error messages
+
+| Scenario | Before | After |
+|---|---|---|
+| Slot already taken | `Sorry, that time slot is already booked. Please choose a different time.` | `That slot just got taken 😅 — pick another time?` |
+| Tech error saving appointment | `Sorry, we couldn't save your appointment due to a technical issue. Please try again.` | `Something went wrong on our end. Give it a moment and try again, or type 'help' to reach us.` |
+| Escalation after 3 failures | `I'm having trouble understanding. Let me connect you to our team at...` | `Having trouble finding a time that works? Let me get someone to help.` |
+
+### "Didn't catch that" prefix on re-prompts
+
+`handleUnknown()` now prefixes all re-prompts with a brief acknowledgment:
+
+| State | Before | After |
+|---|---|---|
+| `MAIN_MENU` | `Sorry, I didn't catch that. Tap an option...` | `I didn't catch that — tap an option or type what you need.` |
+| `BOOKING_COLLECTION` | *(silent re-prompt)* | `Hmm, I didn't quite get that. {field prompt}` |
+| `CANCEL_CONFIRM` | `... Tap 'Yes, Cancel It'...` | `I didn't catch that. Tap 'Yes, Cancel It' or 'No, Keep It'.` |
+
+### Context-aware main menu when user has a booking
+
+When the user is in `BOOKED` state and returns to the main menu, the menu body surfaces their appointment first:
+
+```
+Your next appointment: Wed 28 May, 10:00 AM
+─────────────────────
+[Reschedule] [Cancel appointment] [Book another] [Clinic info]
+```
+
+### Small talk intent
+
+New `small_talk` global intent handles casual openers that previously fell through to `unknown`:
+
+| Keywords | Response |
+|---|---|
+| `how are you`, `how r u`, `what's up`, `wassup`, `sup`, `you there`, `anyone there` | Warm one-liner (e.g. `"Doing great, thanks for asking! 😊 How can I help?"`) + main menu |
+
 
 13. **DB persistence failure no longer creates phantom bookings** — `createAppointment()` / `supersedeAppointment()` returning `null` aborts the transition to `BOOKED` and returns an error message instead of falsely saying "Confirmed!".
 

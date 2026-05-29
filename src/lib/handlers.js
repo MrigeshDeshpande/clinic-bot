@@ -15,11 +15,20 @@ import { getNextState } from '@/lib/transitions';
 // State-aware greeting for returning users
 // ───────────────────────────────────────────────
 const STATE_GREETING = {
-  BOOKING_COLLECTION:   'Hi! We were setting up your appointment. What works for you?',
-  BOOKING_CONFIRMATION: 'Hello! Your appointment details are ready to confirm.',
-  BOOKED:               'Hi! You have an appointment booked.',
-  CANCEL_CONFIRM:       'Hi! Were you looking to cancel an appointment?',
+  BOOKING_COLLECTION:   'We were setting up your appointment — let\'s pick up where we left off.',
+  BOOKING_CONFIRMATION: 'Your appointment details are ready to confirm.',
+  BOOKED:               'You have an appointment coming up.',
+  CANCEL_CONFIRM:       'Were you looking to cancel your appointment?',
 };
+
+function firstName(session) {
+  const name = session.profileName || '';
+  return name.split(' ')[0] || '';
+}
+
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 // ───────────────────────────────────────────────
 // Frustration score
@@ -1613,12 +1622,26 @@ function handleCancel(session) {
 function buildFieldAck(field, value) {
   if (field === 'date') {
     const d = new Date(value);
-    const formatted = d.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    return `Great, ${formatted}! ✅`;
+    const formatted = d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+    return pick([
+      `${formatted} — perfect! 📅`,
+      `${formatted} works great.`,
+      `Got it — ${formatted}. 📅`,
+    ]);
   }
   if (field === 'time') {
     const formatted = new Date(`2000-01-01T${value}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-    return `Got it, ${formatted}! ✅`;
+    return pick([
+      `${formatted} it is! ⏰`,
+      `${formatted} — noted.`,
+      `Great, ${formatted}. ⏰`,
+    ]);
+  }
+  if (field === 'treatment') {
+    return pick([
+      `${value} — got it. 🦷`,
+      `${value}, noted!`,
+    ]);
   }
   return '';
 }
@@ -1684,13 +1707,14 @@ function resetBookingContext(context) {
   };
 }
 
-function buildConfirmationBody(booking) {
+function buildConfirmationBody(booking, session) {
   const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
-  let body = '📋 Appointment Summary\n';
-  body += '━━━━━━━━━━━━━━━━\n';
-  body += `Date: ${formatDateDisplay(booking.date)}\n`;
-  body += `Time: ${formatTime(booking.time)}\n`;
-  body += `Treatment: ${booking.treatment}${doctorSuffix}`;
+  const name = session ? firstName(session) : '';
+  const namePrefix = name ? `${name}, here's your booking:\n\n` : '';
+  let body = `📋 ${namePrefix}`;
+  body += `📅 ${formatDateDisplay(booking.date)}\n`;
+  body += `⏰ ${formatTime(booking.time)}\n`;
+  body += `🦷 ${booking.treatment}${doctorSuffix}`;
   return body;
 }
 
