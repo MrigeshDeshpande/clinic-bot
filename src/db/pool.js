@@ -183,6 +183,12 @@ export async function runMigrations() {
       ALTER TABLE messages ALTER COLUMN wa_id TYPE VARCHAR(50);
     `;
 
+    // Reminder tracking — prevents duplicate 24h reminder sends
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
+    `;
+
     // Blocked dates table for doctor schedule management
     await db`
       CREATE TABLE IF NOT EXISTS blocked_dates (

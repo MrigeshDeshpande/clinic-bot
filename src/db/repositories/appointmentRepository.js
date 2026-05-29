@@ -282,3 +282,47 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
   }
   return null;
 }
+
+// ───────────────────────────────────────────────
+// Fetch confirmed appointments for tomorrow where reminder not yet sent
+// Used by the 24h reminder cron job
+// ───────────────────────────────────────────────
+export async function fetchAppointmentsForReminder() {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const rows = await sql`
+      SELECT DISTINCT ON (logical_id) *
+      FROM appointments
+      WHERE status = 'confirmed'
+        AND date = CURRENT_DATE + INTERVAL '1 day'
+        AND reminder_sent_at IS NULL
+      ORDER BY logical_id, version DESC
+    `;
+    rows.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    return rows;
+  } catch (error) {
+    logger.error('APPOINTMENT_FETCH_REMINDER_ERROR', { error: error.message });
+    return [];
+  }
+}
+
+// ───────────────────────────────────────────────
+// Mark reminder as sent for a given appointment id
+// ───────────────────────────────────────────────
+export async function markReminderSent(id) {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`UPDATE appointments SET reminder_sent_at = NOW() WHERE id = ${id}`;
+  } catch (error) {
+    logger.error('APPOINTMENT_MARK_REMINDER_ERROR', { id, error: error.message });
+  }
+}
+
+// Alias used by daily-summary cron — same as fetchAppointmentsByDate(today)
+export async function fetchTodayAppointments() {
+  const today = new Date().toISOString().slice(0, 10);
+  return fetchAppointmentsByDate(today);
+}

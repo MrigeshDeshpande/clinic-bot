@@ -935,3 +935,149 @@ New `small_talk` global intent handles casual openers that previously fell throu
 
 *Documentation derived from code review session — 2026-05-26.*  
 *Validated by `tests/replay/runner.js` — 13 active fixtures covering all major flows.*
+
+---
+
+## 10. Planned Enhancements Backlog (2026-05-29)
+
+Prioritised by impact. "Very High" items should be tackled first.
+
+---
+
+### 🔴 Very High Impact
+
+#### #14 — Daily Morning Summary (Doctor)
+**What:** Every morning at 8:00 AM the bot proactively sends the doctor their full day schedule.
+**Why missing:** No cron/scheduler exists — `notifyDoctorNewBooking` is reactive only.
+**Implementation notes:**
+- Add a scheduled job (cron, Vercel cron, or external scheduler) that calls a `/api/cron/daily-summary` route at 08:00 IST.
+- Route fetches today's appointments via `fetchAppointmentsByDate(today)` and calls `notifyDoctor(body)`.
+- If no appointments: `"☀️ Good morning! No appointments today."` — still send so the doctor knows the bot is alive.
+- Sample message:
+  ```
+  ☀️ Good morning, Dr. Vishnu Vardhan!
+  Today — Mon 27 May — 4 appointments:
+
+  09:00  Rajesh Kumar       Root Canal
+  10:30  Priya Sharma       Whitening
+  14:00  Anand Rao          Braces
+  16:30  Sneha Patel        Implants
+
+  Reply "today" to open the dashboard.
+  ```
+
+---
+
+#### #1 — Appointment Reminder 24h Before (Patient)
+**What:** Patient receives a WhatsApp reminder the day before their appointment.
+**Why:** Reduces no-shows. Most impactful single patient-side feature.
+**Implementation notes:**
+- Scheduled job runs daily (e.g. 10:00 AM) and queries appointments for `tomorrow`.
+- Sends via `sendText(appointment.wa_id, body)` — no session state needed.
+- Sample message:
+  ```
+  Hi Priya! 👋 Just a reminder:
+
+  📅 Tomorrow — Tue 28 May at 10:00 AM
+  🦷 Root Canal with Dr. Vishnu Vardhan
+  📍 Shri Balaji Dental Clinic, Bhilai
+
+  Reply *confirm* to keep it or *cancel* to cancel.
+  ```
+- Replies to this message re-enter the normal webhook pipeline — `confirm` → `affirm` intent, `cancel` → `cancel` intent. No new state needed.
+- Track `reminder_sent_at` on the appointment row to avoid duplicate sends.
+
+---
+
+### 🟠 High Impact
+
+#### #4 — "My Appointments" with Inline Actions
+**What:** `my_appointments` currently shows a read-only list. After a session expires the user loses `BOOKED` state and can't manage their booking.
+**Fix:** Show each appointment as a tappable list row → tap → detail view with Reschedule / Cancel buttons. Reuse `DOCTOR_APPOINTMENT_DETAIL`-style pattern on the patient side.
+**Implementation notes:**
+- `handleMyAppointments` already fetches `findUpcomingByWaId`. Change rows to use `id: appt_${a.id}` and add an `appt_detail` intent handler.
+- New state: `PATIENT_APPOINTMENT_DETAIL` (or reuse `BOOKED` with `appointmentId` set from the list tap).
+- Simpler alternative: after showing the list, if there's exactly one upcoming appointment, auto-set `session.context.appointmentId` and transition to `BOOKED` so existing reschedule/cancel flows work immediately.
+
+---
+
+#### #7 — Filter Already-Booked Slots from Time Picker
+**What:** Time quick-pick shows slots regardless of availability. Patient picks a taken slot, gets rejected, picks again.
+**Fix:** Call `countAppointmentsBySlot(date, slot)` for each slot before building the list and omit full slots.
+**Implementation notes:**
+- `countAppointmentsBySlot` already exists in `appointmentRepository.js`.
+- In `getTimeListReply(session)`, fetch slot counts for the selected date and filter `CLINIC.slots[dayType]` before passing to `timeQuickPickSections`.
+- Cap DB calls: fetch all appointments for the date in one query, then filter in-memory.
+- Fallback: if all slots are full, show "No slots available on this date — please pick another day" and return to date picker.
+
+---
+
+#### #9 — "Next Appointment" Quick Action (Doctor)
+**What:** Doctor's most common need is "who's next?" — currently requires 2 taps.
+**Fix:** Add a "⏭ Next Patient" row to `getDoctorMenuSections()`.
+**Implementation notes:**
+- On tap, fetch today's appointments, find the first one with `status = 'confirmed'` and `time > now`.
+- If found: jump straight to `DOCTOR_APPOINTMENT_DETAIL` with that appointment pre-loaded.
+- If none: `"No more patients today. 🎉"` with back button.
+- Zero new states needed — reuses existing detail handler.
+
+---
+
+### 🟡 Medium Impact
+
+#### #2 — Post-Appointment Feedback (Patient)
+**What:** After doctor marks `completed`, patient gets a 1–5 star rating prompt.
+**Implementation notes:**
+- In `handleMarkAppointment`, after successful `updateAppointmentStatus('completed')`, fire-and-forget:
+  ```js
+  sendText(appt.wa_id, `Hi ${appt.patient_name}! Hope your visit went well 😊\nHow was your experience?\n\nReply with a number:\n1 ⭐ – 2 ⭐⭐ – 3 ⭐⭐⭐ – 4 ⭐⭐⭐⭐ – 5 ⭐⭐⭐⭐⭐`);
+  ```
+- Rating reply (1–5) hits the webhook → `provide_rating` intent → store on appointment row.
+- Needs a `rating` column on `appointments` table and a `provide_rating` intent in the router.
+
+#### #11 — Forward-Looking Stats (Doctor)
+**What:** Stats currently show past counts only. Add next 7 days and open slots.
+**Implementation notes:**
+- In `handleDoctorStats`, add two more `countAppointmentsByDateRange` calls: `[today+1, today+7]` and `[today+8, today+14]`.
+- Show open slots: `(days × slotsPerDay) - booked`.
+
+#### #5 — Booking for Someone Else (Patient)
+**What:** No way to book for a family member. `patientName` field exists in context but is never collected.
+**Implementation notes:**
+- After treatment is confirmed and before showing the summary, add an optional prompt:
+  `"Who is this appointment for? (Type a name, or tap 'Myself')"`.
+- Store in `session.context.booking.patientName`. Pass to `createAppointment`.
+- New intent: `provide_name` (entity: any non-keyword text after the prompt).
+
+#### #6 — Notes / Special Requests (Patient)
+**What:** No way for patients to communicate special needs.
+**Implementation notes:**
+- Optional final step after all 3 fields collected, before confirmation:
+  `"Anything we should know before your visit? (e.g. anxiety, mobility, allergies) — or tap 'Skip'"`.
+- Store in `session.context.booking.notes`. Pass to `createAppointment` and include in doctor notification.
+
+---
+
+### 🟢 Low Impact / Quick Wins
+
+#### #15 — Show Time Range in Appointment Detail (Doctor)
+`slotIntervalMinutes = 30` is constant. Change `Time: 09:00` → `Time: 09:00 – 09:30` in `handleDoctorAppointmentDetail`. One-liner.
+
+#### #13 — Block Date Reason (Doctor)
+After doctor picks a date to block, prompt: `"Reason? (optional — e.g. holiday, leave)"`. Pass to `blockDate(dateStr, reason)`. The `reason` column already exists in the schema.
+
+#### #12 — Note on Mark Action (Doctor)
+After tapping "Mark Completed" or "No Show", optionally prompt: `"Add a note? (optional)"`. Store on appointment. Useful for "treatment incomplete — follow-up needed".
+
+#### #16 — Patient Contact Shortcut (Doctor)
+In appointment detail, format phone as a WhatsApp deep link: `wa.me/91XXXXXXXXXX`. Patients can be contacted directly from the detail view.
+
+---
+
+### 🔵 Large Effort / Future
+
+#### #3 — Waitlist When Slot Is Taken
+When a slot is full, offer: `"Want me to add you to the waitlist? I'll message you if it opens up."` Needs a `waitlist` table and a trigger in `handleCancelConfirm` to notify the next person on the list.
+
+#### #8 — Hindi / Regional Language Support
+Add Hindi transliterations to intent keyword lists (`"kal"` → tomorrow, `"dard"` → pain, `"doctor"` → doctor). Partial support — greetings and treatment names — would cover most cases without a full translation layer.
