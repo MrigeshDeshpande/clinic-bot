@@ -392,8 +392,11 @@ function handleBookingCollection(session, entities, normalized, intent) {
         replyType: 'buttons',
       };
     }
-    session.metrics = { ...session.metrics };
-    return { session, ...buildFieldPrompt(noFieldCurrent, session.context.booking) };
+    // Allow free-text name input to fall through to field processing
+    if (noFieldCurrent !== 'patientName') {
+      session.metrics = { ...session.metrics };
+      return { session, ...buildFieldPrompt(noFieldCurrent, session.context.booking, undefined, undefined, session) };
+    }
   }
 
   if (session.context.awaitingTreatmentHelp && normalized?.textTrimmed) {
@@ -488,6 +491,8 @@ function handleBookingCollection(session, entities, normalized, intent) {
       validation = validateTime(rawValue, bookingDate);
     } else if (currentField === 'treatment') {
       validation = validateTreatment(rawValue);
+    } else if (currentField === 'patientName') {
+      validation = rawValue.trim().length > 0 ? { valid: true, parsed: rawValue.trim() } : { valid: false };
     }
 
     if (validation?.valid && validation?.parsed) {
@@ -551,7 +556,7 @@ function handleBookingCollection(session, entities, normalized, intent) {
 
       return {
         session: filledSession,
-        ...buildFieldPrompt(nextField, filledSession.context.booking, ack),
+        ...buildFieldPrompt(nextField, filledSession.context.booking, ack, undefined, filledSession),
       };
     }
 
@@ -564,7 +569,7 @@ function handleBookingCollection(session, entities, normalized, intent) {
     }
     return {
       session,
-      ...buildFieldPrompt(currentField, session.context.booking, null, validation?.suggestion || ''),
+      ...buildFieldPrompt(currentField, session.context.booking, null, validation?.suggestion || '', session),
     };
   }
 
@@ -577,18 +582,30 @@ function handleBookingCollection(session, entities, normalized, intent) {
   }
   return {
     session,
-    ...buildFieldPrompt(currentField, session.context.booking),
+    ...buildFieldPrompt(currentField, session.context.booking, undefined, undefined, session),
   };
 }
 
 // ───────────────────────────────────────────────
 // Time quick pick sections
 // ───────────────────────────────────────────────
-function timeQuickPickSections(slots) {
+function timeQuickPickSections(slots, bookingDate) {
+  let availableSlots = slots;
+  if (bookingDate) {
+    const today = new Date().toISOString().slice(0, 10);
+    const dateStr = bookingDate instanceof Date ? bookingDate.toISOString().slice(0, 10) : String(bookingDate);
+    if (dateStr === today) {
+      const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+      availableSlots = slots.filter(s => {
+        const [h, m] = s.split(':').map(Number);
+        return h * 60 + m > nowMinutes;
+      });
+    }
+  }
   const picked = [];
-  if (slots.length > 0) picked.push(slots[0]);
-  if (slots.length > 2) picked.push(slots[Math.floor(slots.length / 2)]);
-  if (slots.length > 1 && !picked.includes(slots[slots.length - 1])) picked.push(slots[slots.length - 1]);
+  if (availableSlots.length > 0) picked.push(availableSlots[0]);
+  if (availableSlots.length > 2) picked.push(availableSlots[Math.floor(availableSlots.length / 2)]);
+  if (availableSlots.length > 1 && !picked.includes(availableSlots[availableSlots.length - 1])) picked.push(availableSlots[availableSlots.length - 1]);
   const unique = [...new Set(picked)].slice(0, 3);
 
   return [{
@@ -603,8 +620,8 @@ function timeQuickPickSections(slots) {
   }];
 }
 
-function timeQuickPickSectionsWithBack(slots) {
-  const sections = timeQuickPickSections(slots);
+function timeQuickPickSectionsWithBack(slots, bookingDate) {
+  const sections = timeQuickPickSections(slots, bookingDate);
   sections.push({
     title: 'Navigation',
     rows: [
@@ -626,7 +643,7 @@ function getTimeListReply(session) {
   return {
     body,
     buttonLabel: 'Select time',
-    sections: timeQuickPickSectionsWithBack(slots),
+    sections: timeQuickPickSectionsWithBack(slots, session.context?.booking?.date),
   };
 }
 
@@ -766,7 +783,6 @@ function symptomSections() {
       ...CLINIC.treatments.map(t => ({
         id: t.id,
         title: t.symptom,
-        description: t.name,
       })),
       { id: 'treatment_help', title: "Something else — tell me more", description: "Describe what you're feeling" },
     ],
@@ -839,7 +855,7 @@ async function handleBookingConfirmation(session, intent, entities) {
       appointment = await createAppointment({
         sessionId: session.id,
         waId: session.waId,
-        patientName: session.profileName,
+        patientName: booking.patientName || session.profileName,
         date: booking.date,
         time: booking.time,
         treatment: booking.treatment,
@@ -1093,7 +1109,7 @@ function handleBack(session) {
 // Affirm handler — user said "ok", "sure", "great" etc.
 // Don't count as failure — just re-prompt the current state.
 // ───────────────────────────────────────────────
-function handleAffirm(session) {
+async function handleAffirm(session) {
   const pending = computePendingFields(session.context, session.context.receivedEntities || {});
   const currentField = pending[0];
 
@@ -1123,10 +1139,58 @@ function handleAffirm(session) {
 
   // For BOOKING_COLLECTION, re-prompt the current field without failure penalty
   if (session.state === 'BOOKING_COLLECTION' && currentField) {
+    // Handle "ok"/"yes" to accept default name for patientName field
+    if (currentField === 'patientName') {
+      const defaultName = session.profileName || '';
+      if (defaultName) {
+        const booking = { ...session.context.booking, patientName: defaultName };
+        session = {
+          ...session,
+          context: { ...session.context, booking },
+        };
+        const newPending = computePendingFields(session.context, session.context.receivedEntities || {});
+        if (newPending.length === 0) {
+          session = { ...session, state: 'BOOKING_CONFIRMATION', previousState: session.state };
+          session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, currentField: null };
+          return {
+            session,
+            reply: {
+              body: buildConfirmationBody(session.context.booking, session),
+              buttons: confirmationButtons(),
+            },
+            replyType: 'buttons',
+          };
+        }
+        return {
+          session: { ...session, metrics: { ...session.metrics, failedAttempts: 0 } },
+          ...buildFieldPrompt(newPending[0], session.context.booking, undefined, undefined, session),
+        };
+      }
+    }
     return {
       session: { ...session, metrics: { ...session.metrics, failedAttempts: 0 } },
-      ...buildFieldPrompt(currentField, session.context.booking),
+      ...buildFieldPrompt(currentField, session.context.booking, undefined, undefined, session),
     };
+  }
+
+  // Reminder reply: "confirm" from IDLE/MAIN_MENU — acknowledge upcoming appointment
+  if (session.state === 'IDLE' || session.state === 'MAIN_MENU' || session.state === 'DONE') {
+    try {
+      const appointments = await findUpcomingByWaId(session.waId);
+      if (appointments && appointments.length > 0) {
+        const apt = appointments[0];
+        const d = new Date(apt.date + 'T' + apt.time);
+        const dateStr = d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+        const timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        return {
+          session,
+          reply: `Great! Your appointment on ${dateStr} at ${timeStr} is confirmed. See you then! 😊`,
+          replyType: 'text',
+        };
+      }
+    } catch {
+      // DB error — fall through to default
+    }
   }
 
   // Default: just repeat current prompt
@@ -1369,8 +1433,8 @@ function handleGreeting(session) {
       reply: {
         body: `Welcome back! ${buildResumePrompt(session.context.booking, pending)}`,
         buttonLabel: 'Select',
-        sections: pending[0] === 'date' ? getDateQuickPickSections() :
-          pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday) :
+        sections:           pending[0] === 'date' ? getDateQuickPickSections() :
+          pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday, session.context?.booking?.date) :
           symptomSectionsWithBack(),
       },
       replyType: 'list',
@@ -1591,11 +1655,55 @@ async function handleMyAppointments(session) {
 // ───────────────────────────────────────────────
 // Global Cancel handler (state-aware)
 // ───────────────────────────────────────────────
-function handleCancel(session) {
+async function handleCancel(session) {
   // If user has an appointment (either in BOOKED state or session has appointmentId),
   // offer cancellation flow
   if (session.state === 'BOOKED' || session.context.appointmentId) {
     return handleCancelAppointment(session);
+  }
+
+  // Reminder reply: "cancel" from IDLE/MAIN_MENU — look up upcoming appointment
+  if (!session.context.appointmentId && (session.state === 'IDLE' || session.state === 'MAIN_MENU' || session.state === 'DONE')) {
+    try {
+      const appointments = await findUpcomingByWaId(session.waId);
+      if (appointments && appointments.length > 0) {
+        const apt = appointments[0];
+        session = {
+          ...session,
+          state: 'CANCEL_CONFIRM',
+          previousState: session.state,
+          context: {
+            ...session.context,
+            appointmentId: apt.id,
+            logicalId: apt.logical_id,
+            booking: {
+              date: apt.date,
+              time: apt.time,
+              treatment: apt.treatment,
+              patientName: apt.patient_name,
+            },
+          },
+        };
+        session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+        return {
+          session,
+          reply: {
+            body: 'Are you sure you want to cancel this appointment?',
+            buttonLabel: 'Select option',
+            sections: [{
+              title: 'Cancel Appointment',
+              rows: [
+                { id: 'confirm_cancel_yes', title: 'Yes, Cancel It' },
+                { id: 'confirm_cancel_no', title: 'No, Keep It' },
+              ],
+            }],
+          },
+          replyType: 'list',
+        };
+      }
+    } catch {
+      // DB error — fall through to reset
+    }
   }
 
   // Otherwise: reset booking context, go to main menu
@@ -1638,9 +1746,17 @@ function buildFieldAck(field, value) {
     ]);
   }
   if (field === 'treatment') {
+    const treatment = CLINIC.treatments.find(t => t.name === value);
+    const label = treatment ? treatment.symptom : value;
     return pick([
-      `${value} — got it. 🦷`,
-      `${value}, noted!`,
+      `${label} — got it. 🦷`,
+      `${label}, noted!`,
+    ]);
+  }
+  if (field === 'patientName') {
+    return pick([
+      `Thanks, ${value}!`,
+      `${value} — noted!`,
     ]);
   }
   return '';
@@ -1650,7 +1766,7 @@ function buildFieldAck(field, value) {
  * Build the reply for prompting the next field to collect.
  * Returns { reply, replyType } suitable for spreading into the handler result.
  */
-function buildFieldPrompt(field, booking, ack, suggestion) {
+function buildFieldPrompt(field, booking, ack, suggestion, session) {
   const progress = buildProgressSummary(booking);
   let body = '';
 
@@ -1676,7 +1792,7 @@ function buildFieldPrompt(field, booking, ack, suggestion) {
     const prompt = suggestion ? `What time works for you?\n${suggestion}` : 'What time works for you?\nSlots available every 30 minutes.';
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;
     return {
-      reply: { body: fullBody, buttonLabel: 'Select time', sections: timeQuickPickSectionsWithBack(slots) },
+      reply: { body: fullBody, buttonLabel: 'Select time', sections: timeQuickPickSectionsWithBack(slots, booking?.date) },
       replyType: 'list',
     };
   }
@@ -1686,6 +1802,15 @@ function buildFieldPrompt(field, booking, ack, suggestion) {
     return {
       reply: { body: fullBody, buttonLabel: 'Select symptom', sections: symptomSectionsWithBack() },
       replyType: 'list',
+    };
+  }
+  if (field === 'patientName') {
+    const defaultName = session?.profileName || '';
+    const nameHint = defaultName ? `\n\n(default: ${defaultName} — type "ok" to use this)` : '';
+    const prompt = suggestion || `What name should the appointment be under?${nameHint}`;
+    const fullBody = body ? `${body}\n\n${prompt}` : prompt;
+    return {
+      reply: { body: fullBody, replyType: 'text' },
     };
   }
 
@@ -1709,7 +1834,7 @@ function resetBookingContext(context) {
 
 function buildConfirmationBody(booking, session) {
   const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
-  const name = session ? firstName(session) : '';
+  const name = booking?.patientName || (session ? firstName(session) : '');
   const namePrefix = name ? `${name}, here's your booking:\n\n` : '';
   let body = `📋 ${namePrefix}`;
   body += `📅 ${formatDateDisplay(booking.date)}\n`;
@@ -2157,6 +2282,11 @@ async function handleMarkAppointment(session, apptId, status) {
   const statusLabel = status === 'completed' ? '✅ Completed' : '❌ No Show';
   const patientName = result.patient_name || 'Patient';
 
+  // Post-appointment feedback request
+  if (status === 'completed' && result.wa_id) {
+    sendFeedbackRequest(result.wa_id, result.patient_name).catch(() => {});
+  }
+
   session = {
     ...session,
     state: 'DOCTOR_MAIN_MENU',
@@ -2168,6 +2298,12 @@ async function handleMarkAppointment(session, apptId, status) {
     reply: { body: `*${patientName}* marked as *${statusLabel}*.\n\nAppointment updated successfully.`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
     replyType: 'list',
   };
+}
+
+async function sendFeedbackRequest(waId, patientName) {
+  const name = patientName ? patientName.split(' ')[0] : '';
+  const body = `Hi ${name}! 👋\n\nWe hope your visit went well! We'd love to hear your feedback.\n\nReply with a rating (1-5) or share your experience.`;
+  await sendText(waId, body);
 }
 
 // ───────────────────────────────────────────────

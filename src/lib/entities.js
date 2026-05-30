@@ -105,6 +105,9 @@ export function computePendingFields(context, accumulated) {
   if (!booking.time && (!accumulated.times || accumulated.times.length === 0)) {
     pending.push('time');
   }
+  if (booking.treatment && booking.date && booking.time && !booking.patientName) {
+    pending.push('patientName');
+  }
 
   return pending;
 }
