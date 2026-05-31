@@ -4,6 +4,8 @@
 > **Audit Scope:** Full project audit — all source files, config, docs, DB schema  
 > **Bot Version:** Level 2 (interactive messages, entity extraction, state machine)  
 > **Stack:** Next.js 16 (App Router) · Meta WhatsApp Cloud API · Neon DB (PostgreSQL) · Node.js
+>
+> **Historical note (2026-05-31):** This is a point-in-time audit snapshot. Some items listed as bugs, gaps, or planned work may already be implemented. For current behavior, refer to `docs/user-flows.md` and `docs/patient-flow-improvements.md`.
 
 ---
 

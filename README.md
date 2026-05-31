@@ -1,35 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Clinic Bot
 
-## Getting Started
-First, run the development server:
+WhatsApp chatbot for Shri Balaji Dental Clinic.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+It handles appointment booking, service/location/timing queries, emergency detection,
+human escalation, callback requests, and doctor-facing daily operations (reminders and
+morning summaries).
+
+## Stack
+
+- Next.js 16 (App Router)
+- Node.js runtime
+- PostgreSQL (Neon via `@neondatabase/serverless`)
+- Meta WhatsApp Cloud API
+
+## Core Capabilities
+
+- Stateful booking flow (date -> time -> treatment -> patient name -> confirmation)
+- Appointment management (view upcoming, cancel, reschedule)
+- Deterministic intent routing + entity extraction
+- Correction-aware handling (`"actually..."`, `"change to..."`, `"no, not that"`)
+- Session persistence with optimistic locking
+- Emergency and escalation flows
+- Scheduled workflows:
+  - 24h reminders (`/api/cron/reminders`)
+  - Daily doctor summary (`/api/cron/daily-summary`)
+
+## Project Structure
+
+```text
+src/
+  app/api/webhook/whatsapp/route.js    # WhatsApp webhook (GET verify + POST ingest)
+  app/api/cron/reminders/route.js      # Daily reminder cron endpoint
+  app/api/cron/daily-summary/route.js  # Daily doctor summary endpoint
+  config/                              # Clinic config, states, intents
+  lib/                                 # Engine, router, handlers, validators, WhatsApp client
+  db/                                  # Pool, migration SQL, repositories
+  utils/                               # Formatters
+docs/                                  # Architecture, flow guides, audits, backlog
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+Create a local `.env.local` with:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+DATABASE_URL=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_VERIFY_TOKEN=
+DOCTOR_WA_ID=
+CRON_SECRET=
+LOG_LEVEL=info
+```
 
-## Learn More
+Notes:
+- `DOCTOR_WA_ID` is used for doctor notifications.
+- `CRON_SECRET` secures cron endpoints (`Authorization: Bearer <CRON_SECRET>`).
 
-To learn more about Next.js, take a look at the following resources:
+## Local Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run db:migrate
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Webhook endpoint (local):
 
-## Deploy on Vercel
+```text
+http://localhost:3000/api/webhook/whatsapp
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `npm run dev` - start dev server
+- `npm run build` - production build
+- `npm run start` - run production server
+- `npm run lint` - lint source
+- `npm run db:migrate` - apply SQL migration
+- `npm run db:status` - list database tables
+
+## Cron Endpoints
+
+- `GET /api/cron/reminders` - sends tomorrow reminders, idempotent via `reminder_sent_at`
+- `GET /api/cron/daily-summary` - sends today's schedule to doctor
+
+Both require:
+
+```text
+Authorization: Bearer <CRON_SECRET>
+```
+
+Configured schedules are in `vercel.json`.
+
+## Docs Map
+
+- `docs/README.md` - documentation index and source-of-truth notes
+- `docs/architecture.md` - original architecture blueprint
+- `docs/user-flows.md` - detailed current conversation flows + backlog
+- `docs/patient-flow-improvements.md` - patient-facing improvements implemented
+- `docs/robustness-layer-changes.md` - correction/robustness hardening notes
+- `docs/audit-report-2026-05-26.md` - full project audit snapshot
+
+## Current Documentation Status
+
+- `docs/user-flows.md` and `docs/patient-flow-improvements.md` are closest to current behavior.
+- `docs/architecture.md` and older audit docs contain historical/planned sections; treat
+  them as design context, not strict current-state truth.

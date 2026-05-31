@@ -30,6 +30,51 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+const PROMPT_VARIANTS = {
+  date: [
+    'Which date works for you?',
+    'What date is best for your visit?',
+    'Please choose a date for your appointment.',
+    'When would you like to come in?',
+    'Pick a date that works for you.',
+  ],
+  time: [
+    'Which time works for you?',
+    'What time is best for you?',
+    'Please choose a time for your visit.',
+    'What time should I book for you?',
+    'Pick a time that works for you.',
+  ],
+  timeWithSlots: [
+    'Which time works for you?\nSlots are every 30 minutes.',
+    'What time is best for you?\nWe have 30-minute slots.',
+    'Please choose a time.\nSlots are available every 30 minutes.',
+    'What time should I book for you?\nAvailable in 30-minute slots.',
+    'Pick a time that works for you.\nSlots are every 30 minutes.',
+  ],
+  treatment: [
+    'What problem are you facing? Pick the closest option.',
+    'Which treatment do you need? Choose the closest option.',
+    'Please pick what you need help with.',
+    'What brings you in today? Pick the nearest option.',
+    'Choose the option that matches your concern.',
+  ],
+  patientName: [
+    'What name should I use for this appointment?',
+    'Please tell me the name for this booking.',
+    'Whose name should I put on the appointment?',
+    'What name should this appointment be under?',
+    'Please share the patient name for this booking.',
+  ],
+  callbackPhone: [
+    'Please share your 10-digit phone number, and we will call you back.',
+    'Please send your 10-digit phone number for the callback.',
+    'Kindly share your 10-digit number so we can call you back.',
+    'Please type your 10-digit phone number for a callback.',
+    'Share your 10-digit number and our team will call you back.',
+  ],
+};
+
 // ───────────────────────────────────────────────
 // Frustration score
 // ───────────────────────────────────────────────
@@ -207,7 +252,7 @@ export async function handle(state, { session, normalized, entities, intent }) {
       return handleBookingCollection(session, entities, normalized, intent);
     }
     session.context.lastCorrection = { field: 'time', timestamp: new Date().toISOString() };
-    return { session, reply: 'Sure! What time works better?', replyType: 'text' };
+    return { session, reply: 'Sure, which time works better?', replyType: 'text' };
   }
   if (intent === 'correction_treatment') {
     const policy = evaluateOverwrite({
@@ -347,7 +392,7 @@ function handleBookingCollection(session, entities, normalized, intent) {
   if (intent === 'date_custom') {
     return {
       session,
-      reply: 'Please type the date you\'d like.\n\nExamples: "tomorrow", "next Monday", "28 May"',
+      reply: 'Please type your preferred date.\n\nExamples: "tomorrow", "next Monday", "28 May"',
       replyType: 'text',
     };
   }
@@ -364,7 +409,7 @@ function handleBookingCollection(session, entities, normalized, intent) {
   if (intent === 'time_custom') {
     return {
       session,
-      reply: 'Please type the time you\'d like.\n\nExamples: "10am", "2:30pm"\nSlots available every 30 minutes.',
+      reply: 'Please type your preferred time.\n\nExamples: "10am", "2:30pm"\nSlots are every 30 minutes.',
       replyType: 'text',
     };
   }
@@ -811,7 +856,7 @@ async function handleBookingConfirmation(session, intent, entities) {
     if (booking.date && await isDateBlocked(booking.date)) {
       return {
         session,
-        reply: 'Sorry, that date is no longer available. Please choose a different date.',
+        reply: 'Sorry, that date is not available now. Please pick another date.',
         replyType: 'text',
       };
     }
@@ -822,7 +867,7 @@ async function handleBookingConfirmation(session, intent, entities) {
       if (slotCount >= 1) {
         return {
           session,
-          reply: 'Sorry, that time slot is already booked. Please choose a different time.',
+          reply: 'Sorry, that slot is already booked. Please pick another time.',
           replyType: 'text',
         };
       }
@@ -879,7 +924,7 @@ async function handleBookingConfirmation(session, intent, entities) {
       session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, messagesInState: 0 };
       return {
         session,
-        reply: 'Sorry, we couldn\u2019t save your appointment due to a technical issue. Please try again.',
+        reply: 'Sorry, I could not save your appointment due to a technical issue. Please try again.',
         replyType: 'text',
       };
     }
@@ -951,7 +996,7 @@ async function handleBookingConfirmation(session, intent, entities) {
       },
     };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
-    return { session, reply: 'What time works better?', replyType: 'text' };
+    return { session, reply: 'Which time works better?', replyType: 'text' };
   }
 
   if (intent === 'edit_treatment') {
@@ -1321,7 +1366,7 @@ function handleCallbackRequested(session, entities) {
 
   session = { ...session };
   session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
-  return { session, reply: 'Please share your 10-digit phone number for the callback.', replyType: 'text' };
+  return { session, reply: pick(PROMPT_VARIANTS.callbackPhone), replyType: 'text' };
 }
 
 // ───────────────────────────────────────────────
@@ -1357,7 +1402,7 @@ function handleUnknown(session, normalized) {
   };
 
   const hint = hints[session.state] || 'Type "0" for the menu or tell me what you need.';
-  return { session, reply: `Sorry, I didn't catch that. ${hint}`, replyType: 'text' };
+  return { session, reply: `Sorry, I missed that. ${hint}`, replyType: 'text' };
 }
 
 function buildResumePrompt(booking, pendingFields) {
@@ -1380,7 +1425,7 @@ function buildResumePrompt(booking, pendingFields) {
     return `${progress}\n\n${hint}`;
   }
 
-  return `We were setting up your appointment. ${hint}`;
+    return `We were booking your appointment. ${hint}`;
 }
 
 // ───────────────────────────────────────────────
@@ -1431,7 +1476,7 @@ function handleGreeting(session) {
     return {
       session,
       reply: {
-        body: `Welcome back! ${buildResumePrompt(session.context.booking, pending)}`,
+        body: `Welcome back. ${buildResumePrompt(session.context.booking, pending)}`,
         buttonLabel: 'Select',
         sections:           pending[0] === 'date' ? getDateQuickPickSections() :
           pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday, session.context?.booking?.date) :
@@ -1502,7 +1547,7 @@ function handleCancelAppointment(session) {
   return {
     session,
     reply: {
-      body: 'Are you sure you want to cancel this appointment?',
+      body: 'Do you want to cancel this appointment?',
       buttonLabel: 'Select option',
       sections: [{
         title: 'Cancel Appointment',
@@ -1554,14 +1599,14 @@ async function handleCancelConfirm(session, intent) {
 
       return {
         session,
-        reply: '✅ Your appointment has been cancelled.\n\nWe understand plans change. If there\'s anything we can help with, we\'re here for you.',
+        reply: '✅ Your appointment is cancelled.\n\nNo worries. If you want, I can help you book another time.',
         replyType: 'text',
       };
     }
 
     return {
       session,
-      reply: 'There was an issue cancelling your appointment. Please call us at ' + CLINIC.phone + ' or try again later.',
+      reply: 'Sorry, I could not cancel it right now. Please call us at ' + CLINIC.phone + ' or try again in a bit.',
       replyType: 'text',
     };
   }
@@ -1619,7 +1664,7 @@ async function handleMyAppointments(session) {
       return {
         session,
         reply: {
-          body: 'You don\'t have any upcoming appointments.\n\nWould you like to book one?',
+          body: 'You have no upcoming appointments.\n\nWould you like to book one now?',
           buttonLabel: 'Menu',
           sections: mainMenuSections(),
         },
@@ -1732,25 +1777,25 @@ function buildFieldAck(field, value) {
     const d = new Date(value);
     const formatted = d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
     return pick([
-      `${formatted} — perfect! 📅`,
-      `${formatted} works great.`,
-      `Got it — ${formatted}. 📅`,
+       `${formatted} works. 📅`,
+       `Great, ${formatted}.`,
+       `Okay, ${formatted}. 📅`,
     ]);
   }
   if (field === 'time') {
     const formatted = new Date(`2000-01-01T${value}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
     return pick([
-      `${formatted} it is! ⏰`,
-      `${formatted} — noted.`,
-      `Great, ${formatted}. ⏰`,
+       `${formatted} works. ⏰`,
+       `Okay, ${formatted}.`,
+       `Great, ${formatted}. ⏰`,
     ]);
   }
   if (field === 'treatment') {
     const treatment = CLINIC.treatments.find(t => t.name === value);
     const label = treatment ? treatment.symptom : value;
     return pick([
-      `${label} — got it. 🦷`,
-      `${label}, noted!`,
+       `${label} noted. 🦷`,
+       `Okay, ${label}.`,
     ]);
   }
   if (field === 'patientName') {
@@ -1778,7 +1823,7 @@ function buildFieldPrompt(field, booking, ack, suggestion, session) {
   }
 
   if (field === 'date') {
-    const prompt = suggestion || 'What date works for you?';
+    const prompt = suggestion || pick(PROMPT_VARIANTS.date);
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;
     return {
       reply: { body: fullBody, buttonLabel: 'Select date', sections: getDateQuickPickSections() },
@@ -1789,7 +1834,9 @@ function buildFieldPrompt(field, booking, ack, suggestion, session) {
     const dateStr = booking?.date;
     const dayType = dateStr ? (new Date(dateStr).getDay() === 0 ? 'sunday' : 'weekday') : 'weekday';
     const slots = CLINIC.slots[dayType] || CLINIC.slots.weekday;
-    const prompt = suggestion ? `What time works for you?\n${suggestion}` : 'What time works for you?\nSlots available every 30 minutes.';
+    const prompt = suggestion
+      ? `${pick(PROMPT_VARIANTS.time)}\n${suggestion}`
+      : pick(PROMPT_VARIANTS.timeWithSlots);
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;
     return {
       reply: { body: fullBody, buttonLabel: 'Select time', sections: timeQuickPickSectionsWithBack(slots, booking?.date) },
@@ -1797,7 +1844,7 @@ function buildFieldPrompt(field, booking, ack, suggestion, session) {
     };
   }
   if (field === 'treatment') {
-    const prompt = suggestion || 'What seems to be the problem? Pick the symptom that fits best.';
+    const prompt = suggestion || pick(PROMPT_VARIANTS.treatment);
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;
     return {
       reply: { body: fullBody, buttonLabel: 'Select symptom', sections: symptomSectionsWithBack() },
@@ -1807,7 +1854,7 @@ function buildFieldPrompt(field, booking, ack, suggestion, session) {
   if (field === 'patientName') {
     const defaultName = session?.profileName || '';
     const nameHint = defaultName ? `\n\n(default: ${defaultName} — type "ok" to use this)` : '';
-    const prompt = suggestion || `What name should the appointment be under?${nameHint}`;
+    const prompt = suggestion || `${pick(PROMPT_VARIANTS.patientName)}${nameHint}`;
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;
     return {
       reply: { body: fullBody, replyType: 'text' },
@@ -1919,11 +1966,11 @@ function handleHelp(session) {
     MAIN_MENU:            'Tap an option or type "book", "services", "location", or "timings".',
     EMERGENCY:            'If this is an emergency, please call us immediately.',
     HUMAN_ESCALATION:     'Our team will be with you shortly.',
-    CALLBACK_REQUESTED:   'Please share your 10-digit phone number.',
+    CALLBACK_REQUESTED:   pick(PROMPT_VARIANTS.callbackPhone),
   };
 
-  const hint = hints[session.state] || 'Type "0" for the menu or tell me what you need.';
-  return { session, reply: `I can help you with appointments, services, and more! ${hint}`, replyType: 'text' };
+  const hint = hints[session.state] || 'Type "0" for menu, or tell me what you need.';
+  return { session, reply: `I can help with booking, services, location, and timings. ${hint}`, replyType: 'text' };
 }
 
 function escalateForFailure(session) {
@@ -1936,7 +1983,7 @@ function escalateForFailure(session) {
   };
   return {
     session,
-    reply: `I'm having trouble understanding. Let me connect you to our team at *${CLINIC.phone}*.`,
+    reply: `I may be getting this wrong. Let me connect you to our team at *${CLINIC.phone}*.`,
     replyType: 'text',
   };
 }
@@ -2075,10 +2122,12 @@ async function handleDoctorMainMenu(session, intent) {
     session = { ...session, state: 'DOCTOR_VIEW_DATE' };
     return {
       session,
-      reply: 'Enter a date (DD-MM-YYYY) or select from the options below:',
+      reply: {
+        body: 'Enter a date (DD-MM-YYYY) or select from the options below:',
+        buttonLabel: 'Quick pick',
+        sections: getDateQuickPickSections(),
+      },
       replyType: 'list',
-      buttonLabel: 'Quick pick',
-      sections: getDateQuickPickSections(),
     };
   }
   if (intent === 'doctor_manage_schedule') {

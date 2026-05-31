@@ -14,25 +14,29 @@
 // because standalone Node.js doesn't know the Next.js path mapping.
 // ───────────────────────────────────────────────
 
-import { processEvent } from '../../src/lib/engine.js';
-import { FIXTURES } from './fixtures.js';
-import { getSql, runMigrations } from '../../src/db/pool.js';
-
 process.env.REPLAY_MODE = 'true';
 process.env.LOG_LEVEL = 'error';
+if (!process.env.DOCTOR_WA_ID) process.env.DOCTOR_WA_ID = 'r_doctor';
+
+const { processEvent } = await import('../../src/lib/engine.js');
+const { FIXTURES } = await import('./fixtures.js');
+const { getSql, runMigrations } = await import('../../src/db/pool.js');
 
 // Counter-based waId generator — avoids collisions from similar fixture names
 let fixtureCounter = 1000;
-function makeWaId(_name) {
+function makeWaId(fixture) {
+  if (fixture?.waId) return fixture.waId;
+  if (fixture?.role === 'doctor') return process.env.DOCTOR_WA_ID;
   // Use a simple counter-based ID format: r_{counter}
   // This guarantees uniqueness and stays within VARCHAR limits
   const id = fixtureCounter++;
   return 'r_' + id;
 }
 
-function simulateMessage(waId, text, type = 'text') {
+function simulateMessage(waId, text, type = 'text', interactiveId = null, interactiveTitle = null) {
   const msgId = `rm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now = Math.floor(Date.now() / 1000);
+  const isInteractive = type === 'interactive';
   return {
     object: 'whatsapp_business_account',
     entry: [{
@@ -41,13 +45,19 @@ function simulateMessage(waId, text, type = 'text') {
           messaging_product: 'whatsapp',
           metadata: { phone_number_id: 'replay_phone_id' },
           contacts: [{ profile: { name: 'Replay User' } }],
-          messages: [{
-            id: msgId,
-            from: waId,
-            type,
-            timestamp: String(now),
-            text: type === 'text' ? { body: text } : undefined,
-          }],
+           messages: [{
+             id: msgId,
+             from: waId,
+             type,
+             timestamp: String(now),
+             text: type === 'text' ? { body: text } : undefined,
+             interactive: isInteractive ? {
+               list_reply: {
+                 id: interactiveId || 'unknown_id',
+                 title: interactiveTitle || text || 'Selection',
+               },
+             } : undefined,
+           }],
         },
       }],
     }],
@@ -59,7 +69,7 @@ async function runFixture(fixture) {
     return { name: fixture.name, skipped: true };
   }
 
-  const waId = makeWaId(fixture.name);
+  const waId = makeWaId(fixture);
   const steps = [];
 
   for (let i = 0; i < fixture.messages.length; i++) {
@@ -67,7 +77,13 @@ async function runFixture(fixture) {
     // Add a 5ms delay between messages to simulate realistic timing
     if (i > 0) await new Promise(r => setTimeout(r, 5));
 
-    const payload = simulateMessage(waId, msg.text, msg.type || 'text');
+    const payload = simulateMessage(
+      waId,
+      msg.text,
+      msg.type || 'text',
+      msg.interactiveId || null,
+      msg.interactiveTitle || null
+    );
 
     try {
       const result = await processEvent(payload);

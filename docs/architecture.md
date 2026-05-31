@@ -3,6 +3,8 @@
 > **Stack:** Next.js 16 (App Router) · Meta WhatsApp Cloud API · Neon DB (PostgreSQL) · Node.js
 >
 > **Status:** Architecture v1.0 — ready for implementation
+>
+> **Historical note (2026-05-31):** This is the foundational design blueprint. Implementation has evolved since this version. Cross-check with `docs/user-flows.md`, `docs/patient-flow-improvements.md`, and current `src/` code for latest behavior.
 
 ---
 

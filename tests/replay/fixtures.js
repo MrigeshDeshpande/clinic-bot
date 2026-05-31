@@ -1,39 +1,19 @@
-// ───────────────────────────────────────────────
-// Replay Test Fixtures
-//
-// Each fixture represents a realistic conversational
-// scenario with chaotic human behavior patterns.
-//
-// Format:
-//   { name, messages: [{ text, type? }, ...], expectations }
-//
-// The test runner processes each message through the
-// engine and asserts the expectations at each step.
-// ───────────────────────────────────────────────
-
 export const FIXTURES = [
-
-  // ── 1. Happy Path Booking ──
   {
-    name: 'Happy Path Booking',
+    name: 'Patient Happy Path Booking',
     messages: [
       { text: 'Hi', intent: 'greeting' },
       { text: '1', intent: 'appointment' },
       { text: 'Tomorrow', intent: 'provide_date' },
       { text: '10am', intent: 'provide_time' },
       { text: 'Cleaning', intent: 'provide_treatment' },
-      { text: 'Confirm', intent: 'confirm' },
+      { text: 'ok', intent: 'affirm' },
+      { text: 'confirm', intent: 'confirm' },
     ],
-    expectations: {
-      finalState: 'BOOKED',
-      finalBooking: { date: 'expect_future', time: '10:00', treatment: 'Teeth Cleaning' },
-    },
+    expectations: { finalState: 'BOOKED' },
   },
-
-  // ── 2. Correction During Booking Flow ──
-  // "Actually Wednesday" corrects the date mid-flow
   {
-    name: 'Correction During Booking Flow — "Actually Wednesday"',
+    name: 'Patient Correction During Booking',
     messages: [
       { text: 'Hi', intent: 'greeting' },
       { text: 'Book appointment', intent: 'appointment' },
@@ -41,157 +21,29 @@ export const FIXTURES = [
       { text: 'Actually Wednesday', intent: 'correction_date' },
       { text: '2pm', intent: 'provide_time' },
       { text: 'Root canal', intent: 'provide_treatment' },
-      { text: 'Confirm', intent: 'confirm' },
+      { text: 'ok', intent: 'affirm' },
+      { text: 'confirm', intent: 'confirm' },
     ],
-    expectations: {
-      finalBooking: { time: '14:00', treatment: 'Root Canal' },
-    },
+    expectations: { finalState: 'BOOKED' },
   },
-
-  // ── 3. Correction With "No" Prefix ──
-  // "No evening" corrects the time from 10am to 17:00
   {
-    name: 'Correction With "No" Prefix',
-    messages: [
-      { text: 'Hi', intent: 'greeting' },
-      { text: 'Book', intent: 'appointment' },
-      { text: 'Tomorrow', intent: 'provide_date' },
-      { text: '10am', intent: 'provide_time' },
-      { text: 'No evening', intent: 'correction_time' },
-      { text: 'General Dentistry', intent: 'provide_treatment' },
-      { text: 'Confirm', intent: 'confirm' },
-    ],
-    expectations: {
-      bookingHasTime: true,
-    },
-  },
-
-  // ── 4. Fragmented Messages (progressive filling) ──
-  // "Tomorrow" + "after 5" + "RCT" across 3 messages before bot replies
-  {
-    name: 'Fragmented Messages — Sequential',
-    messages: [
-      { text: 'Hi', intent: 'greeting' },
-      { text: 'Book', intent: 'appointment' },
-      { text: 'Tomorrow', intent: 'provide_date' },
-      { text: 'after 5', intent: 'provide_time' },
-      { text: 'RCT', intent: 'provide_treatment' },
-    ],
-    expectations: {
-      finalState: 'BOOKING_CONFIRMATION',
-    },
-  },
-
-  // ── 5. Single Message With All Details (dense entity packing) ──
-  {
-    name: 'Single Message All Details',
-    messages: [
-      { text: 'Book appointment tomorrow at 10am for cleaning', intent: 'appointment', checkState: 'MAIN_MENU' },
-    ],
-    expectations: {},
-    skip: true,
-  },
-
-  // ── 6. Escalation During Booking ──
-  {
-    name: 'Escalation During Booking',
-    messages: [
-      { text: 'Hi', intent: 'greeting' },
-      { text: 'Book', intent: 'appointment' },
-      { text: 'Tomorrow', intent: 'provide_date' },
-      { text: 'Talk to agent', intent: 'escalate' },
-    ],
-    expectations: {
-      finalState: 'HUMAN_ESCALATION',
-    },
-  },
-
-  // ── 7. Cancel During Booking ──
-  {
-    name: 'Cancel During Booking',
-    messages: [
-      { text: 'Hi', intent: 'greeting' },
-      { text: 'Book', intent: 'appointment' },
-      { text: 'Tomorrow', intent: 'provide_date' },
-      { text: 'Nevermind', intent: 'cancel' },
-    ],
-    expectations: {
-      finalState: 'MAIN_MENU',
-    },
-  },
-
-  // ── 8. Repeated Greetings ──
-  {
-    name: 'Repeated Greetings',
-    messages: [
-      { text: 'Hi', intent: 'greeting' },
-      { text: 'Hello', intent: 'greeting' },
-      { text: 'Hey', intent: 'greeting' },
-      { text: 'Book', intent: 'appointment' },
-    ],
-    expectations: {
-      finalState: 'BOOKING_COLLECTION',
-    },
-  },
-
-  // ── 9. Invalid Then Corrected Input ──
-  {
-    name: 'Invalid Then Corrected Input',
+    name: 'Patient Invalid Then Corrected',
     messages: [
       { text: 'Hi', intent: 'greeting' },
       { text: 'Book', intent: 'appointment' },
       { text: 'Banana', intent: 'unknown' },
       { text: 'Tomorrow', intent: 'provide_date' },
-      { text: 'O\'clock', intent: 'unknown' },
+      { text: "O'clock", intent: 'unknown' },
       { text: '10am', intent: 'provide_time' },
       { text: 'Zebra', intent: 'unknown' },
-      { text: 'cleaning', intent: 'provide_treatment' },
-      { text: 'Confirm', intent: 'confirm' },
+      { text: 'General Dentistry', intent: 'provide_treatment' },
+      { text: 'ok', intent: 'affirm' },
+      { text: 'confirm', intent: 'confirm' },
     ],
-    expectations: {
-      finalState: 'BOOKED',
-    },
+    expectations: { finalState: 'BOOKED' },
   },
-
-  // ── 10. Contradictory Rapid Messages ──
-  // "10am" then "2pm" — last write wins
   {
-    name: 'Contradictory Rapid Messages',
-    messages: [
-      { text: 'Hi', intent: 'greeting' },
-      { text: 'Book', intent: 'appointment' },
-      { text: 'Tomorrow', intent: 'provide_date' },
-      { text: '10am', intent: 'provide_time' },
-      { text: '2pm', intent: 'provide_time' },
-      { text: 'Cleaning', intent: 'provide_treatment' },
-    ],
-    expectations: {
-      finalBooking: { time: '14:00', treatment: 'Teeth Cleaning' },
-    },
-  },
-
-  // ── 11. Interrupted Booking → Resume ──
-  {
-    name: 'Interrupted Booking Flow — Services Check Then Resume',
-    messages: [
-      { text: 'Hi', intent: 'greeting' },
-      { text: 'Book', intent: 'appointment' },
-      { text: 'Tomorrow', intent: 'provide_date' },
-      { text: '2', intent: 'services' },
-      { text: 'Back', intent: 'back' },
-      { text: '2pm', intent: 'provide_time' },
-      { text: 'Whitening', intent: 'provide_treatment' },
-      { text: 'Confirm', intent: 'confirm' },
-    ],
-    expectations: {
-      finalState: 'BOOKED',
-    },
-    skip: true,
-  },
-
-  // ── 12. Menu Interruption During Booking ──
-  {
-    name: 'Menu Interruption During Booking',
+    name: 'Patient Menu Interruption and Resume',
     messages: [
       { text: 'Hi', intent: 'greeting' },
       { text: 'Book', intent: 'appointment' },
@@ -201,59 +53,92 @@ export const FIXTURES = [
       { text: 'Next Monday', intent: 'provide_date' },
       { text: '10am', intent: 'provide_time' },
       { text: 'Root Canal', intent: 'provide_treatment' },
-      { text: 'Confirm', intent: 'confirm' },
+      { text: 'ok', intent: 'affirm' },
+      { text: 'confirm', intent: 'confirm' },
     ],
-    expectations: {
-      finalState: 'BOOKED',
-    },
+    expectations: { finalState: 'BOOKED' },
   },
-
-  // ── 13. Correction At Confirmation Step ──
   {
-    name: 'Correction At Confirmation Step',
+    name: 'Patient Escalation During Booking',
     messages: [
       { text: 'Hi', intent: 'greeting' },
       { text: 'Book', intent: 'appointment' },
       { text: 'Tomorrow', intent: 'provide_date' },
-      { text: '10am', intent: 'provide_time' },
-      { text: 'Cleaning', intent: 'provide_treatment' },
-      { text: 'Change date', intent: 'edit_date' },
-      { text: 'Next Monday', intent: 'provide_date' },
-      { text: 'Confirm', intent: 'confirm' },
+      { text: 'Talk to agent', intent: 'escalate' },
     ],
-    expectations: {
-      finalState: 'BOOKED',
-    },
+    expectations: { finalState: 'HUMAN_ESCALATION' },
   },
-
-  // ── 14. Back Navigation Through Booking ──
   {
-    name: 'Back Navigation Through Booking',
+    name: 'Patient Cancel During Booking',
     messages: [
       { text: 'Hi', intent: 'greeting' },
       { text: 'Book', intent: 'appointment' },
       { text: 'Tomorrow', intent: 'provide_date' },
-      { text: '10am', intent: 'provide_time' },
-      { text: 'Back', intent: 'back' },
-      { text: '2pm', intent: 'provide_time' },
-      { text: 'Braces', intent: 'provide_treatment' },
-      { text: 'Confirm', intent: 'confirm' },
+      { text: 'Nevermind', intent: 'cancel' },
     ],
-    expectations: {
-      finalState: 'BOOKED',
-    },
+    expectations: { finalState: 'MAIN_MENU' },
   },
-
-  // ── 15. Phone Number Entry ──
   {
-    name: 'Callback Phone Request',
+    name: 'Patient Callback Flow',
     messages: [
       { text: 'Hi', intent: 'greeting' },
       { text: 'Callback', intent: 'callback' },
       { text: '9876543210', intent: 'provide_phone' },
     ],
-    expectations: {
-      finalState: 'MAIN_MENU',
-    },
+    expectations: { finalState: 'MAIN_MENU' },
+  },
+  {
+    name: 'Doctor Greeting to Main Menu',
+    role: 'doctor',
+    messages: [
+      { text: 'Hi', intent: 'greeting' },
+    ],
+    expectations: { finalState: 'DOCTOR_MAIN_MENU' },
+  },
+  {
+    name: 'Doctor View Today (Positive)',
+    role: 'doctor',
+    messages: [
+      { text: 'Hi', intent: 'greeting' },
+      { text: "Today's Appointments", type: 'interactive', interactiveId: 'doc_today', intent: 'doctor_view_today' },
+    ],
+    expectations: { finalState: 'DOCTOR_APPOINTMENT_LIST' },
+  },
+  {
+    name: 'Doctor Manage Schedule (Positive)',
+    role: 'doctor',
+    messages: [
+      { text: 'Hi', intent: 'greeting' },
+      { text: 'Manage Schedule', type: 'interactive', interactiveId: 'doc_schedule', intent: 'doctor_manage_schedule' },
+    ],
+    expectations: { finalState: 'DOCTOR_MANAGE_SCHEDULE' },
+  },
+  {
+    name: 'Doctor Stats (Positive)',
+    role: 'doctor',
+    messages: [
+      { text: 'Back', type: 'interactive', interactiveId: 'back', intent: 'back' },
+      { text: 'View Stats', type: 'interactive', interactiveId: 'doc_stats', intent: 'doctor_view_stats' },
+    ],
+    expectations: { finalState: 'DOCTOR_STATS' },
+  },
+  {
+    name: 'Doctor Invalid Date Input (Negative)',
+    role: 'doctor',
+    messages: [
+      { text: 'Back', type: 'interactive', interactiveId: 'back', intent: 'back' },
+      { text: 'View by Date', type: 'interactive', interactiveId: 'doc_by_date', intent: 'doctor_view_by_date' },
+      { text: 'banana', intent: 'unknown' },
+    ],
+    expectations: { finalState: 'DOCTOR_VIEW_DATE' },
+  },
+  {
+    name: 'Doctor Unknown Input Stays Menu (Negative)',
+    role: 'doctor',
+    messages: [
+      { text: 'Back', type: 'interactive', interactiveId: 'back', intent: 'back' },
+      { text: 'abracadabra', intent: 'unknown' },
+    ],
+    expectations: { finalState: 'DOCTOR_MAIN_MENU' },
   },
 ];

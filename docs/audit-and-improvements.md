@@ -3,6 +3,8 @@
 > **Audit Date:** 2026-05-25
 > **Scope:** Full trace through every major conversation path, both positive and negative
 > **Methodology:** Line-by-line trace through the code for each scenario
+>
+> **Historical note (2026-05-31):** This document captures an earlier audit phase. Some "broken" flows here were addressed in later updates. Use `docs/user-flows.md` and `docs/patient-flow-improvements.md` as the current-state references.
 
 ---
 
