@@ -2,7 +2,7 @@ import { neon } from '@neondatabase/serverless';
 import { logger } from '@/lib/logger';
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const MAX_QUERY_RETRIES = 2;
+const MAX_QUERY_RETRIES = 3;
 
 let rawSql;
 let sql;
@@ -19,7 +19,7 @@ function wrapWithRetry(fn) {
       } catch (error) {
         if (attempt === MAX_QUERY_RETRIES || !isNetworkError(error)) throw error;
         logger.warn('DB_QUERY_RETRY', { attempt, maxRetries: MAX_QUERY_RETRIES, error: error.message });
-        await sleep(500 * attempt);
+        await sleep(1000 * attempt);
       }
     }
   };
@@ -44,13 +44,24 @@ export function getSql() {
   return sql;
 }
 
+export async function ensureConnection() {
+  const db = getSql();
+  if (!db) return false;
+  try {
+    await db`SELECT 1`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export async function runMigrations() {
   const MAX_RETRIES = 3;
-  const BASE_DELAY_MS = 1000;
+  const BASE_DELAY_MS = 2000;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const db = getSql();
@@ -224,6 +235,9 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_patients_wa_id ON patients(wa_id);
     `;
 
+    await db`
+      ALTER TABLE patients DROP CONSTRAINT IF EXISTS unique_patient_phone;
+    `;
     await db`
       ALTER TABLE patients ADD CONSTRAINT unique_patient_phone UNIQUE (phone);
     `;

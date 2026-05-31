@@ -356,8 +356,10 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
         attempt: attempt + 1,
         error: error.message,
       });
-    return null;
+      return null;
+    }
   }
+  return null;
 }
 
 export async function fetchLatestCompletedByWaId(waId) {
@@ -379,8 +381,6 @@ export async function fetchLatestCompletedByWaId(waId) {
     logger.error('FETCH_LATEST_COMPLETED_ERROR', { waId, error: error.message });
     return null;
   }
-}
-  return null;
 }
 
 // ───────────────────────────────────────────────
