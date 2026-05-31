@@ -6,6 +6,7 @@ const MAX_QUERY_RETRIES = 3;
 
 let rawSql;
 let sql;
+let migrationsPromise;
 
 function isNetworkError(error) {
   return error?.sourceError || error?.message?.includes('fetch failed') || error?.message?.includes('Error connecting to database');
@@ -60,6 +61,9 @@ async function sleep(ms) {
 }
 
 export async function runMigrations() {
+  if (migrationsPromise) return migrationsPromise;
+
+  migrationsPromise = (async () => {
   const MAX_RETRIES = 3;
   const BASE_DELAY_MS = 2000;
 
@@ -142,6 +146,9 @@ export async function runMigrations() {
     `;
     await db`
       CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_appointments_date_status ON appointments(date, status);
     `;
 
     // Add new columns if the table already exists (for existing installations)
@@ -312,8 +319,12 @@ export async function runMigrations() {
         logger.info('DB_MIGRATIONS_RETRY', { attempt, nextAttempt: attempt + 1, delayMs: delay });
         await sleep(delay);
       } else {
+        migrationsPromise = null;
         throw error;
       }
     }
   }
+  })();
+
+  return migrationsPromise;
 }

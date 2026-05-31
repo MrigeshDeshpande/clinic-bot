@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getSql, runMigrations } from '@/db/pool';
+import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
 export async function POST(req) {
   try {
-    await runMigrations();
     const sql = getSql();
 
     const body = await req.json();

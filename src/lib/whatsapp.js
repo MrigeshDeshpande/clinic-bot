@@ -77,10 +77,12 @@ async function apiPost(to, payload) {
 }
 
 export async function sendText(to, text) {
+  if (typeof text !== 'string') text = String(text ?? '');
   return apiPost(to, { type: 'text', text: { preview_url: false, body: text } });
 }
 
 export async function sendButtons(to, bodyText, buttons) {
+  if (typeof bodyText !== 'string') bodyText = String(bodyText ?? '');
   // WhatsApp allows max 3 buttons, each title max 20 chars
   // buttons can be strings (legacy) or { id, title } objects
   const btns = buttons.slice(0, 3).map((b, i) => {

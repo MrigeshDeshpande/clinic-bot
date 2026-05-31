@@ -2371,9 +2371,9 @@ async function buildFieldPrompt(field, booking, ack, suggestion, session) {
     const defaultName = session?.profileName || '';
     const nameHint = defaultName ? `\n\n(default: ${defaultName} — type "ok" to use this)` : '';
     const prompt = suggestion || `${pick(PROMPT_VARIANTS.patientName)}${nameHint}`;
-    const fullBody = body ? `${body}\n\n${prompt}` : prompt;
-    return {
-      reply: { body: fullBody, replyType: 'text' },
+    const fullBody = body ? `${body}\n\n${prompt}` : prompt;      return {
+      reply: fullBody,
+      replyType: 'text',
     };
   }
 

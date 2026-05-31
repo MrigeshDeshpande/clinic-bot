@@ -5,7 +5,7 @@ import { useState, useMemo } from 'react';
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-export default function Calendar({ selectedDate, onDateSelect, dotDates = [] }) {
+export default function Calendar({ selectedDate, onDateSelect, dotDates = [], onMonthChange }) {
   const today = new Date().toISOString().slice(0, 10);
   const [viewDate, setViewDate] = useState(() => selectedDate || today);
   const dotSet = useMemo(() => new Set(dotDates), [dotDates]);
@@ -17,8 +17,15 @@ export default function Calendar({ selectedDate, onDateSelect, dotDates = [] }) 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrev = new Date(year, month, 0).getDate();
 
-  function prev() { setViewDate(new Date(year, month - 1, 1).toISOString().slice(0, 7) + '-01'); }
-  function next() { setViewDate(new Date(year, month + 1, 1).toISOString().slice(0, 7) + '-01'); }
+  function goToMonth(y, m) {
+    const d = new Date(y, m, 1);
+    const yStr = d.getFullYear();
+    const mStr = String(d.getMonth() + 1).padStart(2, '0');
+    setViewDate(`${yStr}-${mStr}-01`);
+    onMonthChange?.(yStr, d.getMonth() + 1);
+  }
+  function prev() { goToMonth(year, month - 1); }
+  function next() { goToMonth(year, month + 1); }
 
   const cells = [];
   for (let i = firstDay - 1; i >= 0; i--) cells.push({ day: daysInPrev - i, other: true });

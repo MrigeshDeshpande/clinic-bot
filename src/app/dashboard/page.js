@@ -90,7 +90,7 @@ export default function DashboardPage() {
           </button>
           {showCalendar && (
             <div className="absolute right-0 top-full mt-2 z-50 w-72">
-              <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} />
+              <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} onMonthChange={(y, m) => fetchCalendarDots(`${y}-${String(m).padStart(2,'0')}-01`)} />
             </div>
           )}
         </div>

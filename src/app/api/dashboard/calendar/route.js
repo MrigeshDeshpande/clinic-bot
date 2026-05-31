@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSql, runMigrations } from '@/db/pool';
+import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
 export async function GET(req) {
@@ -17,7 +17,6 @@ export async function GET(req) {
     const endMonth = month === 12 ? 1 : month + 1;
     const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
 
-    await runMigrations();
     const sql = getSql();
 
     const rows = await sql`

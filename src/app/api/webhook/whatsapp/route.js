@@ -2,17 +2,6 @@ import { processEvent } from '@/lib/engine';
 import { runMigrations } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
-let migrationsPromise = null;
-async function ensureMigrations() {
-  if (!migrationsPromise) {
-    migrationsPromise = runMigrations().catch(err => {
-      logger.error('MIGRATIONS_FAILED', { error: err.message });
-      migrationsPromise = null; // allow retry on next request
-    });
-  }
-  return migrationsPromise;
-}
-
 export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get('hub.mode');
@@ -38,9 +27,10 @@ export async function POST(req) {
     }
 
     // Return 200 immediately — process async
-    ensureMigrations()
-        .then(() => processEvent(payload))
-        .catch(err => logger.error('Unhandled engine error', { error: err.message }));
+    // Ensure migrations complete before processing events (critical on cold start)
+    runMigrations()
+      .then(() => processEvent(payload))
+      .catch(err => logger.error('Unhandled engine error', { error: err.message }));
 
     return Response.json({ received: true }, { status: 200 });
 }

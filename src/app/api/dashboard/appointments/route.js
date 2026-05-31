@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getSql, runMigrations } from '@/db/pool';
+import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
 export async function GET(req) {
   try {
-    await runMigrations();
     const sql = getSql();
 
     const { searchParams } = new URL(req.url);
