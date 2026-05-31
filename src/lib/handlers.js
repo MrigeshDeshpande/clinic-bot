@@ -3,11 +3,14 @@ import { validateDate, validateTime, validateTreatment, validatePhone } from '@/
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
 import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppointment,
          fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange,
-         countAppointmentsBySlot } from '@/db/repositories/appointmentRepository';
+          countAppointmentsBySlot, findBookedTimesForDate, findNextAvailableSlots, fetchTodayQueue, updateArrivalStatus,
+         countTodayByArrivalStatus, toggleAppointmentPriority,
+         findAppointmentById, bulkCompleteAppointmentsForDate, bulkCancelAppointmentsForDate } from '@/db/repositories/appointmentRepository';
 import { isDateBlocked, fetchBlockedDates, blockDate, unblockDate } from '@/db/repositories/blockedDateRepository';
 import { createPatient, searchPatients, findPatientById, createAppointmentForPatient, getVisitsByPatientPhone,
-         updateVisitLog } from '@/db/repositories/patientRepository';
-import { processAndStoreMedia } from '@/lib/media';
+         updateVisitLog, findPatientsByWaId } from '@/db/repositories/patientRepository';
+import { processAndStoreMedia, downloadMediaFromMeta } from '@/lib/media';
+import { transcribeAudio } from '@/lib/transcriber';
 import { getR2SignedUrl, r2Configured } from '@/lib/r2';
 import { sendList, sendText } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
@@ -119,7 +122,7 @@ function calculateFrustration(session, textLower) {
 // Supports fragmented messages like "Tomorrow after 5" sent
 // as two separate messages before the bot replies.
 // ───────────────────────────────────────────────
-function progressiveFieldFill(session, justSetField, entities) {
+async function progressiveFieldFill(session, justSetField, entities) {
   const booking = session.context.booking;
   const accumulated = session.context.receivedEntities || {};
 
@@ -145,7 +148,7 @@ function progressiveFieldFill(session, justSetField, entities) {
         session.context.booking = updated.booking;
         session.context.bookingTimestamps = updated.bookingTimestamps;
         // Now check if treatment also available
-        return progressiveFieldFill(session, 'time', entities);
+        return await progressiveFieldFill(session, 'time', entities);
       }
     }
   }
@@ -203,11 +206,17 @@ export async function handle(state, { session, normalized, entities, intent }) {
     if (session.context?.role === 'doctor') {
       return handleDoctorDispatch(session, normalized, entities, intent);
     }
+    if (session.context?.role === 'receptionist') {
+      return handleReceptionistDispatch(session, normalized, entities, intent);
+    }
     return handleMainMenu(session);
   }
   if (intent === 'greeting') {
     if (session.context?.role === 'doctor') {
       return handleDoctorDispatch(session, normalized, entities, intent);
+    }
+    if (session.context?.role === 'receptionist') {
+      return handleReceptionistDispatch(session, normalized, entities, intent);
     }
     return handleGreeting(session);
   }
@@ -215,16 +224,43 @@ export async function handle(state, { session, normalized, entities, intent }) {
   if (intent === 'help') return handleHelp(session);
   if (intent === 'affirm') {
     if (session.context?.role === 'doctor') return handleDoctorAffirm(session);
+    if (session.context?.role === 'receptionist') return handleReceptionistAffirm(session);
     return handleAffirm(session);
   }
   if (intent === 'location') return handleLocation(session);
   if (intent === 'timings') return handleTimings(session);
   if (intent === 'services') return handleServices(session);
   if (intent === 'my_appointments') return handleMyAppointments(session);
+  if (intent === 'appointment') {
+    // Family accounts: check if multiple patients share this wa_id
+    const patients = await findPatientsByWaId(session.waId);
+    if (patients.length > 1) {
+      const rows = patients.map(p => ({
+        id: `family_patient_${p.id}`,
+        title: `${p.name}${p.age ? ` (${p.age})` : ''}`,
+        description: p.phone ? `📞 ${p.phone}` : '',
+      }));
+      session = {
+        ...session,
+        state: 'FAMILY_SELECTION',
+        context: { ...session.context, familyPatients: patients.map(p => p.id) },
+      };
+      return {
+        session,
+        reply: { body: 'Who is this appointment for?', buttonLabel: 'Select', sections: [{ title: 'Family Members', rows }] },
+        replyType: 'list',
+      };
+    }
+    if (patients.length === 1) {
+      session.context = { ...session.context, selectedPatientId: patients[0].id };
+    }
+  }
   if (intent === 'back') {
-    // Doctor back handled via dispatch; patient back uses handleBack
     if (session.context?.role === 'doctor') {
       return handleDoctorDispatch(session, normalized, entities, intent);
+    }
+    if (session.context?.role === 'receptionist') {
+      return handleReceptionistDispatch(session, normalized, entities, intent);
     }
     if (session.state === 'CANCEL_CONFIRM') {
       return handleCancelConfirm(session, 'back');
@@ -409,9 +445,12 @@ async function handleDoctorMediaPatientLookup(session, query) {
     };
   }
 
-  // Doctor routing — role is set on session by getOrCreate()
+  // Role routing — role is set on session by getOrCreate()
   if (session.context?.role === 'doctor') {
     return handleDoctorDispatch(session, normalized, entities, intent);
+  }
+  if (session.context?.role === 'receptionist') {
+    return handleReceptionistDispatch(session, normalized, entities, intent);
   }
 
   // State-specific routing
@@ -435,6 +474,9 @@ async function handleDoctorMediaPatientLookup(session, query) {
     case 'CANCEL_CONFIRM':
       return handleCancelConfirm(session, intent);
 
+    case 'FAMILY_SELECTION':
+      return handleFamilySelection(session, intent, entities, normalized);
+
     case 'EMERGENCY':
       // Safety net — handleEmergency now transitions to MAIN_MENU directly,
       // so this case should rarely be hit. If it is, guide the user out.
@@ -454,6 +496,54 @@ async function handleDoctorMediaPatientLookup(session, query) {
     default:
       return handleUnknown(session, normalized);
   }
+}
+
+// ───────────────────────────────────────────────
+// Family accounts — select patient for booking
+// ───────────────────────────────────────────────
+async function handleFamilySelection(session, intent, entities, normalized) {
+  if (intent === 'back') {
+    return handleMainMenu(session, 'main_menu');
+  }
+
+  if (intent === 'select_family_patient' && entities?.patientId) {
+    const patient = await findPatientById(entities.patientId);
+    if (patient) {
+      session = {
+        ...session,
+        state: 'BOOKING_COLLECTION',
+        previousState: session.state,
+        context: {
+          ...resetBookingContext(session.context),
+          selectedPatientId: patient.id,
+          familyPatients: undefined,
+        },
+        metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+      };
+      return {
+        session,
+        reply: { body: `For *${patient.name}* — what date works?`, buttonLabel: 'Select date', sections: getDateQuickPickSections() },
+        replyType: 'list',
+      };
+    }
+  }
+
+  // If patient not found or intent unknown, show selection again
+  const patients = await findPatientsByWaId(session.waId);
+  if (patients.length <= 1) {
+    session = { ...session, state: 'MAIN_MENU' };
+    return handleMainMenu(session, 'main_menu');
+  }
+  const rows = patients.map(p => ({
+    id: `family_patient_${p.id}`,
+    title: `${p.name}${p.age ? ` (${p.age})` : ''}`,
+    description: p.phone ? `📞 ${p.phone}` : '',
+  }));
+  return {
+    session,
+    reply: { body: 'Who is this appointment for?', buttonLabel: 'Select', sections: [{ title: 'Family Members', rows }] },
+    replyType: 'list',
+  };
 }
 
 // ───────────────────────────────────────────────
@@ -611,7 +701,7 @@ function mainMenuSections() {
 // computePendingFields(). Replaces BOOKING_DATE, BOOKING_TIME,
 // and BOOKING_TREATMENT as a single state.
 // ───────────────────────────────────────────────
-function handleBookingCollection(session, entities, normalized, intent) {
+async function handleBookingCollection(session, entities, normalized, intent) {
   // ── Non-field intents ──
   if (intent === 'date_custom') {
     return {
@@ -644,6 +734,33 @@ function handleBookingCollection(session, entities, normalized, intent) {
     };
   }
 
+  // Multi-treatment: done adding treatments — proceed to next field
+  if (intent === 'treatment_done') {
+    session.context = { ...session.context, multiTreatmentActive: undefined };
+    const pending = computePendingFields(session.context, session.context.receivedEntities || {});
+    if (pending.length === 0) {
+      const filledSession = { ...session };
+      filledSession.state = 'BOOKING_CONFIRMATION';
+      filledSession.metrics = { ...filledSession.metrics, failedAttempts: 0, messagesInState: 0, currentField: null };
+      return {
+        session: filledSession,
+        reply: {
+          body: buildConfirmationBody(filledSession.context.booking, filledSession),
+          buttons: confirmationButtons(),
+        },
+        replyType: 'buttons',
+      };
+    }
+    const fp = await buildFieldPrompt(pending[0], session.context.booking, undefined, undefined, session);
+    return { session, ...fp };
+  }
+
+  // Multi-treatment: add another treatment — re-prompt treatment selection
+  if (intent === 'add_treatment') {
+    const fp2 = await buildFieldPrompt('treatment', session.context.booking, undefined, undefined, session);
+    return { session, ...fp2 };
+  }
+
   // Treatment help flow — user already set awaitingTreatmentHelp via global intent
   // ── Non-field intents — just re-prompt without penalty ──
   // If the intent is unknown or not field-specific, don't treat the text
@@ -651,7 +768,8 @@ function handleBookingCollection(session, entities, normalized, intent) {
   // attempt (fixture 9) and "O'clock" from counting as a failed time attempt.
   if (!['provide_date', 'provide_time', 'provide_treatment',
         'correction_date', 'correction_time', 'correction_treatment',
-        'date_custom', 'time_custom', 'treatment_help'].includes(intent)) {
+        'date_custom', 'time_custom', 'treatment_help',
+        'add_treatment', 'treatment_done'].includes(intent)) {
     const noFieldPending = computePendingFields(session.context, session.context.receivedEntities || {});
     const noFieldCurrent = noFieldPending[0];
     if (!noFieldCurrent) {
@@ -670,7 +788,8 @@ function handleBookingCollection(session, entities, normalized, intent) {
     // Allow free-text name input to fall through to field processing
     if (noFieldCurrent !== 'patientName') {
       session.metrics = { ...session.metrics };
-      return { session, ...buildFieldPrompt(noFieldCurrent, session.context.booking, undefined, undefined, session) };
+      const fp3 = await buildFieldPrompt(noFieldCurrent, session.context.booking, undefined, undefined, session);
+      return { session, ...fp3 };
     }
   }
 
@@ -775,6 +894,13 @@ function handleBookingCollection(session, entities, normalized, intent) {
       let setValue;
       if (currentField === 'date') {
         setValue = validation.parsed.toLocaleDateString('en-CA');
+      } else if (currentField === 'treatment' && session.context.booking?.treatment) {
+        const existing = session.context.booking.treatment;
+        const treatments = existing.split(', ').map(t => t.trim());
+        if (!treatments.includes(validation.parsed)) {
+          treatments.push(validation.parsed);
+        }
+        setValue = treatments.join(', ');
       } else {
         setValue = validation.parsed;
       }
@@ -797,8 +923,24 @@ function handleBookingCollection(session, entities, normalized, intent) {
       };
 
       // Try progressive fill: check if entities also contain the next field
-      const filledSession = progressiveFieldFill(session, currentField, entities);
+      const filledSession = await progressiveFieldFill(session, currentField, entities);
       const newPending = computePendingFields(filledSession.context, filledSession.context.receivedEntities || {});
+
+      if (currentField === 'treatment') {
+        // Multi-treatment: ask if they want to add more
+        filledSession.context.multiTreatmentActive = true;
+        return {
+          session: filledSession,
+          reply: {
+            body: `✅ *${setValue}* selected.\n\nTap "Add Another" to add more treatments or "Done" when finished.`,
+            buttons: [
+              { id: 'add_treatment', title: '➕ Add Another' },
+              { id: 'treatment_done', title: '✅ Done' },
+            ],
+          },
+          replyType: 'buttons',
+        };
+      }
 
       if (newPending.length === 0) {
         // All fields filled — go to confirmation
@@ -829,10 +971,8 @@ function handleBookingCollection(session, entities, normalized, intent) {
         currentField: nextField,
       };
 
-      return {
-        session: filledSession,
-        ...buildFieldPrompt(nextField, filledSession.context.booking, ack, undefined, filledSession),
-      };
+      const fp4 = await buildFieldPrompt(nextField, filledSession.context.booking, ack, undefined, filledSession);
+      return { session: filledSession, ...fp4 };
     }
 
     // ── Invalid value — show suggestion and re-prompt ──
@@ -842,10 +982,8 @@ function handleBookingCollection(session, entities, normalized, intent) {
     if (session.metrics.failedAttempts >= 3) {
       return escalateForFailure(session);
     }
-    return {
-      session,
-      ...buildFieldPrompt(currentField, session.context.booking, null, validation?.suggestion || '', session),
-    };
+    const fp5 = await buildFieldPrompt(currentField, session.context.booking, null, validation?.suggestion || '', session);
+    return { session, ...fp5 };
   }
 
   // ── No recognizable value — re-prompt ──
@@ -855,16 +993,14 @@ function handleBookingCollection(session, entities, normalized, intent) {
   if (session.metrics.failedAttempts >= 3) {
     return escalateForFailure(session);
   }
-  return {
-    session,
-    ...buildFieldPrompt(currentField, session.context.booking, undefined, undefined, session),
-  };
+  const fp6 = await buildFieldPrompt(currentField, session.context.booking, undefined, undefined, session);
+  return { session, ...fp6 };
 }
 
 // ───────────────────────────────────────────────
 // Time quick pick sections
 // ───────────────────────────────────────────────
-function timeQuickPickSections(slots, bookingDate) {
+function timeQuickPickSections(slots, bookingDate, bookedSet) {
   let availableSlots = slots;
   if (bookingDate) {
     const today = new Date().toISOString().slice(0, 10);
@@ -876,6 +1012,9 @@ function timeQuickPickSections(slots, bookingDate) {
         return h * 60 + m > nowMinutes;
       });
     }
+  }
+  if (bookedSet) {
+    availableSlots = availableSlots.filter(s => !bookedSet.has(s));
   }
   const picked = [];
   if (availableSlots.length > 0) picked.push(availableSlots[0]);
@@ -895,8 +1034,8 @@ function timeQuickPickSections(slots, bookingDate) {
   }];
 }
 
-function timeQuickPickSectionsWithBack(slots, bookingDate) {
-  const sections = timeQuickPickSections(slots, bookingDate);
+function timeQuickPickSectionsWithBack(slots, bookingDate, bookedSet) {
+  const sections = timeQuickPickSections(slots, bookingDate, bookedSet);
   sections.push({
     title: 'Navigation',
     rows: [
@@ -907,18 +1046,26 @@ function timeQuickPickSectionsWithBack(slots, bookingDate) {
   return sections;
 }
 
-function getTimeListReply(session) {
+async function getTimeListReply(session) {
   const dateStr = session.context?.booking?.date;
-  const dayType = dateStr ? (new Date(dateStr).getDay() === 0 ? 'sunday' : 'weekday') : 'weekday';
+  const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
+  const dayType = isSunday ? 'sunday' : 'weekday';
   const slots = CLINIC.slots[dayType];
   const progress = session.context?.booking?.date ? buildProgressSummary(session.context.booking) : '';
+  const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}` : '';
+  const bookedTimes = dateStr ? await findBookedTimesForDate(dateStr) : [];
+  const bookedSet = new Set(bookedTimes);
+  const availableCount = slots ? slots.filter(s => !bookedSet.has(s)).length : 0;
+  const availNote = availableCount < (slots?.length || 0)
+    ? `\n${bookedTimes.length} slot(s) already booked — ${availableCount} remaining.`
+    : '';
   const body = progress
-    ? `${progress}\n\nWhat time works for you?\nSlots available every 30 minutes.`
-    : 'What time works for you?\nSlots available every 30 minutes.';
+    ? `${progress}${sundayWarn}${availNote}\n\nWhat time works for you?\nSlots available every 30 minutes.`
+    : `What time works for you?${sundayWarn}${availNote}\nSlots available every 30 minutes.`;
   return {
     body,
     buttonLabel: 'Select time',
-    sections: timeQuickPickSectionsWithBack(slots, session.context?.booking?.date),
+    sections: timeQuickPickSectionsWithBack(slots, session.context?.booking?.date, bookedSet),
   };
 }
 
@@ -1097,9 +1244,62 @@ async function handleBookingConfirmation(session, intent, entities) {
     if (booking.date && booking.time) {
       const slotCount = await countAppointmentsBySlot(booking.date, booking.time);
       if (slotCount >= 1) {
+        const dayType = new Date(booking.date).getDay() === 0 ? 'sunday' : 'weekday';
+        const allSlots = CLINIC.slots[dayType] || CLINIC.slots.weekday;
+
+        const nextSlots = await findNextAvailableSlots(booking.date, booking.time, allSlots, 3);
+
+        if (nextSlots.length > 0) {
+          const suggestions = nextSlots.map(t => `• ${t}`).join('\n');
+          return {
+            session,
+            reply: tr(session,
+              `Sorry, ${booking.time} is already booked.\n\nNext available:\n${suggestions}\n\nTap one or type a different time.`,
+              `Sorry, ${booking.time} already booked hai.\n\nAgle available slots:\n${suggestions}\n\nEk choose karein ya alag time type karein.`),
+            replyType: 'text',
+          };
+        }
+
+        // No slots left today — suggest next available date
+        const nextDate = new Date(booking.date);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const maxLookAhead = 14;
+        let suggestionDate = null;
+        let suggestionSlots = [];
+        for (let i = 0; i < maxLookAhead; i++) {
+          const candidate = nextDate.toISOString().slice(0, 10);
+          const cd = new Date(candidate);
+          const cDayType = cd.getDay() === 0 ? 'sunday' : 'weekday';
+          const cSlots = CLINIC.slots[cDayType] || CLINIC.slots.weekday;
+          const cAvailable = await findNextAvailableSlots(candidate, '00:00', cSlots, 3);
+          if (cAvailable.length > 0) {
+            suggestionDate = candidate;
+            suggestionSlots = cAvailable.slice(0, 2);
+            break;
+          }
+          nextDate.setDate(nextDate.getDate() + 1);
+        }
+
+        if (suggestionDate && suggestionSlots.length > 0) {
+          const dateParts = suggestionDate.split('-');
+          const dateObj = new Date(+dateParts[0], +dateParts[1] - 1, +dateParts[2]);
+          const dayName = dateObj.toLocaleDateString('en-IN', { weekday: 'long' });
+          const dateLabel = dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+          const suggestions = suggestionSlots.map(t => `• ${t}`).join('\n');
+          return {
+            session,
+            reply: tr(session,
+              `Sorry, no slots available today.\n\nNext available: ${dayName}, ${dateLabel}\n${suggestions}\n\nTap a time, pick another date, or type a different time.`,
+              `Sorry, aaj koi slot available nahi hai.\n\nAgli available: ${dayName}, ${dateLabel}\n${suggestions}\n\nTime choose karein, dusri date pick karein, ya alag time type karein.`),
+            replyType: 'text',
+          };
+        }
+
         return {
           session,
-          reply: tr(session, 'Sorry, that slot is already booked. Please pick another time.', 'Sorry, wo slot already booked hai. Please dusra time choose karein.'),
+          reply: tr(session,
+            `Sorry, ${booking.time} is already booked and no later slots are available today. Please pick another date.`,
+            `Sorry, ${booking.time} already booked hai aur aaj koi aur slot available nahi hai. Please koi aur date choose karein.`),
           replyType: 'text',
         };
       }
@@ -1438,15 +1638,17 @@ async function handleAffirm(session) {
             replyType: 'buttons',
           };
         }
+        const fp7 = await buildFieldPrompt(newPending[0], session.context.booking, undefined, undefined, session);
         return {
           session: { ...session, metrics: { ...session.metrics, failedAttempts: 0 } },
-          ...buildFieldPrompt(newPending[0], session.context.booking, undefined, undefined, session),
+          ...fp7,
         };
       }
     }
+    const fp8 = await buildFieldPrompt(currentField, session.context.booking, undefined, undefined, session);
     return {
       session: { ...session, metrics: { ...session.metrics, failedAttempts: 0 } },
-      ...buildFieldPrompt(currentField, session.context.booking, undefined, undefined, session),
+      ...fp8,
     };
   }
 
@@ -2050,7 +2252,7 @@ function buildFieldAck(field, value) {
  * Build the reply for prompting the next field to collect.
  * Returns { reply, replyType } suitable for spreading into the handler result.
  */
-function buildFieldPrompt(field, booking, ack, suggestion, session) {
+async function buildFieldPrompt(field, booking, ack, suggestion, session) {
   const progress = buildProgressSummary(booking);
   let body = '';
 
@@ -2071,14 +2273,27 @@ function buildFieldPrompt(field, booking, ack, suggestion, session) {
   }
   if (field === 'time') {
     const dateStr = booking?.date;
-    const dayType = dateStr ? (new Date(dateStr).getDay() === 0 ? 'sunday' : 'weekday') : 'weekday';
+    const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
+    const dayType = isSunday ? 'sunday' : 'weekday';
     const slots = CLINIC.slots[dayType] || CLINIC.slots.weekday;
+    const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}` : '';
+    let bookedSet;
+    if (dateStr) {
+      const bookedTimes = await findBookedTimesForDate(dateStr);
+      bookedSet = new Set(bookedTimes);
+    }
+    const bookedCount = bookedSet ? bookedSet.size : 0;
+    const totalSlots = slots ? slots.length : 0;
+    const availCount = totalSlots - bookedCount;
+    const availNote = bookedCount > 0
+      ? `\n${bookedCount} slot(s) already booked — ${availCount} remaining.`
+      : '';
     const prompt = suggestion
       ? `${pick(PROMPT_VARIANTS.time)}\n${suggestion}`
       : pick(PROMPT_VARIANTS.timeWithSlots);
-    const fullBody = body ? `${body}\n\n${prompt}` : prompt;
+    const fullBody = body ? `${body}${sundayWarn}${availNote}\n\n${prompt}` : `${prompt}${sundayWarn}${availNote}`;
     return {
-      reply: { body: fullBody, buttonLabel: 'Select time', sections: timeQuickPickSectionsWithBack(slots, booking?.date) },
+      reply: { body: fullBody, buttonLabel: 'Select time', sections: timeQuickPickSectionsWithBack(slots, booking?.date, bookedSet) },
       replyType: 'list',
     };
   }
@@ -2268,6 +2483,26 @@ async function handleDoctorDispatch(session, normalized, entities, intent) {
     }
   }
 
+  // Transcription flow: accept/edit/re-record transcribed audio
+  if (session.context?.pendingTranscription) {
+    const pt = session.context.pendingTranscription;
+    if (intent === 'transcription_accept') {
+      session = await applyTranscribedNotes(session, pt);
+      return handleLogNotes(session, normalized, 'provide_notes');
+    }
+    if (intent === 'transcription_edit') {
+      session = {
+        ...session,
+        context: { ...session.context, pendingTranscription: undefined, visitLog: { ...(session.context.visitLog || {}), notes: pt } },
+      };
+      return { session, reply: `*Current text:* "${pt}"\n\nEdit or type your notes:`, replyType: 'text' };
+    }
+    if (intent === 'transcription_rerrecord') {
+      session = { ...session, context: { ...session.context, pendingTranscription: undefined } };
+      return { session, reply: 'Send the audio note again:', replyType: 'text' };
+    }
+  }
+
   // Back navigation handled first
   if (intent === 'back') return handleDoctorBack(session);
 
@@ -2322,6 +2557,12 @@ async function handleDoctorDispatch(session, normalized, entities, intent) {
       return handleDoctorViewChit(session, normalized, intent, entities);
     case 'DOCTOR_PATIENT_VISITS':
       return handleDoctorPatientVisits(session, normalized, intent, entities);
+    case 'DOCTOR_VIEW_QUEUE':
+      if (intent === 'doctor_call_patient') return handleDoctorCallPatient(session, entities);
+      if (intent === 'doctor_call_next') return handleDoctorCallNext(session);
+      return handleDoctorViewQueue(session);
+    case 'DOCTOR_LOG_VISIT_NAME':
+      return handleDoctorLogVisitName(session, normalized, intent, entities);
     default:
       return handleDoctorGreeting(session);
   }
@@ -2365,7 +2606,43 @@ async function handleDoctorMediaMessage(session, normalized, intent) {
     return handleLogMedia(session, normalized, 'skip_media');
   }
 
-  // Case 2: Doctor is viewing an appointment detail — save media directly
+  // Case 2: Doctor is in LOG_NOTES — try to transcribe audio into notes
+  if (session.state === 'LOG_NOTES' && mimeType?.startsWith('audio/')) {
+    const download = await downloadMediaFromMeta(mediaId);
+    if (download) {
+      await processAndStoreMedia({ mediaId, mimeType, appointmentId: currentApptId, waId: normalized.waId, patientId: null });
+      const text = await transcribeAudio(download.buffer, download.mimeType);
+      if (text) {
+        session = {
+          ...session,
+          context: {
+            ...session.context,
+            pendingTranscription: text,
+          },
+        };
+        return {
+          session,
+          reply: {
+            body: `✅ *Transcribed:* "${text}"\n\nAccept, edit, or re-record?`,
+            buttons: [
+              { id: 'transcription_accept', title: '✅ Accept' },
+              { id: 'transcription_edit', title: '✏️ Edit' },
+              { id: 'transcription_rerrecord', title: '🔁 Re-record' },
+            ],
+          },
+          replyType: 'buttons',
+        };
+      }
+    }
+    // Fallback: ask for typed notes
+    return {
+      session,
+      reply: 'Could not transcribe audio. Please type your notes:',
+      replyType: 'text',
+    };
+  }
+
+  // Case 3: Doctor is viewing an appointment detail — save media directly
   if (session.state === 'DOCTOR_APPOINTMENT_DETAIL' && currentApptId) {
     await processAndStoreMedia({
       mediaId,
@@ -2397,6 +2674,24 @@ async function handleDoctorMediaMessage(session, normalized, intent) {
     reply: `${mediaIcon} *Got the ${mediaType}.* Which patient? Type the name or phone number:`,
     replyType: 'text',
   };
+}
+
+// ───────────────────────────────────────────────
+// Apply transcribed audio as notes to visit log
+// ───────────────────────────────────────────────
+async function applyTranscribedNotes(session, transcribedText) {
+  session = {
+    ...session,
+    context: {
+      ...session.context,
+      pendingTranscription: undefined,
+      visitLog: {
+        ...(session.context.visitLog || {}),
+        notes: transcribedText,
+      },
+    },
+  };
+  return session;
 }
 
 // ───────────────────────────────────────────────
@@ -2456,6 +2751,19 @@ async function handleDoctorMainMenuWithGreeting(session) {
 
 function getDoctorMenuSections() {
   return [
+    {
+      title: 'Queue',
+      rows: [
+        { id: 'doc_view_queue', title: '🚶 View Queue' },
+        { id: 'doc_call_next', title: '📞 Call Next Patient' },
+      ],
+    },
+    {
+      title: 'Quick Actions',
+      rows: [
+        { id: 'doc_log_visit', title: '📝 Log Visit for Walk-in' },
+      ],
+    },
     {
       title: 'Appointments',
       rows: [
@@ -2523,6 +2831,20 @@ async function handleDoctorMainMenu(session, intent) {
       replyType: 'text',
     };
   }
+  if (intent === 'doctor_view_queue') {
+    return handleDoctorViewQueue(session);
+  }
+  if (intent === 'doctor_call_next') {
+    return handleDoctorCallNext(session);
+  }
+  if (intent === 'doctor_log_visit') {
+    session = { ...session, state: 'DOCTOR_LOG_VISIT_NAME', context: { ...session.context, logVisitSearch: undefined } };
+    return {
+      session,
+      reply: 'Enter the walk-in patient name:',
+      replyType: 'text',
+    };
+  }
 
   const body = await buildDoctorMainMenuBody(session, false);
   return {
@@ -2530,6 +2852,130 @@ async function handleDoctorMainMenu(session, intent) {
     reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
     replyType: 'list',
   };
+}
+
+// ───────────────────────────────────────────────
+// Walk-in visit shortcut — Log Visit
+// ───────────────────────────────────────────────
+async function handleDoctorLogVisitName(session, normalized, intent, entities) {
+  if (intent === 'back') return handleDoctorBack(session);
+
+  // Patient selected from search results
+  if (intent === 'select_patient' && entities?.patientId) {
+    const patient = await findPatientById(entities.patientId);
+    if (!patient) {
+      return { session, reply: 'Patient not found. Try again.', replyType: 'text' };
+    }
+    return startLogVisitForPatient(session, patient);
+  }
+
+  // "Register New" tapped
+  if (intent === 'log_visit_register_new') {
+    session = {
+      ...session,
+      state: 'REGISTER_NAME',
+      context: { ...session.context, registration: {}, logVisitPending: true, logVisitSearch: undefined },
+    };
+    return { session, reply: 'Enter new patient name:', replyType: 'text' };
+  }
+
+  // Text search input
+  const query = (normalized?.textClean || '').trim();
+  if (!query || query.length < 2) {
+    return { session, reply: 'Enter at least 2 characters to search:', replyType: 'text' };
+  }
+
+  const patients = await searchPatients(query);
+
+  if (patients.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_LOG_VISIT_NAME', context: { ...session.context, logVisitSearch: query } },
+      reply: {
+        body: `No patients found matching "${query}".`,
+        buttonLabel: 'Options',
+        sections: [
+          { title: 'Options', rows: [
+            { id: 'log_visit_register_new', title: '➕ Register New Patient' },
+            { id: 'back', title: '🔙 Back' },
+          ]},
+        ],
+      },
+      replyType: 'list',
+    };
+  }
+
+  if (patients.length === 1) {
+    const patient = patients[0];
+    return {
+      session: { ...session, state: 'DOCTOR_LOG_VISIT_NAME', context: { ...session.context, logVisitSearch: undefined } },
+      reply: {
+        body: `Found: *${patient.name}*${patient.age ? ` (${patient.age})` : ''}${patient.sex ? `/${patient.sex}` : ''}\n📞 ${patient.phone}\n\nStart visit logging for this patient?`,
+        buttons: [
+          { id: `patient_${patient.id}`, title: '✅ Select This Patient' },
+          { id: 'log_visit_register_new', title: '➕ Register New' },
+          { id: 'back', title: '🔙 Back' },
+        ],
+      },
+      replyType: 'buttons',
+    };
+  }
+
+  const rows = patients.map(p => ({
+    id: `patient_${p.id}`,
+    title: `${p.name}${p.age ? ` (${p.age})` : ''}`,
+    description: `📞 ${p.phone.slice(-8)}`,
+  }));
+  rows.push({ id: 'log_visit_register_new', title: '➕ Register New Patient' });
+
+  return {
+    session: { ...session, state: 'DOCTOR_LOG_VISIT_NAME', context: { ...session.context, logVisitSearch: undefined } },
+    reply: { body: `Found ${patients.length} patients. Select one:`, buttonLabel: 'Patients', sections: [{ title: 'Matching Patients', rows }] },
+    replyType: 'list',
+  };
+}
+
+async function startLogVisitForPatient(session, patient) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const appt = await createAppointmentForPatient({
+    patientName: patient.name,
+    patientPhone: patient.phone,
+    waId: patient.wa_id || null,
+    date: today,
+    time: null,
+    treatment: 'Walk-in',
+  });
+
+  if (!appt) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, logVisitSearch: undefined } },
+      reply: { body: 'Could not create appointment. Try again.', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  await updateArrivalStatus(appt.id, 'arrived');
+
+  session = {
+    ...session,
+    state: 'LOG_TREATMENT',
+    context: {
+      ...session.context,
+      logVisitSearch: undefined,
+      selectedAppointmentId: appt.id,
+      visitLog: {
+        appointmentId: appt.id,
+        treatment: null,
+        consultationFee: null,
+        treatmentCharges: null,
+        medicineCharges: null,
+        nextVisit: null,
+        notes: null,
+      },
+    },
+  };
+
+  return { session, reply: '🦷 *Treatment done?*\n\nWhat treatment was performed? (e.g., RCT Sitting 1, Cleaning, Filling)', replyType: 'text' };
 }
 
 // ───────────────────────────────────────────────
@@ -2600,6 +3046,17 @@ async function handleDoctorViewDate(session, entities, intent) {
 // Appointment list for a specific date
 // ───────────────────────────────────────────────
 async function handleDoctorAppointmentList(session, entities, intent) {
+  // Bulk complete all of today's confirmed appointments
+  if (intent === 'doctor_bulk_complete') {
+    const dateStr = session.context?.doctorDate || new Date().toISOString().slice(0, 10);
+    const count = await bulkCompleteAppointmentsForDate(dateStr);
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: `*✅ ${count} appointment${count !== 1 ? 's' : ''} marked as completed.*`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
   // Appointment detail tap from the list
   if (intent === 'doctor_appt_detail' || (!intent && entities?.appointmentId)) {
     const apptId = entities?.appointmentId;
@@ -2648,9 +3105,15 @@ async function handleDoctorAppointmentListForDate(session, dateStr) {
   const datePretty = formatDatePretty(dateStr);
   const body = `*📋 Appointments for ${dayName}, ${datePretty}*\n${appointments.length} total\n\nSelect an appointment:`;
 
+  const today = new Date().toISOString().slice(0, 10);
+  const menuRows = [...rows];
+  if (dateStr === today) {
+    menuRows.push({ id: 'bulk_complete', title: '✅ Mark All Completed', description: 'No visit logging' });
+  }
+
   return {
     session,
-    reply: { body, buttonLabel: 'Appointments', sections: [{ title: 'Appointments', rows }] },
+    reply: { body, buttonLabel: 'Appointments', sections: [{ title: 'Appointments', rows: menuRows }], footer: dateStr === today ? 'Tap "Mark All Completed" to close all without logging.' : undefined },
     replyType: 'list',
   };
 }
@@ -2833,11 +3296,18 @@ function handleRegisterPhone(session, normalized, intent) {
     return { session: { ...session, metrics: { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 } },
              reply: 'Please enter a valid 10-digit Indian mobile number (e.g., 9876543210 or 919876543210):', replyType: 'text' };
   }
+  const reg = { ...(session.context.registration || {}), phone: phoneResult.parsed };
   session = {
     ...session,
     state: 'REGISTER_APPOINTMENT',
-    context: { ...session.context, registration: { ...(session.context.registration || {}), phone: phoneResult.parsed } },
+    context: { ...session.context, registration: reg },
   };
+
+  // Receptionist auto-creates walk-in without asking for time
+  if (session.context?.role === 'receptionist') {
+    return handleReceptionistCreateWalkIn(session, normalized);
+  }
+
   return { session, reply: { body: 'Does this patient have an appointment time, or walk-in?', buttons: [
     { id: 'walk_in', title: '🚶 Walk-in' },
     { id: 'back', title: '🔙 Back' },
@@ -2893,9 +3363,41 @@ async function handleRegisterAppointment(session, intent, entities, normalized) 
     treatment: null,
   });
 
+  // Mark walk-in as arrived immediately
+  if (appt && intent === 'walk_in') {
+    await updateArrivalStatus(appt.id, 'arrived');
+  }
+
+  // Log-visit shortcut: jump directly into visit logging after registration
+  if (session.context?.logVisitPending && appt) {
+    session = {
+      ...session,
+      state: 'LOG_TREATMENT',
+      context: {
+        ...session.context,
+        registration: undefined,
+        logVisitPending: undefined,
+        selectedAppointmentId: appt.id,
+        visitLog: {
+          appointmentId: appt.id,
+          treatment: null,
+          consultationFee: null,
+          treatmentCharges: null,
+          medicineCharges: null,
+          nextVisit: null,
+          notes: null,
+        },
+      },
+    };
+    return { session, reply: '🦷 *Treatment done?*\n\nWhat treatment was performed? (e.g., RCT Sitting 1, Cleaning, Filling)', replyType: 'text' };
+  }
+
+  const returnState = session.context?.role === 'receptionist' ? 'RECEPTIONIST_MAIN_MENU' : 'DOCTOR_MAIN_MENU';
+  const menuFn = session.context?.role === 'receptionist' ? getReceptionistMenuSections : getDoctorMenuSections;
+
   session = {
     ...session,
-    state: 'DOCTOR_MAIN_MENU',
+    state: returnState,
     context: { ...session.context, registration: undefined },
   };
 
@@ -2903,7 +3405,7 @@ async function handleRegisterAppointment(session, intent, entities, normalized) 
 
   return {
     session,
-    reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    reply: { body, buttonLabel: 'Menu', sections: menuFn() },
     replyType: 'list',
   };
 }
@@ -3388,9 +3890,37 @@ async function handleDoctorManageSchedule(session, intent, entities) {
   }
 
   // Handle date selection for blocking
-  if (session.context?.doctorScheduleAction === 'blocking' && intent === 'date_selected') {
+  if (intent === 'date_selected' && session.context?.doctorScheduleAction === 'blocking') {
     const dateStr = session.context?.doctorDate;
     if (dateStr) {
+      // Check for existing appointments on this date
+      const appointments = await fetchAppointmentsByDate(dateStr);
+      const confirmed = appointments.filter(a => a.status === 'confirmed');
+
+      if (confirmed.length > 0) {
+        session = {
+          ...session,
+          context: {
+            ...session.context,
+            pendingBlockDate: dateStr,
+            pendingBlockCount: confirmed.length,
+            doctorScheduleAction: undefined,
+          },
+        };
+        return {
+          session,
+          reply: {
+            body: `*⚠️ Warning:* ${confirmed.length} appointment${confirmed.length > 1 ? 's' : ''} confirmed on *${formatDatePretty(dateStr)}*.\n\nBlocking will cancel them. What do you want to do?`,
+            buttons: [
+              { id: 'block_cancel_all', title: `🚫 Block & Cancel All` },
+              { id: 'block_notify_reschedule', title: `📲 Block & Notify to Reschedule` },
+              { id: 'back', title: '🔙 Cancel' },
+            ],
+          },
+          replyType: 'buttons',
+        };
+      }
+
       const result = await blockDate(dateStr, null);
       return {
         session: {
@@ -3402,6 +3932,50 @@ async function handleDoctorManageSchedule(session, intent, entities) {
         replyType: 'list',
       };
     }
+  }
+
+  // Handle block confirmation choices
+  if (intent === 'block_cancel_all' && session.context?.pendingBlockDate) {
+    const dateStr = session.context.pendingBlockDate;
+    await blockDate(dateStr, null);
+    const cancelled = await bulkCancelAppointmentsForDate(dateStr);
+    return {
+      session: {
+        ...session,
+        state: 'DOCTOR_MANAGE_SCHEDULE',
+        context: { ...session.context, pendingBlockDate: undefined, pendingBlockCount: undefined, doctorDate: undefined },
+      },
+      reply: { body: `*${formatDatePretty(dateStr)}* blocked. ${cancelled.length} appointment${cancelled.length !== 1 ? 's' : ''} cancelled.`, buttonLabel: 'Manage', sections: getDoctorScheduleSections() },
+      replyType: 'list',
+    };
+  }
+
+  if (intent === 'block_notify_reschedule' && session.context?.pendingBlockDate) {
+    const dateStr = session.context.pendingBlockDate;
+    await blockDate(dateStr, null);
+    const cancelled = await bulkCancelAppointmentsForDate(dateStr);
+
+    // Notify doctor about affected patients
+    if (cancelled.length > 0) {
+      let notifyBody = `*📋 Appointments cancelled due to block on ${formatDatePretty(dateStr)}:*\n\n`;
+      cancelled.forEach(a => {
+        notifyBody += `• ${a.patient_name || 'Unknown'} — ${a.time || 'Walk-in'}\n`;
+        if (a.wa_id) {
+          sendText(a.wa_id, `⚠️ *${CLINIC.name}*\n\nDoctor is unavailable on ${formatDatePretty(dateStr)}. Please pick a new date by booking online.`).catch(() => {});
+        }
+      });
+      notifyDoctor(notifyBody);
+    }
+
+    return {
+      session: {
+        ...session,
+        state: 'DOCTOR_MANAGE_SCHEDULE',
+        context: { ...session.context, pendingBlockDate: undefined, pendingBlockCount: undefined, doctorDate: undefined },
+      },
+      reply: { body: `*${formatDatePretty(dateStr)}* blocked. ${cancelled.length} patient${cancelled.length !== 1 ? 's' : ''} notified to reschedule.`, buttonLabel: 'Manage', sections: getDoctorScheduleSections() },
+      replyType: 'list',
+    };
   }
 
   return {
@@ -3509,6 +4083,506 @@ function handleDoctorAffirm(session) {
     session: { ...session, state: 'DOCTOR_MAIN_MENU' },
     reply: { body: 'Great! How can I help you?',
              buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Receptionist helpers
+// ───────────────────────────────────────────────
+function getQueueStatusIcon(status) {
+  switch (status) {
+    case 'arrived': return '🟢';
+    case 'waiting': return '🟡';
+    case 'called': return '🔵';
+    case 'in_session': return '🟣';
+    case 'done': return '✅';
+    default: return '⚪';
+  }
+}
+
+function formatQueueTime(appt) {
+  if (appt.time) return appt.time.slice(0, 5);
+  if (appt.arrived_at) {
+    const d = new Date(appt.arrived_at);
+    return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  return 'Walk-in';
+}
+
+function getReceptionistMenuSections() {
+  return [
+    {
+      title: 'Queue',
+      rows: [
+        { id: 'rec_view_queue', title: '🚶 View Queue' },
+        { id: 'rec_register_walkin', title: '➕ Register Walk-in' },
+      ],
+    },
+    {
+      title: 'Patients',
+      rows: [
+        { id: 'rec_search', title: '🔍 Search Patient' },
+      ],
+    },
+  ];
+}
+
+async function buildReceptionistMainMenuBody(session, includeGreeting) {
+  const name = session.profileName || 'Receptionist';
+  let body = '';
+
+  if (includeGreeting) {
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    body += `${greeting}, ${name}! 👋\n\n`;
+  }
+
+  const [arrived, waiting, called] = await Promise.all([
+    countTodayByArrivalStatus('arrived'),
+    countTodayByArrivalStatus('waiting'),
+    countTodayByArrivalStatus('called'),
+  ]);
+
+  const total = arrived + waiting + called;
+  body += `*📋 Today's Queue*\n`;
+  body += `Arrived: ${arrived} | Waiting: ${waiting} | Called: ${called}\n\n`;
+  body += `*Choose an option:*`;
+
+  return body;
+}
+
+async function handleReceptionistGreeting(session) {
+  session = { ...session, state: 'RECEPTIONIST_MAIN_MENU' };
+  return handleReceptionistMainMenuWithGreeting(session);
+}
+
+async function handleReceptionistMainMenuWithGreeting(session) {
+  const body = await buildReceptionistMainMenuBody(session, true);
+  return {
+    session,
+    reply: { body, buttonLabel: 'Menu', sections: getReceptionistMenuSections() },
+    replyType: 'list',
+  };
+}
+
+async function handleReceptionistMainMenu(session, intent) {
+  if (intent === 'receptionist_view_queue') {
+    return handleReceptionistViewQueue(session);
+  }
+  if (intent === 'receptionist_register_walkin') {
+    session = { ...session, state: 'REGISTER_NAME', context: { ...session.context, registration: {} } };
+    return { session, reply: 'Enter patient name:', replyType: 'text' };
+  }
+  if (intent === 'receptionist_search') {
+    session = { ...session, state: 'DOCTOR_SEARCH_PATIENT' };
+    return { session, reply: 'Enter patient name or phone number:', replyType: 'text' };
+  }
+
+  const body = await buildReceptionistMainMenuBody(session, false);
+  return {
+    session,
+    reply: { body, buttonLabel: 'Menu', sections: getReceptionistMenuSections() },
+    replyType: 'list',
+  };
+}
+
+function handleReceptionistAffirm(session) {
+  return {
+    session: { ...session, state: 'RECEPTIONIST_MAIN_MENU' },
+    reply: { body: 'How can I help you?',
+             buttonLabel: 'Menu', sections: getReceptionistMenuSections() },
+    replyType: 'list',
+  };
+}
+
+function handleReceptionistBack(session) {
+  if (session.state === 'RECEPTIONIST_QUEUE_DETAIL') {
+    return handleReceptionistViewQueue({ ...session, state: 'RECEPTIONIST_VIEW_QUEUE', previousState: session.state, metrics: { ...session.metrics, messagesInState: 0 } });
+  }
+  const receptionistStates = ['RECEPTIONIST_MAIN_MENU', 'RECEPTIONIST_VIEW_QUEUE'];
+  const doctorStates = ['DOCTOR_SEARCH_PATIENT', 'DOCTOR_PATIENT_VISITS', 'DOCTOR_VIEW_CHIT'];
+  const registrationStates = ['REGISTER_NAME', 'REGISTER_AGE', 'REGISTER_SEX', 'REGISTER_PHONE', 'REGISTER_APPOINTMENT'];
+  const needsMainMenu = [...receptionistStates, ...doctorStates, ...registrationStates].includes(session.state);
+  session = { ...session, state: 'RECEPTIONIST_MAIN_MENU', previousState: session.state };
+  session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
+  return handleReceptionistMainMenu(session);
+}
+
+async function handleReceptionistViewQueue(session) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [queue, todayAppts] = await Promise.all([
+    fetchTodayQueue(),
+    fetchAppointmentsByDate(today),
+  ]);
+
+  const scheduled = todayAppts.filter(a => a.arrival_status === 'scheduled');
+
+  const sections = [];
+
+  if (scheduled.length > 0) {
+    sections.push({
+      title: `⏳ Pending Arrival (${scheduled.length})`,
+      rows: scheduled.map(a => ({
+        id: `queue_patient_${a.id}`,
+        title: `${formatQueueTime(a)} — ${a.patient_name || 'Patient'}`,
+        description: a.treatment || '',
+      })),
+    });
+  }
+
+  if (queue.length > 0) {
+    sections.push({
+      title: `🚶 In Queue (${queue.length})`,
+      rows: queue.map(a => ({
+        id: `queue_patient_${a.id}`,
+        title: `${a.is_priority ? '⭐ ' : ''}${getQueueStatusIcon(a.arrival_status)} ${formatQueueTime(a)} — ${a.patient_name || 'Patient'}`,
+        description: `${a.treatment || ''}${a.is_priority ? ' ⭐ Priority' : ''}${a.arrival_status === 'called' ? ' Called' : ''}`,
+      })),
+    });
+  }
+
+  const [arrived, waiting, called] = await Promise.all([
+    countTodayByArrivalStatus('arrived'),
+    countTodayByArrivalStatus('waiting'),
+    countTodayByArrivalStatus('called'),
+  ]);
+
+  if (sections.length === 0) {
+    return {
+      session: { ...session, state: 'RECEPTIONIST_MAIN_MENU' },
+      reply: { body: '*No patients today.*\n\nTap Register Walk-in to add a patient.', buttonLabel: 'Menu', sections: getReceptionistMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const body = `*📋 Today's Queue*\nArrived: ${arrived} | Waiting: ${waiting} | Called: ${called}\n\nTap a patient to manage:`;
+
+  session = { ...session, state: 'RECEPTIONIST_VIEW_QUEUE' };
+
+  return {
+    session,
+    reply: { body, buttonLabel: 'Queue', sections },
+    replyType: 'list',
+  };
+}
+
+async function handleReceptionistCreateWalkIn(session, normalized) {
+  const reg = session.context.registration || {};
+  const phone = reg.phone;
+
+  if (!phone) {
+    return { session, reply: 'Missing phone number. Please start registration again.', replyType: 'text' };
+  }
+
+  const patient = await createPatient({
+    name: reg.name,
+    age: reg.age,
+    sex: reg.sex,
+    phone: phone,
+    waId: null,
+  });
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const appt = await createAppointmentForPatient({
+    patientName: reg.name,
+    patientPhone: phone,
+    waId: null,
+    date: today,
+    time: null,
+    treatment: 'Walk-in',
+  });
+
+  if (appt) {
+    await updateArrivalStatus(appt.id, 'arrived');
+    notifyDoctorNewBooking(appt);
+  }
+
+  session = {
+    ...session,
+    state: 'RECEPTIONIST_MAIN_MENU',
+    context: { ...session.context, registration: undefined },
+  };
+
+  const body = `*✅ Walk-in Registered*\n\n*Name:* ${reg.name}\n*Age:* ${reg.age || 'N/A'}\n*Sex:* ${reg.sex || 'N/A'}\n*Phone:* ${phone}\n\nPatient has been added to the queue.`;
+
+  return {
+    session,
+    reply: { body, buttonLabel: 'Menu', sections: getReceptionistMenuSections() },
+    replyType: 'list',
+  };
+}
+
+async function handleReceptionistQueuePatient(session, entities) {
+  const apptId = entities?.appointmentId;
+  if (!apptId) {
+    return handleReceptionistViewQueue(session);
+  }
+
+  const appt = await findAppointmentById(apptId);
+  if (!appt) {
+    return handleReceptionistViewQueue(session);
+  }
+
+  const isScheduled = appt.arrival_status === 'scheduled';
+
+  let body = `*${appt.patient_name || 'Patient'}*\n`;
+  body += `${formatQueueTime(appt)} | ${appt.arrival_status.toUpperCase()}\n`;
+  if (appt.treatment) body += `🦷 ${appt.treatment}\n`;
+  if (appt.is_priority) body += `⭐ Priority\n`;
+  body += `\nChoose action:`;
+
+  session = {
+    ...session,
+    state: 'RECEPTIONIST_QUEUE_DETAIL',
+    context: { ...session.context, selectedQueueAppointmentId: apptId },
+  };
+
+  if (isScheduled) {
+    return {
+      session,
+      reply: {
+        body,
+        buttons: [
+          { id: 'queue_mark_arrived', title: '🟢 Mark Arrived' },
+          { id: 'back', title: '🔙 Back' },
+        ],
+      },
+      replyType: 'buttons',
+    };
+  }
+
+  const priorityLabel = appt.is_priority ? '⭐ Remove Priority' : '⭐ Mark Priority';
+
+  return {
+    session,
+    reply: {
+      body,
+      buttons: [
+        { id: 'queue_call_now', title: '📞 Call Now' },
+        { id: 'queue_toggle_priority', title: priorityLabel },
+        { id: 'back', title: '🔙 Back' },
+      ],
+    },
+    replyType: 'buttons',
+  };
+}
+
+async function handleReceptionistMarkCalled(session) {
+  const apptId = session.context?.selectedQueueAppointmentId;
+  if (!apptId) {
+    return handleReceptionistViewQueue(session);
+  }
+
+  const appt = await updateArrivalStatus(apptId, 'called');
+  if (!appt) {
+    return {
+      session,
+      reply: { body: 'Could not update patient status. They may have already been called.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const body = `*📞 ${appt.patient_name || 'Patient'}* has been called.\n\nThey will be seen shortly.`;
+
+  return {
+    session: { ...session, state: 'RECEPTIONIST_MAIN_MENU', context: { ...session.context, selectedQueueAppointmentId: undefined } },
+    reply: { body, buttonLabel: 'Menu', sections: getReceptionistMenuSections() },
+    replyType: 'list',
+  };
+}
+
+async function handleReceptionistTogglePriority(session) {
+  const apptId = session.context?.selectedQueueAppointmentId;
+  if (!apptId) {
+    return handleReceptionistViewQueue(session);
+  }
+
+  const appt = await toggleAppointmentPriority(apptId);
+  if (!appt) {
+    return {
+      session,
+      reply: { body: 'Could not toggle priority. Try again.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const label = appt.is_priority ? '⭐ Priority set' : 'Priority removed';
+  const body = `*${appt.patient_name || 'Patient'}* — ${label}.\n\nThey will now ${appt.is_priority ? 'appear at the top' : 'return to normal position'} of the queue.`;
+
+  return {
+    session: { ...session, state: 'RECEPTIONIST_MAIN_MENU', context: { ...session.context, selectedQueueAppointmentId: undefined } },
+    reply: { body, buttonLabel: 'Menu', sections: getReceptionistMenuSections() },
+    replyType: 'list',
+  };
+}
+
+async function handleReceptionistMarkArrived(session) {
+  const apptId = session.context?.selectedQueueAppointmentId;
+  if (!apptId) {
+    return handleReceptionistViewQueue(session);
+  }
+
+  const appt = await updateArrivalStatus(apptId, 'arrived');
+  if (!appt) {
+    return {
+      session,
+      reply: { body: 'Could not mark patient as arrived. Try again.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const body = `*🟢 ${appt.patient_name || 'Patient'}* has arrived.\n\nThey are now in the queue.`;
+
+  return {
+    session: { ...session, state: 'RECEPTIONIST_MAIN_MENU', context: { ...session.context, selectedQueueAppointmentId: undefined } },
+    reply: { body, buttonLabel: 'Menu', sections: getReceptionistMenuSections() },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Receptionist dispatch
+// ───────────────────────────────────────────────
+async function handleReceptionistDispatch(session, normalized, entities, intent) {
+  if (intent === 'back') return handleReceptionistBack(session);
+
+  switch (session.state) {
+    case 'RECEPTIONIST_MAIN_MENU':
+      return handleReceptionistMainMenu(session, intent);
+    case 'RECEPTIONIST_VIEW_QUEUE':
+      if (intent === 'receptionist_queue_patient') return handleReceptionistQueuePatient(session, entities);
+      return handleReceptionistViewQueue(session);
+    case 'RECEPTIONIST_QUEUE_DETAIL':
+      if (intent === 'queue_mark_called') return handleReceptionistMarkCalled(session);
+      if (intent === 'queue_toggle_priority') return handleReceptionistTogglePriority(session);
+      if (intent === 'queue_mark_arrived') return handleReceptionistMarkArrived(session);
+      return handleReceptionistViewQueue(session);
+    case 'REGISTER_NAME':
+      return handleRegisterName(session, normalized, intent);
+    case 'REGISTER_AGE':
+      return handleRegisterAge(session, normalized, intent);
+    case 'REGISTER_SEX':
+      return handleRegisterSex(session, normalized, intent);
+    case 'REGISTER_PHONE':
+      return handleRegisterPhone(session, normalized, intent);
+    case 'REGISTER_APPOINTMENT':
+      return handleRegisterAppointment(session, intent, entities, normalized);
+    case 'DOCTOR_SEARCH_PATIENT': {
+      const result = await handleDoctorSearchPatient(session, normalized, intent, entities);
+      if (result.session.state === 'DOCTOR_MAIN_MENU') {
+        result.session.state = 'RECEPTIONIST_MAIN_MENU';
+        if (result.reply?.sections) {
+          result.reply.sections = getReceptionistMenuSections();
+        }
+      }
+      return result;
+    }
+    case 'DOCTOR_PATIENT_VISITS':
+      return handleDoctorPatientVisits(session, normalized, intent, entities);
+    case 'DOCTOR_VIEW_CHIT':
+      return handleDoctorViewChit(session, normalized, intent, entities);
+    default:
+      return handleReceptionistGreeting(session);
+  }
+}
+
+// ───────────────────────────────────────────────
+// Doctor queue handlers
+// ───────────────────────────────────────────────
+async function handleDoctorViewQueue(session) {
+  const queue = await fetchTodayQueue();
+
+  if (queue.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: '*No patients in queue.*', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const [arrived, waiting, called, inSession] = await Promise.all([
+    countTodayByArrivalStatus('arrived'),
+    countTodayByArrivalStatus('waiting'),
+    countTodayByArrivalStatus('called'),
+    countTodayByArrivalStatus('in_session'),
+  ]);
+
+  const rows = queue.map((a) => ({
+    id: `call_patient_${a.id}`,
+    title: `${a.is_priority ? '⭐ ' : ''}${formatQueueTime(a)} — ${a.patient_name || 'Patient'}`,
+    description: `${a.arrival_status === 'called' ? '📞 Called' : '📞 Tap to call'}${a.is_priority ? ' ⭐' : ''}`,
+  }));
+
+  let body = `*🚶 Today's Queue*\n`;
+  body += `Arrived: ${arrived} | Waiting: ${waiting} | Called: ${called} | In Session: ${inSession}\n\n`;
+  body += `⭐ = Priority | Tap a patient to call them in, or use "Call Next":`;
+
+  session = { ...session, state: 'DOCTOR_VIEW_QUEUE' };
+
+  return {
+    session,
+    reply: { body, buttonLabel: 'Queue', sections: [{ title: 'Queue', rows }] },
+    replyType: 'list',
+  };
+}
+
+async function handleDoctorCallNext(session) {
+  const queue = await fetchTodayQueue();
+
+  // Filter to patients who are arrived or waiting (not yet called)
+  const waitingPatients = queue.filter(a => a.arrival_status === 'arrived' || a.arrival_status === 'waiting');
+
+  if (waitingPatients.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: '*No patients waiting.*\n\nEveryone has been called or the queue is empty.', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const nextPatient = waitingPatients[0];
+  const appt = await updateArrivalStatus(nextPatient.id, 'called');
+
+  if (!appt) {
+    return {
+      session,
+      reply: { body: 'Could not call the next patient. They may have already been called.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const remaining = waitingPatients.length - 1;
+  const body = `*📞 Called: ${appt.patient_name || 'Patient'}*\n\n${remaining} patient(s) still waiting.`;
+
+  return {
+    session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+    reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+async function handleDoctorCallPatient(session, entities) {
+  const apptId = entities?.appointmentId;
+  if (!apptId) {
+    return handleDoctorViewQueue(session);
+  }
+
+  const appt = await updateArrivalStatus(apptId, 'called');
+  if (!appt) {
+    return {
+      session,
+      reply: { body: 'Could not update patient status. They may have already been called.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const body = `*📞 Called: ${appt.patient_name || 'Patient'}*\n\nThey have been notified.`;
+
+  return {
+    session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+    reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
     replyType: 'list',
   };
 }

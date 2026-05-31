@@ -159,3 +159,18 @@ export async function createAppointmentForPatient({ patientName, patientPhone, w
     return null;
   }
 }
+
+export async function findPatientsByWaId(waId) {
+  if (!waId) return [];
+  const sql = getSql();
+  if (!sql) return [];
+  try {
+    const rows = await sql`
+      SELECT * FROM patients WHERE wa_id = ${waId} ORDER BY created_at ASC
+    `;
+    return rows;
+  } catch (error) {
+    logger.error('PATIENT_FIND_BY_WAID_ERROR', { waId, error: error.message });
+    return [];
+  }
+}

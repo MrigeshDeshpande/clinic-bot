@@ -173,6 +173,46 @@ export async function updateAppointmentStatus(id, status) {
   }
 }
 
+export async function bulkCompleteAppointmentsForDate(date) {
+  const sql = getSql();
+  if (!sql) return 0;
+
+  try {
+    const rows = await sql`
+      UPDATE appointments
+      SET status = 'completed',
+          updated_at = NOW()
+      WHERE date = ${date}
+        AND status = 'confirmed'
+      RETURNING id
+    `;
+    return rows.length;
+  } catch (error) {
+    logger.error('APPOINTMENT_BULK_COMPLETE_ERROR', { date, error: error.message });
+    return 0;
+  }
+}
+
+export async function bulkCancelAppointmentsForDate(date) {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const rows = await sql`
+      UPDATE appointments
+      SET status = 'cancelled',
+          updated_at = NOW()
+      WHERE date = ${date}
+        AND status = 'confirmed'
+      RETURNING *
+    `;
+    return rows;
+  } catch (error) {
+    logger.error('APPOINTMENT_BULK_CANCEL_ERROR', { date, error: error.message });
+    return [];
+  }
+}
+
 // ───────────────────────────────────────────────
 // Count appointments by status for a date range (doctor stats)
 // ───────────────────────────────────────────────
@@ -208,6 +248,45 @@ export async function countAppointmentsBySlot(date, time) {
   } catch (error) {
     logger.error('APPOINTMENT_COUNT_BY_SLOT_ERROR', { date, time, error: error.message });
     return 0;
+  }
+}
+
+export async function findBookedTimesForDate(date) {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const rows = await sql`
+      SELECT DISTINCT time
+      FROM appointments
+      WHERE date = ${date}
+        AND status = 'confirmed'
+    `;
+    return rows.map(r => r.time);
+  } catch (error) {
+    logger.error('APPOINTMENT_BOOKED_TIMES_ERROR', { date, error: error.message });
+    return [];
+  }
+}
+
+export async function findNextAvailableSlots(date, afterTime, allSlots, count = 3) {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const rows = await sql`
+      SELECT DISTINCT time
+      FROM appointments
+      WHERE date = ${date}
+        AND status = 'confirmed'
+    `;
+    const bookedSet = new Set(rows.map(r => r.time));
+    return allSlots
+      .filter(t => t > afterTime && !bookedSet.has(t))
+      .slice(0, count);
+  } catch (error) {
+    logger.error('FIND_NEXT_AVAILABLE_SLOTS_ERROR', { date, afterTime, error: error.message });
+    return [];
   }
 }
 
@@ -325,4 +404,99 @@ export async function markReminderSent(id) {
 export async function fetchTodayAppointments() {
   const today = new Date().toISOString().slice(0, 10);
   return fetchAppointmentsByDate(today);
+}
+
+// ───────────────────────────────────────────────
+// Queue management functions
+// ───────────────────────────────────────────────
+
+// Fetch today's queue — priority first, then by time then arrival
+export async function fetchTodayQueue() {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await sql`
+      SELECT * FROM appointments
+      WHERE date = ${today}
+        AND arrival_status IN ('arrived', 'waiting', 'called')
+        AND status != 'cancelled'
+      ORDER BY
+        is_priority DESC,
+        CASE WHEN time IS NOT NULL THEN 0 ELSE 1 END,
+        time ASC,
+        arrived_at ASC
+    `;
+    return rows;
+  } catch (error) {
+    logger.error('QUEUE_FETCH_TODAY_ERROR', { error: error.message });
+    return [];
+  }
+}
+
+// Update arrival_status and optionally set arrived_at or called_at
+export async function updateArrivalStatus(id, status) {
+  const sql = getSql();
+  if (!sql) return null;
+
+  try {
+    const setArrived = status === 'arrived' ? sql`arrived_at = NOW(),` : sql``;
+    const setCalled = status === 'called' ? sql`called_at = NOW(),` : sql``;
+    const rows = await sql`
+      UPDATE appointments
+      SET arrival_status = ${status},
+          ${setArrived}
+          ${setCalled}
+          updated_at = NOW()
+      WHERE id = ${id}
+        AND status != 'cancelled'
+      RETURNING *
+    `;
+    return rows[0] || null;
+  } catch (error) {
+    logger.error('QUEUE_UPDATE_ARRIVAL_ERROR', { id, status, error: error.message });
+    return null;
+  }
+}
+
+// Get count of today's appointments by arrival_status
+export async function countTodayByArrivalStatus(status) {
+  const sql = getSql();
+  if (!sql) return 0;
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await sql`
+      SELECT COUNT(*) as count FROM appointments
+      WHERE date = ${today}
+        AND arrival_status = ${status}
+        AND status != 'cancelled'
+    `;
+    return parseInt(rows[0]?.count || '0', 10);
+  } catch (error) {
+    logger.error('QUEUE_COUNT_ARRIVAL_ERROR', { status, error: error.message });
+    return 0;
+  }
+}
+
+// Toggle the priority flag for an appointment
+export async function toggleAppointmentPriority(id) {
+  const sql = getSql();
+  if (!sql) return null;
+
+  try {
+    const rows = await sql`
+      UPDATE appointments
+      SET is_priority = NOT is_priority,
+          updated_at = NOW()
+      WHERE id = ${id}
+        AND status != 'cancelled'
+      RETURNING *
+    `;
+    return rows[0] || null;
+  } catch (error) {
+    logger.error('QUEUE_TOGGLE_PRIORITY_ERROR', { id, error: error.message });
+    return null;
+  }
 }

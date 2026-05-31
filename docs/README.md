@@ -23,6 +23,10 @@ This folder contains both current behavior docs and historical design/audit reco
 - `truth-and-mutation-model.md` - mutation safety model and state-truth guidance.
 - `entity-extraction-design.md` - current extraction strategy details (validators.js implementation).
 
+## Roadmap / Planning
+
+- `enhancements-roadmap.md` - upcoming features: receptionist role, queue management, and future enhancements.
+
 ## Audits and Historical Notes
 
 - `audit-report-2026-05-26.md` - point-in-time audit snapshot (mostly fixed).

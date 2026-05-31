@@ -40,6 +40,12 @@ export function getNextState(state, intent, entities) {
         case 'DOCTOR_STATS':
         case 'DOCTOR_MANAGE_SCHEDULE': return 'DOCTOR_MAIN_MENU';
         case 'DOCTOR_APPOINTMENT_DETAIL': return 'DOCTOR_APPOINTMENT_LIST';
+        case 'DOCTOR_VIEW_QUEUE': return 'DOCTOR_MAIN_MENU';
+        case 'DOCTOR_LOG_VISIT_NAME': return 'DOCTOR_MAIN_MENU';
+        case 'FAMILY_SELECTION': return 'MAIN_MENU';
+        // Receptionist back navigation
+        case 'RECEPTIONIST_VIEW_QUEUE': return 'RECEPTIONIST_MAIN_MENU';
+        case 'RECEPTIONIST_QUEUE_DETAIL': return 'RECEPTIONIST_VIEW_QUEUE';
         default:                     return 'MAIN_MENU';
       }
     case 'greeting':
@@ -87,6 +93,18 @@ export function getNextState(state, intent, entities) {
     case 'doctor_register_patient':
       return 'REGISTER_NAME';
     case 'doctor_search_patient':
+      return 'DOCTOR_SEARCH_PATIENT';
+    case 'doctor_view_queue':
+      return 'DOCTOR_VIEW_QUEUE';
+    case 'doctor_log_visit':
+      return 'DOCTOR_LOG_VISIT_NAME';
+
+    // Receptionist transitions
+    case 'receptionist_view_queue':
+      return 'RECEPTIONIST_VIEW_QUEUE';
+    case 'receptionist_register_walkin':
+      return 'REGISTER_NAME';
+    case 'receptionist_search':
       return 'DOCTOR_SEARCH_PATIENT';
 
     // Registration transitions

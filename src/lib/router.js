@@ -59,6 +59,27 @@ const ID_TO_INTENT = {
   'walk_in': 'walk_in',
   'view_chit': 'view_chit',
   'add_chit': 'add_chit',
+  // Receptionist menu
+  'rec_view_queue': 'receptionist_view_queue',
+  'rec_register_walkin': 'receptionist_register_walkin',
+  'rec_search': 'receptionist_search',
+  // Doctor queue
+  'doc_view_queue': 'doctor_view_queue',
+  'doc_call_next': 'doctor_call_next',
+  'doc_log_visit': 'doctor_log_visit',
+  // Receptionist queue actions
+  'queue_call_now': 'queue_mark_called',
+  'queue_toggle_priority': 'queue_toggle_priority',
+  'queue_mark_arrived': 'queue_mark_arrived',
+  'log_visit_register_new': 'log_visit_register_new',
+  'bulk_complete': 'doctor_bulk_complete',
+  'block_cancel_all': 'block_cancel_all',
+  'block_notify_reschedule': 'block_notify_reschedule',
+  'add_treatment': 'add_treatment',
+  'treatment_done': 'treatment_done',
+  'transcription_accept': 'transcription_accept',
+  'transcription_edit': 'transcription_edit',
+  'transcription_rerrecord': 'transcription_rerrecord',
 };
 
 function resolveDateId(id) {
@@ -127,6 +148,14 @@ export function classifyIntent(normalized, session) {
       }
     }
 
+    // Family member selection: family_patient_<uuid>
+    if (id.startsWith('family_patient_')) {
+      const patientId = id.replace('family_patient_', '');
+      if (patientId) {
+        return { intent: 'select_family_patient', confidence: 1.0, source: 'interactive_id', entities: { patientId } };
+      }
+    }
+
     // Chit media item tap: chit_media_<idx>_<apptId>
     if (id.startsWith('chit_media_')) {
       const parts = id.replace('chit_media_', '').split('_');
@@ -136,6 +165,22 @@ export function classifyIntent(normalized, session) {
         if (!isNaN(mediaIdx) && apptId) {
           return { intent: 'view_media', confidence: 1.0, source: 'interactive_id', entities: { mediaIdx, appointmentId: apptId } };
         }
+      }
+    }
+
+    // Queue patient item tap (receptionist view): queue_patient_<apptId>
+    if (id.startsWith('queue_patient_')) {
+      const apptId = id.replace('queue_patient_', '');
+      if (apptId) {
+        return { intent: 'receptionist_queue_patient', confidence: 1.0, source: 'interactive_id', entities: { appointmentId: apptId } };
+      }
+    }
+
+    // Doctor call specific patient from queue: call_patient_<apptId>
+    if (id.startsWith('call_patient_')) {
+      const apptId = id.replace('call_patient_', '');
+      if (apptId) {
+        return { intent: 'doctor_call_patient', confidence: 1.0, source: 'interactive_id', entities: { appointmentId: apptId } };
       }
     }
 

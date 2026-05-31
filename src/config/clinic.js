@@ -19,6 +19,9 @@ export const CLINIC = {
     name: 'Dr. Vishnu Vardhan',
     waId: process.env.DOCTOR_WA_ID || '',
   },
+  receptionist: {
+    waId: process.env.RECEPTIONIST_WA_ID || '',
+  },
   treatments: [
     { id: 'general',   name: 'General Dentistry', aliases: ['general dentistry','general checkup','checkup','check-up','consultation','dental checkup','routine checkup','exam','examination'], symptom: 'Routine checkup', hinglish: 'Normal daant checkup' },
     { id: 'cleaning',  name: 'Teeth Cleaning',    aliases: ['cleaning','teeth cleaning','scaling','polishing','deep cleaning','stain cleaning','gum cleaning','plaque'], symptom: 'Cleaning and polishing', hinglish: 'Daant safai / scaling' },

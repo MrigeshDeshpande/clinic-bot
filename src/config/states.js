@@ -9,6 +9,9 @@ export const STATES = [
   'LOG_TREATMENT','LOG_CONSULTATION_FEE','LOG_TREATMENT_CHARGES','LOG_MEDICINE_CHARGES',
   'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT',
   'DOCTOR_PATIENT_VISITS',
+  'DOCTOR_LOG_VISIT_NAME',
+  'FAMILY_SELECTION',
+  'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL','DOCTOR_VIEW_QUEUE',
 ];
 
 export const TRANSITIONS = {
@@ -30,11 +33,12 @@ export const TRANSITIONS = {
   DONE:                 ['main_menu','greeting'],
   DOCTOR_MAIN_MENU:     ['doctor_view_today','doctor_view_by_date','doctor_manage_schedule',
                           'doctor_view_stats','doctor_register_patient','doctor_search_patient',
+                          'doctor_view_queue','doctor_call_next',
                           'emergency','escalate','back','greeting'],
   DOCTOR_VIEW_DATE:     ['provide_date','date_custom','back','emergency','escalate'],
   DOCTOR_APPOINTMENT_LIST: ['doctor_appt_detail','back','emergency','escalate'],
   DOCTOR_APPOINTMENT_DETAIL: ['doctor_mark_completed','doctor_mark_noshow','back','emergency','escalate'],
-  DOCTOR_MANAGE_SCHEDULE: ['doctor_block_date','doctor_view_blocked','back','emergency','escalate'],
+  DOCTOR_MANAGE_SCHEDULE: ['doctor_block_date','doctor_view_blocked','block_cancel_all','block_notify_reschedule','back','emergency','escalate'],
   DOCTOR_STATS:         ['back','emergency','escalate'],
   REGISTER_NAME:        ['provide_name','back','emergency','escalate'],
   REGISTER_AGE:         ['provide_age','back','emergency','escalate'],
@@ -51,4 +55,11 @@ export const TRANSITIONS = {
   DOCTOR_SEARCH_PATIENT: ['provide_search_query','select_patient','back','emergency','escalate'],
   DOCTOR_VIEW_CHIT:      ['view_media','back','emergency','escalate'],
   DOCTOR_PATIENT_VISITS: ['doctor_appt_detail','back','emergency','escalate'],
+  DOCTOR_LOG_VISIT_NAME: ['provide_search_query','select_patient','back','emergency','escalate'],
+  RECEPTIONIST_MAIN_MENU: ['receptionist_view_queue','receptionist_register_walkin',
+                            'receptionist_search','back','emergency','escalate','greeting'],
+  RECEPTIONIST_VIEW_QUEUE: ['receptionist_queue_patient','back','emergency','escalate'],
+  RECEPTIONIST_QUEUE_DETAIL: ['queue_mark_called','queue_toggle_priority','back','emergency','escalate'],
+  DOCTOR_VIEW_QUEUE: ['doctor_call_next','doctor_call_patient','back','emergency','escalate'],
+  FAMILY_SELECTION: ['select_family_patient','back','emergency','escalate'],
 };

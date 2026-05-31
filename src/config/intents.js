@@ -42,4 +42,5 @@ export const STATE_INTENTS = {
                           back:         ['no','keep','back','dont cancel','nahi','mat karo','cancel mat karo','नहीं','मत करो'] },
   DOCTOR_APPOINTMENT_DETAIL: { doctor_mark_completed: ['done','complete','finished','mark done','completed'],
                                doctor_mark_noshow:    ['no show',"didn't come","did not come","missed","noshow"] },
+  DOCTOR_MAIN_MENU: { doctor_view_queue: ['queue','waiting','line','next patient'] },
 };

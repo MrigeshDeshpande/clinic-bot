@@ -131,11 +131,14 @@ function rowToSession(row) {
 }
 
 export async function getOrCreate(waId, phoneNumberId, profileName) {
-  // Detect role: doctor waId is configured in clinic.js
+  // Detect role: doctor and receptionist waIds are configured in clinic.js
   // Strip leading + from both sides for reliable comparison
   const cleanWaId = waId.replace(/^\+/, '');
   const cleanDoctorWaId = (CLINIC.doctor?.waId || '').replace(/^\+/, '');
-  const role = cleanDoctorWaId && cleanWaId === cleanDoctorWaId ? 'doctor' : 'patient';
+  const cleanReceptionistWaId = (CLINIC.receptionist?.waId || '').replace(/^\+/, '');
+  let role = 'patient';
+  if (cleanDoctorWaId && cleanWaId === cleanDoctorWaId) role = 'doctor';
+  else if (cleanReceptionistWaId && cleanWaId === cleanReceptionistWaId) role = 'receptionist';
 
   // Layer 1: In-memory cache (replay mode, no-DB, or between saves)
   // Cached sessions are in internal format — return a shallow copy directly

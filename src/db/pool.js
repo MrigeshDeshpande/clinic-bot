@@ -240,6 +240,15 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id);
     `;
 
+    // Queue management columns on appointments
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS arrival_status VARCHAR(20) NOT NULL DEFAULT 'scheduled',
+        ADD COLUMN IF NOT EXISTS arrived_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS called_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS is_priority BOOLEAN NOT NULL DEFAULT FALSE;
+    `;
+
     // Ensure the valid_state constraint covers ALL states (patient + doctor)
     // Drop first to allow constraint redefinition across deploys
     await db`
@@ -253,9 +262,11 @@ export async function runMigrations() {
                   'DONE','ABANDONED',
                   'DOCTOR_MAIN_MENU','DOCTOR_VIEW_DATE','DOCTOR_APPOINTMENT_LIST',
                   'DOCTOR_APPOINTMENT_DETAIL','DOCTOR_MANAGE_SCHEDULE','DOCTOR_STATS',
+                  'DOCTOR_VIEW_QUEUE',
                   'REGISTER_NAME','REGISTER_AGE','REGISTER_SEX','REGISTER_PHONE','REGISTER_APPOINTMENT',
                   'LOG_TREATMENT','LOG_CONSULTATION_FEE','LOG_TREATMENT_CHARGES','LOG_MEDICINE_CHARGES',
-                  'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT','DOCTOR_PATIENT_VISITS')
+                  'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT','DOCTOR_PATIENT_VISITS',
+                  'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL')
       );
     `;
 
