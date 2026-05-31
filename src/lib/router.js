@@ -5,8 +5,12 @@ import { detectCorrection } from '@/lib/correction-detector';
 
 function matchKeywords(text, keywords) {
   for (const kw of keywords) {
+    const hasNonAscii = /[^\x00-\x7F]/.test(kw);
     if (kw.includes(' ')) {
       // Multi-word: phrase match
+      if (text.includes(kw)) return true;
+    } else if (hasNonAscii) {
+      // Devanagari/non-ASCII terms — use includes, word boundaries are unreliable
       if (text.includes(kw)) return true;
     } else {
       // Single word: word boundary match

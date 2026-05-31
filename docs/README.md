@@ -11,6 +11,7 @@ This folder contains both current behavior docs and historical design/audit reco
 5. `testing-update-2026-05-31.md` - latest replay test fixes and coverage update.
 6. `daily-flow-patient-doctor.md` - simple day-to-day flow for both users.
 7. `daily-flow-patient-doctor-visual.md` - visual flowcharts for patient and doctor journeys.
+8. `india-edge-cases-hardening-2026-05-31.md` - India-focused edge cases and hardening summary.
 
 ## Architecture and Deep Design
 

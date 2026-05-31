@@ -21,6 +21,24 @@ const MONTH_MAP = {
   oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
 };
 
+const HINGLISH_NUMBER_WORDS = {
+  ek: 1,
+  do: 2,
+  teen: 3,
+  char: 4,
+  chaar: 4,
+  chaaron: 4,
+  paanch: 5,
+  panch: 5,
+  cheh: 6,
+  chhe: 6,
+  saat: 7,
+  sat: 7,
+  aath: 8,
+  nau: 9,
+  das: 10,
+};
+
 function addDays(n) {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -41,20 +59,56 @@ function getDayIndex(name) {
   return DAY_LONG[name] ?? DAY_NAMES[name] ?? -1;
 }
 
+function normalizeIndicDigits(input) {
+  if (!input) return input;
+  const map = {
+    '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+    '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
+  };
+  return input.replace(/[०-९]/g, (d) => map[d] || d);
+}
+
 export function validateDate(text) {
   if (!text) return { valid: false, reason: 'MISSING' };
 
-  const lower = text.toLowerCase();
+  const lower = normalizeIndicDigits(text.toLowerCase());
   let parsedDate = null;
 
+  // Ambiguous in common Hinglish usage: "kal" can mean yesterday or tomorrow.
+  // Ask user to be explicit to avoid accidental wrong-date bookings.
+  if ((/\bkal\b/.test(lower) || /कल/.test(lower)) && !/\btomorrow\b/.test(lower) && !/\bnext\b/.test(lower)) {
+    return {
+      valid: false,
+      reason: 'AMBIGUOUS_KAL',
+      suggestion: 'Did you mean tomorrow? Please type "tomorrow" or an exact date like "25 May".',
+    };
+  }
+
   // Absolute references
-  if (/\btoday\b/.test(lower) || /\btonight\b/.test(lower)) parsedDate = addDays(0);
-  else if (/\btomorrow\b/.test(lower) || /\btmrw\b/.test(lower)) parsedDate = addDays(1);
-  else if (/\bday after tomorrow\b/.test(lower)) parsedDate = addDays(2);
+  if (/\btoday\b/.test(lower) || /\btonight\b/.test(lower) || /\baaj\b/.test(lower) || /आज/.test(lower)) parsedDate = addDays(0);
+  else if (/\btomorrow\b/.test(lower) || /\btmrw\b/.test(lower) || /\bkal\b/.test(lower) || /कल/.test(lower)) parsedDate = addDays(1);
+  else if (/\bday after tomorrow\b/.test(lower) || /\bparso\b/.test(lower) || /परसों|परसो/.test(lower)) parsedDate = addDays(2);
+
+  // Relative day offsets: "2 din baad", "do din baad", "3 days later"
+  if (!parsedDate) {
+    const relNum = lower.match(/\b(\d{1,2})\s*(din|day|days)\s*(baad|later|after)\b/);
+    if (relNum) {
+      const n = parseInt(relNum[1], 10);
+      if (n >= 1 && n <= CLINIC.bookingHorizonDays) parsedDate = addDays(n);
+    }
+  }
+
+  if (!parsedDate) {
+    const relWord = lower.match(/\b(ek|do|teen|char|chaar|paanch|panch|cheh|chhe|saat|sat|aath|nau|das)\s*(din|day|days)\s*(baad|later|after)\b/);
+    if (relWord) {
+      const n = HINGLISH_NUMBER_WORDS[relWord[1]];
+      if (n >= 1 && n <= CLINIC.bookingHorizonDays) parsedDate = addDays(n);
+    }
+  }
 
   // Weekday references
   if (!parsedDate) {
-    const weekdayMatch = lower.match(/\b((?:this|next|coming)\s+)?(mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/);
+    const weekdayMatch = lower.match(/\b((?:this|next|coming|agle|agla)\s+)?(mon(?:day)?|monday|tue(?:sday)?|tuesday|wed(?:nesday)?|wednesday|thu(?:rsday)?|thursday|fri(?:day)?|friday|sat(?:urday)?|saturday|sun(?:day)?|sunday)\b/);
     if (weekdayMatch) {
       const prefix = (weekdayMatch[1] || '').toLowerCase().trim();
       const targetDay = getDayIndex(weekdayMatch[2].toLowerCase());
@@ -127,7 +181,7 @@ export function validateDate(text) {
 export function validateTime(text, date) {
   if (!text) return { valid: false, reason: 'MISSING' };
 
-  const lower = text.toLowerCase();
+  const lower = normalizeIndicDigits(text.toLowerCase());
   let parsedTime = null;
 
   // HH:MM am/pm or 24h
@@ -178,12 +232,39 @@ export function validateTime(text, date) {
 
   // Time-of-day words: morning → 10:00, afternoon → 14:00, evening → 17:00
   if (!parsedTime) {
-    if (/\b(morning|breakfast)/.test(lower)) {
+    if (/\b(morning|breakfast|subah)\b/.test(lower) || /सुबह/.test(lower)) {
       parsedTime = '10:00';
-    } else if (/\b(afternoon|lunch)/.test(lower)) {
+    } else if (/\b(afternoon|lunch|dopahar)\b/.test(lower) || /दोपहर/.test(lower)) {
       parsedTime = '14:00';
-    } else if (/\b(evening|night|dinner)/.test(lower)) {
+    } else if (/\b(evening|night|dinner|shaam|raat)\b/.test(lower) || /शाम|रात/.test(lower)) {
       parsedTime = '17:00';
+    }
+  }
+
+  // Hinglish: "5 baje", "7 bje", "5 baje shaam"
+  if (!parsedTime) {
+    const baje = lower.match(/\b(\d{1,2})\s*(baje|bje|बजे)\b(?:\s*(subah|shaam|raat|सुबह|शाम|रात|am|pm))?/i);
+    if (baje) {
+      let h = parseInt(baje[1], 10);
+      const tod = (baje[3] || '').toLowerCase();
+      if (tod === 'pm' || tod === 'shaam' || tod === 'raat' || tod === 'शाम' || tod === 'रात') {
+        if (h < 12) h += 12;
+      } else if (tod === 'am' || tod === 'subah' || tod === 'सुबह') {
+        if (h === 12) h = 0;
+      } else if (h >= 1 && h <= 6) {
+        h += 12;
+      }
+      parsedTime = `${String(h).padStart(2, '0')}:00`;
+    }
+  }
+
+  // Hinglish: "saade 5" (half past)
+  if (!parsedTime) {
+    const saade = lower.match(/\b(saade|sade|साढ़े|साढे)\s*(\d{1,2})\b/i);
+    if (saade) {
+      let h = parseInt(saade[2], 10);
+      if (h >= 1 && h <= 6) h += 12;
+      parsedTime = `${String(h).padStart(2, '0')}:30`;
     }
   }
 
@@ -302,11 +383,12 @@ export function validatePhone(text) {
 
   const cleaned = text.replace(/[^0-9]/g, '');
 
-  // 10-digit Indian mobile numbers, optionally prefixed with 91 or 0
+  // 10-digit Indian mobile numbers, optionally prefixed with 91 or 0.
+  // Mobile numbers should start with 6-9.
   let digits = null;
-  if (/^(91)?\d{10}$/.test(cleaned)) {
+  if (/^(91)?[6-9]\d{9}$/.test(cleaned)) {
     digits = cleaned.slice(-10);
-  } else if (/^(0)\d{10}$/.test(cleaned)) {
+  } else if (/^(0)[6-9]\d{9}$/.test(cleaned)) {
     digits = cleaned.slice(1);
   }
 

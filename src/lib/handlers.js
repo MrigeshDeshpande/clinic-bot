@@ -30,6 +30,28 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function detectLanguageHint(text = '') {
+  const t = text.toLowerCase();
+  const hindiSignals = [
+    'kal', 'parso', 'aaj', 'shaam', 'subah', 'baje', 'dard', 'khun', 'khoon',
+    'sujan', 'soojan', 'hindi', 'haan', 'nahi', 'krdo', 'kar do'
+  ];
+  let score = 0;
+  for (const s of hindiSignals) {
+    if (t.includes(s)) score += 1;
+  }
+  if (score >= 2) return 'hi';
+  return 'en';
+}
+
+function getLang(session) {
+  return session?.context?.language || 'en';
+}
+
+function tr(session, en, hi) {
+  return getLang(session) === 'hi' ? hi : en;
+}
+
 const PROMPT_VARIANTS = {
   date: [
     'Which date works for you?',
@@ -144,6 +166,9 @@ function progressiveFieldFill(session, justSetField, entities) {
 // Main dispatch
 // ───────────────────────────────────────────────
 export async function handle(state, { session, normalized, entities, intent }) {
+  const langHint = detectLanguageHint(normalized?.textLower || '');
+  session.context = { ...session.context, language: session.context?.language || langHint };
+
   // Increment messagesInState
   session = { ...session };
   session.metrics = { ...session.metrics, messagesInState: session.metrics.messagesInState + 1 };
@@ -160,6 +185,14 @@ export async function handle(state, { session, normalized, entities, intent }) {
 
   // Global intent handling (before state-specific routing)
   if (intent === 'emergency') return handleEmergency(session);
+  if (intent === 'language_en') {
+    session.context = { ...session.context, language: 'en' };
+    return { session, reply: 'Sure. I will continue in English.', replyType: 'text' };
+  }
+  if (intent === 'language_hi') {
+    session.context = { ...session.context, language: 'hi' };
+    return { session, reply: 'Theek hai. Main simple Hindi/English me reply karunga.', replyType: 'text' };
+  }
   if (intent === 'escalate') return handleHumanEscalation(session);
   if (intent === 'cancel') return handleCancel(session);
   if (intent === 'main_menu') {
@@ -185,6 +218,9 @@ export async function handle(state, { session, normalized, entities, intent }) {
     // Doctor back handled via dispatch; patient back uses handleBack
     if (session.context?.role === 'doctor') {
       return handleDoctorDispatch(session, normalized, entities, intent);
+    }
+    if (session.state === 'CANCEL_CONFIRM') {
+      return handleCancelConfirm(session, 'back');
     }
     return handleBack(session);
   }
@@ -392,7 +428,10 @@ function handleBookingCollection(session, entities, normalized, intent) {
   if (intent === 'date_custom') {
     return {
       session,
-      reply: 'Please type your preferred date.\n\nExamples: "tomorrow", "next Monday", "28 May"',
+      reply: tr(session,
+        'Please type your preferred date.\n\nExamples: "tomorrow", "next Monday", "28 May"',
+        'Apni date type karein.\n\nExamples: "kal", "next Monday", "28 May"'
+      ),
       replyType: 'text',
     };
   }
@@ -409,7 +448,10 @@ function handleBookingCollection(session, entities, normalized, intent) {
   if (intent === 'time_custom') {
     return {
       session,
-      reply: 'Please type your preferred time.\n\nExamples: "10am", "2:30pm"\nSlots are every 30 minutes.',
+      reply: tr(session,
+        'Please type your preferred time.\n\nExamples: "10am", "2:30pm"\nSlots are every 30 minutes.',
+        'Apna time type karein.\n\nExamples: "10am", "2:30pm"\nSlots har 30 minute me hain.'
+      ),
       replyType: 'text',
     };
   }
@@ -806,6 +848,7 @@ function treatmentSections() {
       ...CLINIC.treatments.map((t, i) => ({
         id: t.id,
         title: `${i + 1}. ${t.name}`,
+        description: t.hinglish || t.symptom,
       })),
       { id: 'treatment_help', title: "I'm not sure — help me choose", description: 'Describe your symptoms' },
     ],
@@ -828,6 +871,7 @@ function symptomSections() {
       ...CLINIC.treatments.map(t => ({
         id: t.id,
         title: t.symptom,
+        description: t.hinglish || '',
       })),
       { id: 'treatment_help', title: "Something else — tell me more", description: "Describe what you're feeling" },
     ],
@@ -856,7 +900,7 @@ async function handleBookingConfirmation(session, intent, entities) {
     if (booking.date && await isDateBlocked(booking.date)) {
       return {
         session,
-        reply: 'Sorry, that date is not available now. Please pick another date.',
+        reply: tr(session, 'Sorry, that date is not available now. Please pick another date.', 'Sorry, wo date ab available nahi hai. Please dusri date choose karein.'),
         replyType: 'text',
       };
     }
@@ -867,7 +911,7 @@ async function handleBookingConfirmation(session, intent, entities) {
       if (slotCount >= 1) {
         return {
           session,
-          reply: 'Sorry, that slot is already booked. Please pick another time.',
+          reply: tr(session, 'Sorry, that slot is already booked. Please pick another time.', 'Sorry, wo slot already booked hai. Please dusra time choose karein.'),
           replyType: 'text',
         };
       }
@@ -924,7 +968,7 @@ async function handleBookingConfirmation(session, intent, entities) {
       session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, messagesInState: 0 };
       return {
         session,
-        reply: 'Sorry, I could not save your appointment due to a technical issue. Please try again.',
+        reply: tr(session, 'Sorry, I could not save your appointment due to a technical issue. Please try again.', 'Sorry, technical issue ki wajah se appointment save nahi hua. Please dobara try karein.'),
         replyType: 'text',
       };
     }
@@ -1366,7 +1410,10 @@ function handleCallbackRequested(session, entities) {
 
   session = { ...session };
   session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
-  return { session, reply: pick(PROMPT_VARIANTS.callbackPhone), replyType: 'text' };
+  const callbackPrompt = getLang(session) === 'hi'
+    ? 'Please apna 10-digit phone number bhejiye, hum callback karenge.'
+    : pick(PROMPT_VARIANTS.callbackPhone);
+  return { session, reply: callbackPrompt, replyType: 'text' };
 }
 
 // ───────────────────────────────────────────────
@@ -1402,7 +1449,7 @@ function handleUnknown(session, normalized) {
   };
 
   const hint = hints[session.state] || 'Type "0" for the menu or tell me what you need.';
-  return { session, reply: `Sorry, I missed that. ${hint}`, replyType: 'text' };
+  return { session, reply: tr(session, `Sorry, I missed that. ${hint}`, `Sorry, samajh nahi aaya. ${hint}`), replyType: 'text' };
 }
 
 function buildResumePrompt(booking, pendingFields) {
@@ -1455,7 +1502,11 @@ function handleGreeting(session) {
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
     return {
       session,
-      reply: { body: `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, buttonLabel: 'Select option', sections: mainMenuSections() },
+      reply: {
+        body: tr(session, `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, `${CLINIC.name} me swagat hai 🦷\nAaj main aapki kaise help karun?`),
+        buttonLabel: tr(session, 'Select option', 'Option chunein'),
+        sections: mainMenuSections(),
+      },
       replyType: 'list',
     };
   }
@@ -1969,8 +2020,12 @@ function handleHelp(session) {
     CALLBACK_REQUESTED:   pick(PROMPT_VARIANTS.callbackPhone),
   };
 
-  const hint = hints[session.state] || 'Type "0" for menu, or tell me what you need.';
-  return { session, reply: `I can help with booking, services, location, and timings. ${hint}`, replyType: 'text' };
+  const hint = hints[session.state] || tr(session, 'Type "0" for menu, or tell me what you need.', 'Menu ke liye "0" type karein, ya apni need batayein.');
+  return {
+    session,
+    reply: tr(session, `I can help with booking, services, location, and timings. ${hint}`, `Main booking, services, location aur timings me help kar sakta hoon. ${hint}`),
+    replyType: 'text',
+  };
 }
 
 function escalateForFailure(session) {
@@ -1983,7 +2038,10 @@ function escalateForFailure(session) {
   };
   return {
     session,
-    reply: `I may be getting this wrong. Let me connect you to our team at *${CLINIC.phone}*.`,
+    reply: tr(session,
+      `I may be getting this wrong. Let me connect you to our team at *${CLINIC.phone}*.`,
+      `Lagta hai main sahi samajh nahi pa raha. Main aapko team se connect karta hoon: *${CLINIC.phone}*.`
+    ),
     replyType: 'text',
   };
 }
