@@ -1,96 +1,188 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { Search, Users, ChevronRight, Phone, Calendar, Activity } from 'lucide-react';
 
 export default function PatientsPage() {
-  const [query, setQuery] = useState('');
   const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const searchRef = useRef(null);
+  const router = useRouter();
 
   const fetchPatients = useCallback(async (q) => {
-    setLoading(true);
-    setSearched(true);
     try {
-      const res = await fetch(`/api/dashboard/patients?q=${encodeURIComponent(q)}&limit=30`);
+      setLoading(true);
+      const params = new URLSearchParams(q ? { q } : {});
+      const res = await fetch(`/api/dashboard/patients?${params}`);
       const data = await res.json();
-      setPatients(data.patients || []);
-    } catch {
-      setPatients([]);
+      setPatients(data.patients ?? data ?? []);
+    } catch (e) {
+      console.error('Failed to fetch patients', e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
-    if (query.length >= 2) {
-      const timer = setTimeout(() => fetchPatients(query), 300);
-      return () => clearTimeout(timer);
-    } else if (query.length === 0) {
-      fetchPatients('');
+    fetchPatients(search);
+  }, [fetchPatients]);
+
+  function getInitials(name) {
+    if (!name || name === '?') return '?';
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  }
+
+  function getAvatarColor(name) {
+    const colors = [
+      'from-blue-500 to-blue-600',
+      'from-emerald-500 to-teal-600',
+      'from-violet-500 to-purple-600',
+      'from-rose-500 to-pink-600',
+      'from-amber-500 to-orange-600',
+      'from-cyan-500 to-sky-600',
+    ];
+    let hash = 0;
+    for (let i = 0; i < (name || '').length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
-  }, [query, fetchPatients]);
+    return colors[Math.abs(hash) % colors.length];
+  }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Patients</h1>
-        <p className="text-gray-500 mt-1">Search and manage patient records</p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50">
+      <div className="max-w-6xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-200">
+            <Users className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Patients</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Search and manage patient records</p>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative group">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-emerald-500/10 rounded-2xl blur-xl transition-opacity opacity-0 group-focus-within:opacity-100" />
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Search by name or phone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all duration-200 shadow-sm text-base"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Patients List */}
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 animate-pulse">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gray-200" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-1/3" />
+                    <div className="h-3 bg-gray-100 rounded w-1/4" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : patients.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 mb-6">
+              <Users className="w-10 h-10 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No patients found</h3>
+            <p className="text-gray-500 text-sm max-w-sm mx-auto">
+              {search ? 'Try a different search term or clear the search filter' : 'Patients will appear here once they book appointments through WhatsApp'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {patients.map((patient, idx) => (
+              <button
+                key={patient.id}
+                onClick={() => router.push(`/dashboard/patients/${patient.id}`)}
+                className="group relative w-full text-left bg-white rounded-2xl border border-gray-100 p-4 md:p-5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-100/50 transition-all duration-200 animate-in"
+                style={{ animationDelay: `${idx * 50}ms` }}
+              >
+                <div className="flex items-center gap-4">
+                  {/* Avatar with initials */}
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getAvatarColor(patient.name)} flex items-center justify-center text-white font-semibold text-sm shadow-md shrink-0`}>
+                    {getInitials(patient.name)}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                        {patient.name === '?' ? 'Unknown Patient' : patient.name}
+                      </h3>
+                      {patient.visit_count > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Activity className="w-3 h-3" />
+                          {patient.visit_count} visit{patient.visit_count !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span className="flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5" />
+                        {patient.phone || 'N/A'}
+                      </span>
+                      {patient.last_visit && (
+                        <span className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5" />
+                          Last: {new Date(patient.last_visit + 'T12:00:00').toLocaleDateString('en-IN', {
+                            day: 'numeric', month: 'short', year: 'numeric'
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="shrink-0 w-8 h-8 rounded-xl bg-gray-50 group-hover:bg-blue-50 flex items-center justify-center transition-colors">
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="mb-6">
-        <div className="relative max-w-md">
-          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search by name or phone..."
-            className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
-          />
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full" />
-        </div>
-      ) : patients.length === 0 && searched ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
-          <p className="text-gray-400 text-lg mb-1">No patients found</p>
-          <p className="text-gray-300 text-sm">Try a different search term</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Age/Sex</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Visits</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Last Visit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {patients.map(p => (
-                <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
-                  <td className="px-5 py-4 text-sm font-medium text-gray-900">{p.name || '—'}</td>
-                  <td className="px-5 py-4 text-sm text-gray-600">{p.phone || '—'}</td>
-                  <td className="px-5 py-4 text-sm text-gray-500">
-                    {p.age ? `${p.age}${p.sex ? '/' + p.sex : ''}` : '—'}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-gray-700">{p.visit_count || 0}</td>
-                  <td className="px-5 py-4 text-sm text-gray-500">
-                    {p.last_visit ? new Date(p.last_visit).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <style jsx>{`
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-in {
+          animation: slideUp 0.3s ease-out both;
+        }
+      `}</style>
     </div>
   );
 }

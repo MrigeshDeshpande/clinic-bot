@@ -1,120 +1,139 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { TrendingUp, DollarSign, Calendar, Activity, Stethoscope, Pill, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function StatsPage() {
-  const [period, setPeriod] = useState('week');
-  const [data, setData] = useState(null);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/dashboard/stats?period=${period}`)
+    fetch('/api/dashboard/stats')
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [period]);
+      .then(d => setStats(d))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  function formatCurrency(amount) {
+    return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+  }
+
+  const treatments = stats?.treatmentBreakdown || [];
+  const maxTreatmentCount = Math.max(...treatments.map(t => t.count), 1);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full" />
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 p-4 md:p-6 lg:p-8">
+        <div className="max-w-6xl mx-auto space-y-6 animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-40" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map(i => <div key={i} className="h-32 bg-white rounded-3xl border border-gray-100" />)}
+          </div>
+          <div className="h-64 bg-white rounded-3xl border border-gray-100" />
+        </div>
       </div>
     );
   }
 
-  const summary = data?.summary || {};
-  const daily = (data?.daily || []).map(d => ({
-    ...d,
-    date: new Date(d.date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' }),
-  }));
-  const treatments = data?.treatments || [];
-
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Statistics</h1>
-          <p className="text-gray-500 mt-1">Weekly and monthly performance trends</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setPeriod('week')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${period === 'week' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
-          >
-            Week
-          </button>
-          <button
-            onClick={() => setPeriod('month')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${period === 'month' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
-          >
-            Month
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <p className="text-sm text-gray-500 mb-1">Total Visits</p>
-          <p className="text-3xl font-bold text-gray-900">{summary.total_visits || 0}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <p className="text-sm text-gray-500 mb-1">Revenue</p>
-          <p className="text-3xl font-bold text-green-600">₹{summary.total_revenue || 0}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <p className="text-sm text-gray-500 mb-1">No Shows</p>
-          <p className="text-3xl font-bold text-red-600">{summary.total_no_shows || 0}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <p className="text-sm text-gray-500 mb-1">Cancelled</p>
-          <p className="text-3xl font-bold text-gray-600">{summary.total_cancelled || 0}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Daily Appointments</h2>
-          {daily.length === 0 ? (
-            <p className="text-gray-400 text-sm py-8 text-center">No data for this period.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={daily}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  labelStyle={{ fontWeight: 600, color: '#111827' }}
-                />
-                <Legend iconType="circle" />
-                <Bar dataKey="completed" name="Completed" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="total" name="Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50">
+      <div className="max-w-6xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200">
+            <TrendingUp className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Statistics</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Practice overview and treatment insights</p>
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Popular Treatments</h2>
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100">
+                <Calendar className="w-5 h-5 text-blue-600" />
+              </div>
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                <ArrowUp className="w-3 h-3" />
+                {stats?.totalAppointments || 0} total
+              </span>
+            </div>
+            <div className="text-3xl font-bold text-gray-900 mb-1">{stats?.todayAppointments || 0}</div>
+            <div className="text-sm text-gray-500">Appointments Today</div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100">
+                <DollarSign className="w-5 h-5 text-emerald-600" />
+              </div>
+            </div>
+            <div className="text-3xl font-bold text-gray-900 mb-1">{formatCurrency(stats?.todayRevenue || 0)}</div>
+            <div className="text-sm text-gray-500">Today's Revenue</div>
+            {stats?.totalRevenue > 0 && (
+              <div className="mt-2 text-xs text-gray-400">
+                Total: {formatCurrency(stats.totalRevenue)}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-50 to-violet-100">
+                <Activity className="w-5 h-5 text-violet-600" />
+              </div>
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">
+                {stats?.totalPatients || 0} total
+              </span>
+            </div>
+            <div className="text-3xl font-bold text-gray-900 mb-1">{stats?.newPatientsThisMonth || 0}</div>
+            <div className="text-sm text-gray-500">New Patients This Month</div>
+          </div>
+        </div>
+
+        {/* Treatment Breakdown */}
+        <div className="bg-white rounded-3xl border border-gray-100 p-6 md:p-8 shadow-sm">
+          <div className="flex items-center gap-2.5 mb-6">
+            <Stethoscope className="w-5 h-5 text-blue-500" />
+            <h2 className="text-lg font-bold text-gray-900">Treatment Breakdown</h2>
+          </div>
+
           {treatments.length === 0 ? (
-            <p className="text-gray-400 text-sm py-8 text-center">No treatment data for this period.</p>
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gray-50 mb-4">
+                <Pill className="w-7 h-7 text-gray-300" />
+              </div>
+              <p className="text-gray-500 text-sm">No treatments recorded yet</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {treatments.map((t, i) => {
-                const maxCount = treatments[0]?.count || 1;
-                const pct = (t.count / maxCount) * 100;
+                const percentage = (t.count / maxTreatmentCount) * 100;
+                const gradients = [
+                  'from-blue-500 to-blue-600',
+                  'from-emerald-500 to-teal-500',
+                  'from-violet-500 to-purple-600',
+                  'from-rose-500 to-pink-600',
+                  'from-amber-500 to-orange-500',
+                  'from-cyan-500 to-sky-500',
+                  'from-indigo-500 to-indigo-600',
+                ];
                 return (
-                  <div key={t.treatment || i}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-700">{t.treatment || 'Unknown'}</span>
-                      <span className="text-gray-500 font-medium">{t.count}</span>
+                  <div key={t.treatment || i} className="group">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
+                        {t.treatment}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-500">{t.count} visit{t.count !== 1 ? 's' : ''}</span>
                     </div>
-                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-blue-500 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
+                        className={`h-full rounded-full bg-gradient-to-r ${gradients[i % gradients.length]} transition-all duration-700 ease-out`}
+                        style={{ width: `${Math.max(percentage, 4)}%` }}
                       />
                     </div>
                   </div>

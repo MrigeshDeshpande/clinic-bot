@@ -270,6 +270,15 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS is_priority BOOLEAN NOT NULL DEFAULT FALSE;
     `;
 
+    // Clinical documentation columns
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS diagnosis TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS follow_up_date DATE,
+        ADD COLUMN IF NOT EXISTS follow_up_instructions TEXT DEFAULT '';
+    `;
+
     // Feedback table
     await db`
       CREATE TABLE IF NOT EXISTS feedback (

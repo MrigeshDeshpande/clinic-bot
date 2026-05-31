@@ -4,15 +4,15 @@ import { logger } from '@/lib/logger';
 // ───────────────────────────────────────────────
 // Create a new appointment (version 1 of a new logical chain)
 // ───────────────────────────────────────────────
-export async function createAppointment({ sessionId, waId, patientName, date, time, treatment }) {
+export async function createAppointment({ sessionId, waId, patientName, patientId, patientPhone, date, time, treatment }) {
   const sql = getSql();
   if (!sql) return null;
 
   try {
     const rows = await sql`
-      INSERT INTO appointments (logical_id, version, session_id, wa_id, patient_name, date, time, treatment)
+      INSERT INTO appointments (logical_id, version, session_id, wa_id, patient_name, patient_id, patient_phone, date, time, treatment)
       VALUES (gen_random_uuid(), 1, ${sessionId || null}, ${waId}, ${patientName || null},
-              ${date}, ${time}, ${treatment || null})
+              ${patientId || null}, ${patientPhone || null}, ${date}, ${time}, ${treatment || null})
       RETURNING *
     `;
     return rows[0] || null;

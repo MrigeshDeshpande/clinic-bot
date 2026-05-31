@@ -24,3 +24,66 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ─── Custom Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* ─── Page fade-in animation ─── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* ─── Slide-in for dropdowns ─── */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-slide-down {
+  animation: slideDown 0.15s ease-out forwards;
+}
+
+/* ─── Scale pulse for stat cards on hover ─── */
+@keyframes pulse-subtle {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.02); }
+}
+.hover-pulse:hover {
+  animation: pulse-subtle 0.4s ease-in-out;
+}
+
+/* ─── Skeleton loading shimmer ─── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ─── Badge dot pulse ─── */
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.animate-dot-pulse {
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+/* ─── Print styles ─── */
+@media print {
+  body { background: white !important; color: black !important; }
+  aside, nav, .no-print, button, .animate-spin { display: none !important; }
+  main { margin-left: 0 !important; padding: 0 !important; }
+  @page { margin: 1.5cm; }
+  .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
+  .border { border-color: #ddd !important; }
+}

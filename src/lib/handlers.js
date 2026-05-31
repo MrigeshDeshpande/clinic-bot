@@ -1335,11 +1335,41 @@ async function handleBookingConfirmation(session, intent, entities) {
       }
       delete session.context.reschedulingLogicalId;
     } else {
-      // New appointment
+      // New appointment — find or create patient record for dashboard
+      let patientId = null;
+      let patientPhone = '';
+      try {
+        const existingPatients = await findPatientsByWaId(session.waId);
+        if (existingPatients.length > 0) {
+          // Respect family-account selection if set
+          const selectedId = session.context?.selectedPatientId;
+          const match = selectedId
+            ? existingPatients.find(p => p.id === selectedId)
+            : null;
+          patientId = match ? match.id : existingPatients[0].id;
+          patientPhone = match ? match.phone : existingPatients[0].phone;
+        } else {
+          const newPatient = await createPatient({
+            name: booking.patientName || session.profileName || 'Patient',
+            waId: session.waId,
+            phone: session.waId,
+          });
+          if (newPatient) {
+            patientId = newPatient.id;
+            patientPhone = newPatient.phone;
+          }
+        }
+      } catch (e) {
+        // Non-critical — don't block appointment creation
+        logger.warn('PATIENT_LOOKUP_FAILED', { waId: session.waId, error: e.message });
+      }
+
       appointment = await createAppointment({
         sessionId: session.id,
         waId: session.waId,
         patientName: booking.patientName || session.profileName,
+        patientId,
+        patientPhone,
         date: booking.date,
         time: booking.time,
         treatment: booking.treatment,
