@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, createContext } from 'react';
+
+export const DateContext = createContext();
 
 const NAV = [
   { href: '/dashboard', label: 'Overview', icon: '📊' },
@@ -94,6 +96,12 @@ export default function DashboardLayout({ children }) {
   const router = useRouter();
   const [pageKey, setPageKey] = useState(0);
 
+  // Shared selectedDate state persists across page navigations
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+
   useEffect(() => {
     setPageKey(prev => prev + 1);
   }, [pathname]);
@@ -170,11 +178,13 @@ export default function DashboardLayout({ children }) {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 p-8 min-h-screen" key={pageKey}>
-        <div className="animate-fade-in max-w-7xl mx-auto">
-          {children}
-        </div>
-      </main>
+      <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
+        <main className="ml-64 p-8 min-h-screen" key={pageKey}>
+          <div className="animate-fade-in max-w-7xl mx-auto">
+            {children}
+          </div>
+        </main>
+      </DateContext.Provider>
     </div>
   );
 }

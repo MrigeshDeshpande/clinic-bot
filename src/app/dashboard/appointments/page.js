@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { FileImage, Phone as PhoneIcon } from 'lucide-react';
 import Calendar from '@/components/Calendar';
+import { DateContext } from '../layout';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">Completed</span>;
@@ -22,11 +24,12 @@ const TOTALS_CONFIG = [
 ];
 
 export default function AppointmentsPage() {
+  const { selectedDate, setSelectedDate } = useContext(DateContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
   const [error, setError] = useState('');
-  const [selectedDate, setSelectedDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  const [arrivalUpdating, setArrivalUpdating] = useState(null);
   const [dotDates, setDotDates] = useState([]);
   const [showCalendar, setShowCalendar] = useState(false);
   const calRef = useRef();
@@ -68,6 +71,21 @@ export default function AppointmentsPage() {
     fetchData(selectedDate);
   }
 
+  async function handleArrivalChange(appointmentId, arrivalStatus) {
+    setArrivalUpdating(appointmentId);
+    await fetch('/api/dashboard/arrival', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appointmentId, arrivalStatus }),
+    });
+    setArrivalUpdating(null);
+    fetchData(selectedDate);
+  }
+
+  function getMediaCount(a) {
+    return a.chit_media?.length || 0;
+  }
+
   return (
     <div className="animate-fade-in">
       {/* Header */}
@@ -89,9 +107,12 @@ export default function AppointmentsPage() {
             {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
           </button>
           {showCalendar && (
-            <div className="absolute right-0 top-full mt-2 z-50 w-72 animate-slide-down">
-              <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} onMonthChange={(y, m) => fetchCalendarDots(`${y}-${String(m).padStart(2,'0')}-01`)} />
-            </div>
+            <>
+              <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShowCalendar(false)} />
+              <div className="absolute right-0 top-full mt-2 z-50 w-72 animate-slide-down shadow-xl">
+                <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} onMonthChange={(y, m) => fetchCalendarDots(`${y}-${String(m).padStart(2,'0')}-01`)} />
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -130,6 +151,7 @@ export default function AppointmentsPage() {
                   <tr className="border-b border-gray-100 bg-gray-50/80">
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Treatment</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
@@ -139,7 +161,7 @@ export default function AppointmentsPage() {
                 <tbody>
                   {(data?.appointments || []).length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-16 text-center">
+                      <td colSpan={7} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <svg className="w-12 h-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -172,29 +194,84 @@ export default function AppointmentsPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-5 py-4 text-sm text-gray-500">{a.treatment || '—'}</td>
+                        <td className="px-5 py-4 text-sm text-gray-500">
+                          {a.patient_phone ? (
+                            <span className="flex items-center gap-1">
+                              <PhoneIcon className="w-3 h-3 text-gray-400" />
+                              {a.patient_phone}
+                            </span>
+                          ) : '—'}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm text-gray-500">{a.treatment || '—'}</span>
+                            {getMediaCount(a) > 0 && (
+                              <Link
+                                href={a.patient_id ? `/dashboard/patients/${a.patient_id}` : '#'}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 text-xs font-medium hover:bg-blue-100 transition-colors"
+                                title={`${getMediaCount(a)} media file(s)`}
+                              >
+                                <FileImage className="w-3 h-3" />
+                                {getMediaCount(a)}
+                              </Link>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-5 py-4"><StatusBadge status={a.status} arrivalStatus={a.arrival_status} /></td>
                         <td className="px-5 py-4 text-sm font-medium text-gray-700">
                           ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}
                         </td>
                         <td className="px-5 py-4 text-right">
                           {a.status === 'confirmed' && (
-                            <div className="flex gap-1.5 justify-end">
-                              <button
-                                onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
-                                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-all hover:shadow-sm"
-                              >
-                                ✓ Complete
-                              </button>
-                              <button
-                                onClick={() => handleStatusChange(a.id, 'no_show')}
-                                disabled={!!updating}
-                                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-all hover:shadow-sm disabled:opacity-50"
-                              >
-                                ✕ No Show
-                              </button>
+                            <div className="flex flex-col gap-1">
+                              {/* Arrival management */}
+                              <div className="flex gap-1 justify-end">
+                                {a.arrival_status === 'scheduled' && (
+                                  <button
+                                    onClick={() => handleArrivalChange(a.id, 'arrived')}
+                                    disabled={!!arrivalUpdating}
+                                    className="px-2 py-1 text-[10px] font-medium rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all disabled:opacity-50"
+                                  >
+                                    📍 Mark Arrived
+                                  </button>
+                                )}
+                                {a.arrival_status === 'arrived' && (
+                                  <button
+                                    onClick={() => handleArrivalChange(a.id, 'called')}
+                                    disabled={!!arrivalUpdating}
+                                    className="px-2 py-1 text-[10px] font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all disabled:opacity-50"
+                                  >
+                                    📞 Call Patient
+                                  </button>
+                                )}
+                                {a.arrival_status === 'called' && (
+                                  <button
+                                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
+                                    className="px-2 py-1 text-[10px] font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-all"
+                                  >
+                                    ✓ Start Visit
+                                  </button>
+                                )}
+                              </div>
+                              {/* Primary actions */}
+                              <div className="flex gap-1 justify-end">
+                                <button
+                                  onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-all hover:shadow-sm"
+                                >
+                                  ✓ Complete
+                                </button>
+                                <button
+                                  onClick={() => handleStatusChange(a.id, 'no_show')}
+                                  disabled={!!updating}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-all hover:shadow-sm disabled:opacity-50"
+                                >
+                                  ✕ No Show
+                                </button>
+                            </div>
                             </div>
                           )}
+
                         </td>
                       </tr>
                     ))

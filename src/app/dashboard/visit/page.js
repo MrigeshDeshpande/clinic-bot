@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft } from 'lucide-react';
+import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X } from 'lucide-react';
 
 const TREATMENTS = [
   'General Checkup', 'Root Canal', 'Dental Filling', 'Teeth Cleaning',
@@ -10,6 +10,18 @@ const TREATMENTS = [
 ];
 
 export default function VisitPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 flex items-center justify-center p-4">
+        <div className="animate-pulse text-gray-400 text-sm">Loading...</div>
+      </div>
+    }>
+      <VisitPageInner />
+    </Suspense>
+  );
+}
+
+function VisitPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -33,6 +45,13 @@ export default function VisitPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [errors, setErrors] = useState({});
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaFiles, setMediaFiles] = useState([]);
+  const searchRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     setForm(f => ({
@@ -41,6 +60,56 @@ export default function VisitPage() {
       treatment: prefillTreatment || f.treatment,
     }));
   }, [prefillName, prefillTreatment]);
+
+  // Patient search for walk-in
+  useEffect(() => {
+    if (appointmentId || form.patientName.trim().length < 2) {
+      setSearchResults([]);
+      setShowSearch(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(form.patientName.trim())}`);
+        const data = await res.json();
+        setSearchResults(data.patients || []);
+        setShowSearch(data.patients?.length > 0);
+      } catch {}
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [form.patientName, appointmentId]);
+
+  function selectPatient(p) {
+    setForm(f => ({
+      ...f,
+      patientName: p.name,
+      patientPhone: p.phone || f.patientPhone,
+    }));
+    setShowSearch(false);
+    setSearchResults([]);
+  }
+
+  async function handleMediaUpload(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploadingMedia(true);
+    try {
+      // For now, we store files locally until the visit is submitted
+      setMediaFiles(prev => [...prev, ...files]);
+      alert(`${files.length} file(s) added. Media will be uploaded when the visit is saved.`);
+    } catch (err) {
+      alert('Failed to add media');
+    } finally {
+      setUploadingMedia(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function removeMediaFile(idx) {
+    setMediaFiles(prev => prev.filter((_, i) => i !== idx));
+  }
 
   function addMedicine() {
     setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '' }] }));
@@ -98,6 +167,19 @@ export default function VisitPage() {
       });
       const data = await res.json();
       if (res.ok) {
+        // Upload any media files attached to this visit
+        const appointmentIdForMedia = data.appointment?.id || appointmentId;
+        if (appointmentIdForMedia && mediaFiles.length > 0) {
+          for (const file of mediaFiles) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('appointmentId', appointmentIdForMedia);
+            await fetch('/api/dashboard/media', {
+              method: 'POST',
+              body: formData,
+            });
+          }
+        }
         setResult({ patient_name: form.patientName, treatment: form.treatment });
       } else {
         alert(data.error || 'Failed to log visit');
@@ -113,6 +195,21 @@ export default function VisitPage() {
     setForm({ patientName: '', patientPhone: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '' });
     setResult(null);
     setErrors({});
+    setMediaFiles([]);
+  }
+
+  function getFilePreview(file) {
+    if (file.type?.startsWith('image/')) {
+      return URL.createObjectURL(file);
+    }
+    return null;
+  }
+
+  function getFileIcon(file) {
+    if (file.type?.startsWith('image/')) return '🖼️';
+    if (file.type?.startsWith('audio/')) return '🎵';
+    if (file.type?.startsWith('video/')) return '🎬';
+    return '📎';
   }
 
   if (result) {
@@ -169,19 +266,40 @@ export default function VisitPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Patient Info — hidden when pre-filled from appointment */}
           {!appointmentId && (
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+            <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm relative">
               <div className="flex items-center gap-2.5 mb-5">
-                <div className="p-1.5 rounded-lg bg-blue-50"><Activity className="w-4 h-4 text-blue-500" /></div>
+                <div className="p-1.5 rounded-lg bg-blue-50"><Search className="w-4 h-4 text-blue-500" /></div>
                 <h2 className="font-semibold text-gray-900">Patient Information</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Patient Name *</label>
                   <input type="text" value={form.patientName}
                     onChange={e => { setForm(f => ({ ...f, patientName: e.target.value })); setErrors(ev => { const n={...ev}; delete n.patientName; return n; }); }}
                     className={`w-full px-4 py-2.5 bg-white border rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 transition-all ${errors.patientName ? 'border-red-300 focus:ring-red-200' : 'border-gray-200 focus:ring-blue-200 focus:border-blue-400'}`}
                     placeholder="e.g. Rajesh Kumar" />
                   {errors.patientName && <p className="text-xs text-red-500 mt-1">{errors.patientName}</p>}
+                  {/* Search suggestions */}
+                  {showSearch && searchResults.length > 0 && (
+                    <div ref={searchRef} className="absolute z-20 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+                      {searchResults.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => selectPatient(p)}
+                          className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-50 last:border-0 transition-colors flex items-center gap-3"
+                        >
+                          <span className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-xs font-semibold text-blue-700 flex-shrink-0">
+                            {(p.name || '?')[0].toUpperCase()}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
+                            {p.phone && <p className="text-xs text-gray-400">{p.phone}</p>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone (optional)</label>
@@ -192,6 +310,54 @@ export default function VisitPage() {
               </div>
             </div>
           )}
+
+          {/* Media Upload Section */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="p-1.5 rounded-lg bg-purple-50"><Upload className="w-4 h-4 text-purple-500" /></div>
+                <h2 className="font-semibold text-gray-900">Attachments</h2>
+                <span className="text-xs text-gray-400 font-normal">(optional)</span>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
+                onChange={handleMediaUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingMedia}
+                className="w-full py-8 border-2 border-dashed border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50/30 transition-all flex flex-col items-center gap-2 text-gray-400 hover:text-purple-500"
+              >
+                <Upload className="w-6 h-6" />
+                <span className="text-sm font-medium">
+                  {uploadingMedia ? 'Uploading...' : 'Click to upload photos or files'}
+                </span>
+                <span className="text-xs">Photos, documents, audio recordings</span>
+              </button>
+              {mediaFiles.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  {mediaFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100 text-sm">
+                      {getFilePreview(file) ? (
+                        <img src={getFilePreview(file)} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                      ) : (
+                        <span className="text-base">{getFileIcon(file)}</span>
+                      )}
+                      <span className="flex-1 truncate text-gray-700">{file.name}</span>
+                      <span className="text-xs text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
+                      <button type="button" onClick={() => removeMediaFile(idx)}
+                        className="p-1 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
           {/* Consultation Details */}
           <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">

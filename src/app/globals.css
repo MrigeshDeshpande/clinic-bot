@@ -81,9 +81,31 @@ body {
 /* ─── Print styles ─── */
 @media print {
   body { background: white !important; color: black !important; }
-  aside, nav, .no-print, button, .animate-spin { display: none !important; }
+  aside, nav, .no-print, button, .animate-spin, .animate-pulse, .shimmer {
+    display: none !important;
+  }
   main { margin-left: 0 !important; padding: 0 !important; }
   @page { margin: 1.5cm; }
-  .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
-  .border { border-color: #ddd !important; }
+  .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+    box-shadow: none !important;
+  }
+  .border, .border-gray-100, .border-gray-200 {
+    border-color: #ddd !important;
+  }
+  .bg-gradient-to-br, .bg-gradient-to-r {
+    background: #f9fafb !important;
+  }
+  .max-w-4xl, .max-w-6xl, .max-w-2xl {
+    max-width: 100% !important;
+  }
+  .print-shadow-none {
+    box-shadow: none !important;
+  }
+  img {
+    max-width: 6cm !important;
+    page-break-inside: avoid;
+  }
+  .space-y-6, .space-y-4, .gap-4, .gap-6 {
+    page-break-inside: avoid;
+  }
 }

@@ -11,10 +11,10 @@ export async function GET(req) {
 
     const [appointments, totalsRaw] = await Promise.all([
       sql`
-        SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.date, a.time, a.treatment,
+        SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
                a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
-               a.created_at, a.updated_at
+               a.chit_media, a.created_at, a.updated_at
         FROM appointments a
         WHERE a.date = ${date}
           AND a.status IN ('confirmed', 'completed', 'no_show')

@@ -18,7 +18,7 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
     try {
       const res = await fetch(`/api/dashboard/calendar?year=${year}&month=${month}`);
       const data = await res.json();
-      setDots(data.dots || {});
+      setDots(data.dates || {});
     } catch (e) {
       console.error('Failed to fetch calendar dots', e);
     } finally {
@@ -27,8 +27,8 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
   }, []);
 
   useEffect(() => {
-    if (!dotDates) fetchDots(y, m);
-  }, [y, m, fetchDots, dotDates]);
+    fetchDots(y, m);
+  }, [y, m, fetchDots]);
 
   function goToMonth(dir) {
     const d = new Date(y, m - 1 + dir, 1);
@@ -52,7 +52,7 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="w-full">
+    <div className="w-full bg-white rounded-xl border border-gray-200 shadow-md p-3">
       {!hideHeader && (
         <div className="flex items-center justify-between mb-5">
           <button
@@ -100,7 +100,9 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
           const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const dotCount = dotDates ? (dotDates.includes(dateStr) ? 1 : 0) : (dots[dateStr] || 0);
+          const dotCount = dotDates && dotDates.length > 0
+            ? (dotDates.includes(dateStr) ? 1 : 0)
+            : (dots[dateStr] || 0);
           const today = isToday(day);
           const isSelected = selectedDate === dateStr;
 

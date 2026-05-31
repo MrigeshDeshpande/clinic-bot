@@ -5,14 +5,16 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Activity, DollarSign, Calendar, Clock, Phone,
   Pill, Stethoscope, FileText, Printer, ClipboardList,
-  ChevronRight, Users, AlertCircle
+  ChevronRight, Users, AlertCircle, Star, MessageCircle
 } from 'lucide-react';
+import MediaViewer from '@/components/MediaViewer';
 
 export default function PatientDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const [patient, setPatient] = useState(null);
   const [visits, setVisits] = useState([]);
+  const [feedback, setFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,6 +24,12 @@ export default function PatientDetailPage() {
         const data = await res.json();
         setPatient(data.patient);
         setVisits(data.visits || []);
+        // Fetch feedback for this patient (filtered by wa_id)
+        if (data.patient?.wa_id) {
+          const fbRes = await fetch(`/api/dashboard/feedback?limit=20&waId=${encodeURIComponent(data.patient.wa_id)}`);
+          const fbData = await fbRes.json();
+          setFeedback(fbData?.entries || []);
+        }
       } catch (e) {
         console.error('Failed to load patient', e);
       } finally {
@@ -47,6 +55,17 @@ export default function PatientDetailPage() {
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
   }
 
+  function getSignedUrl(key) {
+    return `/api/dashboard/media/signed?key=${encodeURIComponent(key)}`;
+  }
+
+  function ratingEmoji(rating) {
+    if (rating === 'great') return { emoji: '😊', label: 'Great', color: 'text-emerald-600 bg-emerald-50' };
+    if (rating === 'okay') return { emoji: '🙂', label: 'Okay', color: 'text-amber-600 bg-amber-50' };
+    if (rating === 'poor') return { emoji: '😞', label: 'Poor', color: 'text-red-600 bg-red-50' };
+    return { emoji: '—', label: rating, color: 'text-gray-600 bg-gray-50' };
+  }
+
   function getAvatarColor(name) {
     const colors = [
       'from-blue-500 to-blue-600',
@@ -63,7 +82,7 @@ export default function PatientDetailPage() {
   }
 
   const completedVisits = visits.filter(v => v.status === 'completed');
-  const totalRevenue = completedVisits.reduce((sum, v) => sum + Number(v.fees || 0), 0);
+  const totalRevenue = completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0);
   const upcomingFollowUp = completedVisits.find(v => v.follow_up_date && v.follow_up_date >= new Date().toISOString().slice(0, 10));
 
   if (loading) {
@@ -189,6 +208,30 @@ export default function PatientDetailPage() {
           )}
         </div>
 
+        {/* Feedback Summary */}
+        {feedback.filter(f => f.rating).length > 0 && (
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 md:p-8 shadow-sm print-shadow-none">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2.5">
+              <Star className="w-5 h-5 text-amber-500" />
+              Patient Feedback
+            </h2>
+            <div className="grid grid-cols-3 gap-3">
+              {['great', 'okay', 'poor'].map(rating => {
+                const entries = feedback.filter(f => f.rating === rating);
+                if (entries.length === 0) return null;
+                const r = ratingEmoji(rating);
+                return (
+                  <div key={rating} className={`rounded-xl p-4 text-center ${r.color} border border-current/20`}>
+                    <div className="text-2xl mb-1">{r.emoji}</div>
+                    <div className="text-lg font-bold">{entries.length}</div>
+                    <div className="text-xs font-medium opacity-70">{r.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Visit Timeline */}
         {visits.length > 0 ? (
           <div className="bg-white rounded-3xl border border-gray-100 p-6 md:p-8 shadow-sm">
@@ -240,7 +283,7 @@ export default function PatientDetailPage() {
                       </div>
 
                       {/* Treatment + Fees */}
-                      {(visit.treatment || visit.fees) && (
+                      {(visit.treatment || visit.consultation_fee || visit.treatment_charges || visit.medicine_charges) && (
                         <div className="flex flex-wrap items-center gap-3 mb-3">
                           {visit.treatment && (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-xl border border-gray-200 text-sm font-medium text-gray-700 shadow-sm">
@@ -248,10 +291,10 @@ export default function PatientDetailPage() {
                               {visit.treatment}
                             </span>
                           )}
-                          {visit.fees > 0 && (
+                          {(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0)) > 0 && (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-xl border border-gray-200 text-sm font-medium text-gray-700 shadow-sm">
                               <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                              {formatCurrency(visit.fees)}
+                              {formatCurrency(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0))}
                             </span>
                           )}
                         </div>
@@ -303,6 +346,13 @@ export default function PatientDetailPage() {
                           {visit.follow_up_instructions && (
                             <span className="text-amber-600">— {visit.follow_up_instructions}</span>
                           )}
+                        </div>
+                      )}
+
+                      {/* Media Files */}
+                      {visit.chit_media && visit.chit_media.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <MediaViewer mediaKeys={visit.chit_media} getSignedUrl={getSignedUrl} />
                         </div>
                       )}
 

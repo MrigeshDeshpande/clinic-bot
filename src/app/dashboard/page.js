@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import Link from 'next/link';
+import { DollarSign, TrendingUp } from 'lucide-react';
 import Calendar from '@/components/Calendar';
+import { DateContext } from './layout';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">Completed</span>;
@@ -27,17 +29,20 @@ const STAT_CARDS = [
   )},
 ];
 
+const REVENUE_CARD = { key: 'revenue', label: "Today's Revenue", color: 'emerald', icon: <DollarSign className="w-5 h-5" /> };
+
 const COLOR_MAP = {
   total: { text: 'text-gray-900', icon: 'text-gray-400', bg: 'bg-gray-50', ring: 'ring-gray-100' },
   waiting: { text: 'text-amber-600', icon: 'text-amber-400', bg: 'bg-amber-50', ring: 'ring-amber-100' },
   in_session: { text: 'text-blue-600', icon: 'text-blue-400', bg: 'bg-blue-50', ring: 'ring-blue-100' },
   completed: { text: 'text-green-600', icon: 'text-green-400', bg: 'bg-green-50', ring: 'ring-green-100' },
+  revenue: { text: 'text-emerald-700', icon: 'text-emerald-400', bg: 'bg-emerald-50', ring: 'ring-emerald-100' },
 };
 
 export default function DashboardPage() {
+  const { selectedDate, setSelectedDate } = useContext(DateContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   const [dotDates, setDotDates] = useState([]);
   const [showCalendar, setShowCalendar] = useState(false);
   const calRef = useRef();
@@ -85,6 +90,11 @@ export default function DashboardPage() {
   const appointments = data?.appointments || [];
   const confirmed = appointments.filter(a => a.status === 'confirmed');
   const completed = appointments.filter(a => a.status === 'completed');
+  const todayRevenue = completed.reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
+
+  function formatCurrency(amount) {
+    return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+  }
 
   return (
     <div className="animate-fade-in">
@@ -107,24 +117,34 @@ export default function DashboardPage() {
             {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
           </button>
           {showCalendar && (
-            <div className="absolute right-0 top-full mt-2 z-50 w-72 animate-slide-down">
-              <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} onMonthChange={(y, m) => fetchCalendarDots(`${y}-${String(m).padStart(2,'0')}-01`)} />
-            </div>
+            <>
+              <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShowCalendar(false)} />
+              <div className="absolute right-0 top-full mt-2 z-50 w-72 animate-slide-down shadow-xl">
+                <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} onMonthChange={(y, m) => fetchCalendarDots(`${y}-${String(m).padStart(2,'0')}-01`)} />
+              </div>
+            </>
           )}
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {STAT_CARDS.map(card => {
-          const value = card.key === 'total' ? appointments.length : totals[card.key] || 0;
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        {[...STAT_CARDS, REVENUE_CARD].map(card => {
           const c = COLOR_MAP[card.key];
+          let value;
+          if (card.key === 'total') value = appointments.length;
+          else if (card.key === 'revenue') value = formatCurrency(todayRevenue);
+          else value = totals[card.key] || 0;
           return (
             <div key={card.key} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm text-gray-500 font-medium">{card.label}</p>
                 <div className={`w-9 h-9 rounded-lg ${c.bg} flex items-center justify-center ring-1 ${c.ring} group-hover:scale-110 transition-transform duration-200`}>
-                  <svg className={`w-5 h-5 ${c.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">{card.icon}</svg>
+                  {card.key === 'revenue' ? (
+                    <div className={`${c.icon}`}>{REVENUE_CARD.icon}</div>
+                  ) : (
+                    <svg className={`w-5 h-5 ${c.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">{card.icon}</svg>
+                  )}
                 </div>
               </div>
               <p className={`text-3xl font-bold ${c.text}`}>{value}</p>
@@ -157,7 +177,14 @@ export default function DashboardPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
-                        {a.is_priority ? '⭐ ' : ''}{a.patient_name || 'Patient'}
+                        {a.is_priority ? '⭐ ' : ''}
+                        {a.patient_id ? (
+                          <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 hover:underline">
+                            {a.patient_name || 'Patient'}
+                          </Link>
+                        ) : (
+                          a.patient_name || 'Patient'
+                        )}
                       </p>
                       <p className="text-xs text-gray-400 truncate">{a.time?.slice(0, 5)} — {a.treatment || 'Visit'}</p>
                     </div>
@@ -185,7 +212,15 @@ export default function DashboardPage() {
                       {(a.patient_name || 'P')[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{a.patient_name || 'Patient'}</p>
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {a.patient_id ? (
+                          <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 hover:underline">
+                            {a.patient_name || 'Patient'}
+                          </Link>
+                        ) : (
+                          a.patient_name || 'Patient'
+                        )}
+                      </p>
                       <p className="text-xs text-gray-400 truncate">{a.treatment || 'Visit'} — ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}</p>
                     </div>
                   </div>
