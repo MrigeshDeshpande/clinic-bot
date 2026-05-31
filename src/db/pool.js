@@ -249,6 +249,25 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS is_priority BOOLEAN NOT NULL DEFAULT FALSE;
     `;
 
+    // Feedback table
+    await db`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id  UUID REFERENCES appointments(id),
+        wa_id           VARCHAR(50) NOT NULL,
+        rating          VARCHAR(10) NOT NULL,
+        comment         TEXT DEFAULT '',
+        callback        BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    // feedback_sent_at on appointments
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS feedback_sent_at TIMESTAMPTZ;
+    `;
+
     // Ensure the valid_state constraint covers ALL states (patient + doctor)
     // Drop first to allow constraint redefinition across deploys
     await db`

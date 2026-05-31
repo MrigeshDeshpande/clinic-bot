@@ -356,9 +356,30 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
         attempt: attempt + 1,
         error: error.message,
       });
-      return null;
-    }
+    return null;
   }
+}
+
+export async function fetchLatestCompletedByWaId(waId) {
+  const sql = getSql();
+  if (!sql) return null;
+
+  try {
+    const rows = await sql`
+      SELECT id, wa_id, patient_name, date, time, treatment
+      FROM appointments
+      WHERE wa_id = ${waId}
+        AND status = 'completed'
+        AND feedback_sent_at IS NOT NULL
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `;
+    return rows[0] || null;
+  } catch (error) {
+    logger.error('FETCH_LATEST_COMPLETED_ERROR', { waId, error: error.message });
+    return null;
+  }
+}
   return null;
 }
 

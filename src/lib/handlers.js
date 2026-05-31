@@ -3,12 +3,13 @@ import { validateDate, validateTime, validateTreatment, validatePhone } from '@/
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
 import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppointment,
          fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange,
-          countAppointmentsBySlot, findBookedTimesForDate, findNextAvailableSlots, fetchTodayQueue, updateArrivalStatus,
+          countAppointmentsBySlot, findBookedTimesForDate, findNextAvailableSlots, fetchLatestCompletedByWaId, fetchTodayQueue, updateArrivalStatus,
          countTodayByArrivalStatus, toggleAppointmentPriority,
          findAppointmentById, bulkCompleteAppointmentsForDate, bulkCancelAppointmentsForDate } from '@/db/repositories/appointmentRepository';
 import { isDateBlocked, fetchBlockedDates, blockDate, unblockDate } from '@/db/repositories/blockedDateRepository';
 import { createPatient, searchPatients, findPatientById, createAppointmentForPatient, getVisitsByPatientPhone,
          updateVisitLog, findPatientsByWaId } from '@/db/repositories/patientRepository';
+import { insertFeedback } from '@/db/repositories/feedbackRepository';
 import { processAndStoreMedia, downloadMediaFromMeta } from '@/lib/media';
 import { transcribeAudio } from '@/lib/transcriber';
 import { getR2SignedUrl, r2Configured } from '@/lib/r2';
@@ -231,6 +232,12 @@ export async function handle(state, { session, normalized, entities, intent }) {
   if (intent === 'timings') return handleTimings(session);
   if (intent === 'services') return handleServices(session);
   if (intent === 'my_appointments') return handleMyAppointments(session);
+  if (intent === 'feedback_great' || intent === 'feedback_okay' || intent === 'feedback_poor') {
+    return handleFeedbackRating(session, intent, normalized);
+  }
+  if (intent === 'feedback_callback') {
+    return handleFeedbackCallback(session);
+  }
   if (intent === 'appointment') {
     // Family accounts: check if multiple patients share this wa_id
     const patients = await findPatientsByWaId(session.waId);
@@ -1754,6 +1761,61 @@ function handleEmergency(session) {
       sections: mainMenuSections(),
     },
     replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// FEEDBACK — rating from post-visit survey
+// ───────────────────────────────────────────────
+async function handleFeedbackRating(session, intent, normalized) {
+  const rating = intent === 'feedback_great' ? 'great' :
+                 intent === 'feedback_okay' ? 'okay' : 'poor';
+
+  const appt = await fetchLatestCompletedByWaId(session.waId);
+  if (appt) {
+    await insertFeedback({
+      appointmentId: appt.id,
+      waId: session.waId,
+      rating,
+    });
+  }
+
+  if (rating === 'poor') {
+    return {
+      session,
+      reply: {
+        body: `We're sorry your experience wasn't great. Would you like someone to call you?`,
+        buttons: [
+          { id: 'feedback_callback', title: '✅ Yes, Call Me' },
+          { id: 'main_menu', title: 'No, Thanks' },
+        ],
+      },
+      replyType: 'buttons',
+    };
+  }
+
+  return {
+    session,
+    reply: 'Thank you for your feedback! 😊 We\'re glad you had a good experience.',
+    replyType: 'text',
+  };
+}
+
+async function handleFeedbackCallback(session) {
+  const appt = await fetchLatestCompletedByWaId(session.waId);
+  if (appt) {
+    await insertFeedback({
+      appointmentId: appt.id,
+      waId: session.waId,
+      rating: 'poor',
+      callback: true,
+    });
+  }
+  session = { ...session, state: 'HUMAN_ESCALATION', previousState: session.state, isEscalated: true };
+  return {
+    session,
+    reply: `We've noted your request. Someone from ${CLINIC.name} will call you back shortly.`,
+    replyType: 'text',
   };
 }
 

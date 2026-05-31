@@ -80,6 +80,10 @@ const ID_TO_INTENT = {
   'transcription_accept': 'transcription_accept',
   'transcription_edit': 'transcription_edit',
   'transcription_rerrecord': 'transcription_rerrecord',
+  'feedback_great': 'feedback_great',
+  'feedback_okay': 'feedback_okay',
+  'feedback_poor': 'feedback_poor',
+  'feedback_callback': 'feedback_callback',
 };
 
 function resolveDateId(id) {
