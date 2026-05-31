@@ -149,7 +149,7 @@ export default function PatientsPage() {
                       {patient.last_visit && (
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" />
-                          Last: {new Date(patient.last_visit + 'T12:00:00').toLocaleDateString('en-IN', {
+                          Last: {new Date(patient.last_visit.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-IN', {
                             day: 'numeric', month: 'short', year: 'numeric'
                           })}
                         </span>

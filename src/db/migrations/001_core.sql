@@ -32,3 +32,10 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_wa_id ON messages(wa_id);
 CREATE INDEX IF NOT EXISTS idx_messages_msg_id ON messages(msg_id);
+
+-- Clinical documentation columns (added for patient detail view)
+ALTER TABLE appointments
+  ADD COLUMN IF NOT EXISTS diagnosis TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS follow_up_date DATE,
+  ADD COLUMN IF NOT EXISTS follow_up_instructions TEXT DEFAULT '';

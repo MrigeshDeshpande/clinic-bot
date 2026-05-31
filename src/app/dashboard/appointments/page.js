@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Calendar from '@/components/Calendar';
 
 function StatusBadge({ status, arrivalStatus }) {
@@ -23,11 +24,13 @@ const TOTALS_CONFIG = [
 export default function AppointmentsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(null);
   const [error, setError] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
   const [dotDates, setDotDates] = useState([]);
   const [showCalendar, setShowCalendar] = useState(false);
   const calRef = useRef();
+  const router = useRouter();
 
   function fetchData(date) {
     setLoading(true);
@@ -54,12 +57,15 @@ export default function AppointmentsPage() {
 
   function handleDateSelect(date) { setSelectedDate(date); setShowCalendar(false); }
 
-  function handleStatusChange(appointmentId, newStatus) {
-    fetch('/api/dashboard/visit', {
+  async function handleStatusChange(appointmentId, newStatus) {
+    setUpdating(appointmentId);
+    await fetch('/api/dashboard/visit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appointmentId, status: newStatus }),
-    }).then(() => fetchData(selectedDate));
+    });
+    setUpdating(null);
+    fetchData(selectedDate);
   }
 
   return (
@@ -68,7 +74,9 @@ export default function AppointmentsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Appointments</h1>
-          <p className="text-gray-500 mt-1">View and manage daily appointments</p>
+          <p className="text-gray-500 mt-1">
+            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
         </div>
         <div className="relative" ref={calRef}>
           <button
@@ -108,7 +116,7 @@ export default function AppointmentsPage() {
                       <svg className={`w-4 h-4 ${cfg.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">{cfg.icon}</svg>
                     </div>
                   </div>
-                  <p className={`text-2xl font-bold ${cfg.color}`}>{data.totals[cfg.key] || 0}</p>
+                  <p className={`text-2xl font-bold ${cfg.color}`}>{Number(data.totals[cfg.key] || 0)}</p>
                 </div>
               ))}
             </div>
@@ -116,77 +124,84 @@ export default function AppointmentsPage() {
 
           {/* Appointments Table */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50/80">
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Treatment</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="text-right px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.appointments || []).length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-16 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <svg className="w-12 h-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <p className="text-gray-400 text-sm">No appointments for this date.</p>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/80">
+                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Treatment</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th className="text-right px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
-                ) : (
-                  (data?.appointments || []).map((a, idx) => (
-                    <tr key={a.id} className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors group">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'completed' ? 'bg-green-400' : a.status === 'no_show' ? 'bg-red-400' : 'bg-blue-400'}`} />
-                          <span className="text-sm font-medium text-gray-900">{a.time?.slice(0, 5)}</span>
-                          {a.is_priority && <span className="text-xs">⭐</span>}
+                </thead>
+                <tbody>
+                  {(data?.appointments || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-16 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <svg className="w-12 h-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <p className="text-gray-400 text-sm">No appointments for this date.</p>
                         </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <span className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center text-xs font-semibold text-gray-600 flex-shrink-0">
-                            {(a.patient_name || 'P')[0].toUpperCase()}
-                          </span>
-                          <Link href={a.patient_id ? `/dashboard/patients/${a.patient_id}` : '#'} className="text-sm text-gray-700 hover:text-blue-600 hover:underline truncate max-w-[160px]">
-                            {a.patient_name || '—'}
-                          </Link>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-500">{a.treatment || '—'}</td>
-                      <td className="px-5 py-4"><StatusBadge status={a.status} arrivalStatus={a.arrival_status} /></td>
-                      <td className="px-5 py-4 text-sm font-medium text-gray-700">
-                        ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        {a.status === 'confirmed' && (
-                          <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 justify-end">
-                            <button
-                              onClick={() => handleStatusChange(a.id, 'completed')}
-                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-all hover:shadow-sm"
-                            >
-                              ✓ Complete
-                            </button>
-                            <button
-                              onClick={() => handleStatusChange(a.id, 'no_show')}
-                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-all hover:shadow-sm"
-                            >
-                              ✕ No Show
-                            </button>
-                          </div>
-                        )}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    (data?.appointments || []).map((a) => (
+                      <tr key={a.id} className={`border-b border-gray-50 hover:bg-blue-50/30 transition-colors ${updating === a.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'completed' ? 'bg-green-400' : a.status === 'no_show' ? 'bg-red-400' : 'bg-blue-400'}`} />
+                            <span className="text-sm font-medium text-gray-900">{a.time?.slice(0, 5)}</span>
+                            {a.is_priority && <span className="text-xs">⭐</span>}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <span className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center text-xs font-semibold text-gray-600 flex-shrink-0">
+                              {(a.patient_name || 'P')[0].toUpperCase()}
+                            </span>
+                            {a.patient_id ? (
+                              <Link href={`/dashboard/patients/${a.patient_id}`} className="text-sm text-gray-700 hover:text-blue-600 hover:underline truncate max-w-[160px]">
+                                {a.patient_name || '—'}
+                              </Link>
+                            ) : (
+                              <span className="text-sm text-gray-700 truncate max-w-[160px]">{a.patient_name || '—'}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-500">{a.treatment || '—'}</td>
+                        <td className="px-5 py-4"><StatusBadge status={a.status} arrivalStatus={a.arrival_status} /></td>
+                        <td className="px-5 py-4 text-sm font-medium text-gray-700">
+                          ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          {a.status === 'confirmed' && (
+                            <div className="flex gap-1.5 justify-end">
+                              <button
+                                onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
+                                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-all hover:shadow-sm"
+                              >
+                                ✓ Complete
+                              </button>
+                              <button
+                                onClick={() => handleStatusChange(a.id, 'no_show')}
+                                disabled={!!updating}
+                                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-all hover:shadow-sm disabled:opacity-50"
+                              >
+                                ✕ No Show
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
