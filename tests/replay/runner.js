@@ -21,6 +21,7 @@ if (!process.env.DOCTOR_WA_ID) process.env.DOCTOR_WA_ID = 'r_doctor';
 const { processEvent } = await import('../../src/lib/engine.js');
 const { FIXTURES } = await import('./fixtures.js');
 const { getSql, runMigrations } = await import('../../src/db/pool.js');
+const { clearSessionCache } = await import('../../src/lib/session.js');
 
 // Counter-based waId generator — avoids collisions from similar fixture names
 let fixtureCounter = 1000;
@@ -229,6 +230,7 @@ async function main() {
   const failures = [];
 
   for (const fixture of fixturesToRun) {
+    clearSessionCache();
     const result = await runFixture(fixture);
     const evaluation = evaluateResult(result);
 

@@ -200,6 +200,46 @@ export async function runMigrations() {
       );
     `;
 
+    // Patients table — persistent patient records independent of appointments
+    await db`
+      CREATE TABLE IF NOT EXISTS patients (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        wa_id      VARCHAR(50),
+        name       VARCHAR(100) NOT NULL,
+        age        INTEGER,
+        sex        VARCHAR(10),
+        phone      VARCHAR(20) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_patients_phone ON patients(phone);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(name);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_patients_wa_id ON patients(wa_id);
+    `;
+
+    await db`
+      ALTER TABLE patients ADD CONSTRAINT unique_patient_phone UNIQUE (phone);
+    `;
+
+    // Visit logging columns on appointments
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS consultation_fee INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS treatment_charges INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS medicine_charges INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS chit_media TEXT[] DEFAULT '{}',
+        ADD COLUMN IF NOT EXISTS patient_phone VARCHAR(20) DEFAULT '',
+        ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id);
+    `;
+
     // Ensure the valid_state constraint covers ALL states (patient + doctor)
     // Drop first to allow constraint redefinition across deploys
     await db`
@@ -212,7 +252,10 @@ export async function runMigrations() {
                   'EMERGENCY','HUMAN_ESCALATION','CALLBACK_REQUESTED','CANCEL_CONFIRM',
                   'DONE','ABANDONED',
                   'DOCTOR_MAIN_MENU','DOCTOR_VIEW_DATE','DOCTOR_APPOINTMENT_LIST',
-                  'DOCTOR_APPOINTMENT_DETAIL','DOCTOR_MANAGE_SCHEDULE','DOCTOR_STATS')
+                  'DOCTOR_APPOINTMENT_DETAIL','DOCTOR_MANAGE_SCHEDULE','DOCTOR_STATS',
+                  'REGISTER_NAME','REGISTER_AGE','REGISTER_SEX','REGISTER_PHONE','REGISTER_APPOINTMENT',
+                  'LOG_TREATMENT','LOG_CONSULTATION_FEE','LOG_TREATMENT_CHARGES','LOG_MEDICINE_CHARGES',
+                  'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT','DOCTOR_PATIENT_VISITS')
       );
     `;
 

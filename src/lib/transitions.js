@@ -78,11 +78,47 @@ export function getNextState(state, intent, entities) {
     case 'doctor_appt_detail':
       return 'DOCTOR_APPOINTMENT_DETAIL';
     case 'doctor_mark_completed':
+      return 'LOG_TREATMENT';
     case 'doctor_mark_noshow':
       return 'DOCTOR_APPOINTMENT_LIST';
     case 'doctor_block_date':
     case 'doctor_view_blocked':
       return 'DOCTOR_MANAGE_SCHEDULE';
+    case 'doctor_register_patient':
+      return 'REGISTER_NAME';
+    case 'doctor_search_patient':
+      return 'DOCTOR_SEARCH_PATIENT';
+
+    // Registration transitions
+    case 'provide_name':
+      return 'REGISTER_AGE';
+    case 'provide_age':
+      return 'REGISTER_SEX';
+    case 'provide_sex':
+      return 'REGISTER_PHONE';
+    case 'provide_phone':
+      return 'REGISTER_APPOINTMENT';
+    case 'provide_appointment_time':
+    case 'walk_in':
+      return 'DOCTOR_MAIN_MENU';
+
+    // Visit log transitions
+    case 'provide_log_treatment':
+      return 'LOG_CONSULTATION_FEE';
+    case 'provide_fee':
+      // State-dependent: if in LOG_CONSULTATION_FEE → next is LOG_TREATMENT_CHARGES, etc.
+      return null;
+    case 'provide_next_visit':
+    case 'no_next_visit':
+      return 'LOG_NOTES';
+    case 'provide_notes':
+    case 'no_notes':
+      return 'LOG_MEDIA';
+    case 'provide_media':
+    case 'skip_media':
+      return 'DOCTOR_MAIN_MENU';
+    case 'provide_search_query':
+      return 'DOCTOR_SEARCH_PATIENT';
     case 'provide_phone':
       return 'DONE';
 

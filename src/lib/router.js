@@ -51,6 +51,14 @@ const ID_TO_INTENT = {
   'mark_noshow': 'doctor_mark_noshow',
   'block_date': 'doctor_block_date',
   'view_blocked': 'doctor_view_blocked',
+  'register': 'doctor_register_patient',
+  'search_pt': 'doctor_search_patient',
+  'log_skip_media': 'skip_media',
+  'log_no_notes': 'no_notes',
+  'log_no_next': 'no_next_visit',
+  'walk_in': 'walk_in',
+  'view_chit': 'view_chit',
+  'add_chit': 'add_chit',
 };
 
 function resolveDateId(id) {
@@ -108,6 +116,26 @@ export function classifyIntent(normalized, session) {
       const dateStr = id.replace('unblock_', '');
       if (dateStr) {
         return { intent: 'unblock_date', confidence: 1.0, source: 'interactive_id', entities: { date: dateStr } };
+      }
+    }
+
+    // Doctor patient selection from search: patient_<uuid>
+    if (id.startsWith('patient_')) {
+      const patientId = id.replace('patient_', '');
+      if (patientId) {
+        return { intent: 'select_patient', confidence: 1.0, source: 'interactive_id', entities: { patientId } };
+      }
+    }
+
+    // Chit media item tap: chit_media_<idx>_<apptId>
+    if (id.startsWith('chit_media_')) {
+      const parts = id.replace('chit_media_', '').split('_');
+      if (parts.length >= 2) {
+        const mediaIdx = parseInt(parts[0], 10);
+        const apptId = parts.slice(1).join('_');
+        if (!isNaN(mediaIdx) && apptId) {
+          return { intent: 'view_media', confidence: 1.0, source: 'interactive_id', entities: { mediaIdx, appointmentId: apptId } };
+        }
       }
     }
 

@@ -5,6 +5,10 @@ import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppo
          fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange,
          countAppointmentsBySlot } from '@/db/repositories/appointmentRepository';
 import { isDateBlocked, fetchBlockedDates, blockDate, unblockDate } from '@/db/repositories/blockedDateRepository';
+import { createPatient, searchPatients, findPatientById, createAppointmentForPatient, getVisitsByPatientPhone,
+         updateVisitLog } from '@/db/repositories/patientRepository';
+import { processAndStoreMedia } from '@/lib/media';
+import { getR2SignedUrl, r2Configured } from '@/lib/r2';
 import { sendList, sendText } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 import { evaluateOverwrite, applyFieldOverwrite, getTargetState } from '@/lib/overwrite-policy';
@@ -248,9 +252,95 @@ export async function handle(state, { session, normalized, entities, intent }) {
     return {
       session,
       reply: "No problem! Tell me a bit about what you're experiencing:\n\n• Tooth pain or sensitivity?\n• Need a routine checkup?\n• Looking for cosmetic treatment (whitening, braces)?\n• Something else?\n\nJust describe your symptoms and I'll recommend the right treatment.",
-      replyType: 'text',
+    replyType: 'text',
+  };
+}
+
+async function handleDoctorMediaPatientLookup(session, query) {
+  const pm = session.context?.pendingMedia;
+  if (!pm) {
+    return handleDoctorMainMenu(session);
+  }
+
+  const patients = await searchPatients(query);
+
+  if (patients.length === 0) {
+    session = {
+      ...session,
+      state: 'DOCTOR_MAIN_MENU',
+      context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
+    };
+    return {
+      session,
+      reply: { body: `No patient found matching "${query}". Image not saved. Tap Register New Patient to add them first.`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
     };
   }
+
+  // Single match — ask which visit to save to
+  if (patients.length === 1) {
+    const patient = patients[0];
+    const visits = await getVisitsByPatientPhone(patient.phone);
+    if (visits.length === 0) {
+      // No visits — create a new appointment row for the image
+      await processAndStoreMedia({
+        mediaId: pm.mediaId,
+        mimeType: pm.mimeType,
+        appointmentId: null,
+        waId: null,
+        patientId: patient.id,
+      });
+      session = {
+        ...session,
+        state: 'DOCTOR_MAIN_MENU',
+        context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
+      };
+      return {
+        session,
+        reply: { body: `*✅ Media saved for ${patient.name}.*`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+        replyType: 'list',
+      };
+    }
+    // Save to most recent visit
+    const latestVisit = visits[0];
+    await processAndStoreMedia({
+      mediaId: pm.mediaId,
+      mimeType: pm.mimeType,
+      appointmentId: latestVisit.id,
+      waId: null,
+      patientId: patient.id,
+    });
+    session = {
+      ...session,
+      state: 'DOCTOR_MAIN_MENU',
+      context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
+    };
+    return {
+      session,
+      reply: { body: `*✅ Media saved to ${patient.name}'s visit on ${latestVisit.date}.*`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  // Multiple matches — show list
+  const rows = patients.map(p => ({
+    id: `patient_${p.id}`,
+    title: p.name,
+    description: p.phone ? '📞 ' + p.phone.slice(-8) : '',
+  }));
+
+  session = {
+    ...session,
+    state: 'DOCTOR_SEARCH_PATIENT',
+    context: { ...session.context, searchResults: patients.map(p => p.id) },
+  };
+
+  return {
+    session,
+    reply: { body: `Found ${patients.length} patients matching "${query}". Select one to save the image:`, buttonLabel: 'Patients', sections: [{ title: 'Matching Patients', rows }] },
+    replyType: 'list',
+  };
+}
 
   // Correction intents — route to the right handler but pass correction context
   if (intent === 'correction_date') {
@@ -364,6 +454,101 @@ export async function handle(state, { session, normalized, entities, intent }) {
     default:
       return handleUnknown(session, normalized);
   }
+}
+
+// ───────────────────────────────────────────────
+// View chit media for an appointment
+// ───────────────────────────────────────────────
+async function handleDoctorViewChit(session, normalized, intent, entities) {
+  if (intent === 'back') {
+    const prev = session.context?.returnToState || 'DOCTOR_MAIN_MENU';
+    if (prev === 'DOCTOR_APPOINTMENT_DETAIL') {
+      const apptId = session.context?.selectedAppointmentId;
+      if (apptId) {
+        session.state = 'DOCTOR_APPOINTMENT_DETAIL';
+        return handleDoctorAppointmentDetail(session, entities, intent);
+      }
+    }
+    return handleDoctorBack(session);
+  }
+
+  // User taps a specific media item: view_media intent with mediaIdx + appointmentId
+  if (intent === 'view_media' && entities?.mediaIdx !== undefined && entities?.appointmentId) {
+    return handleDoctorViewSingleMedia(session, entities.mediaIdx, entities.appointmentId);
+  }
+
+  const apptId = session.context?.selectedAppointmentId;
+  if (!apptId) {
+    return handleDoctorBack(session);
+  }
+
+  const appt = session.context?.selectedAppointment;
+  if (!appt) {
+    return handleDoctorBack(session);
+  }
+
+  const media = appt.chit_media || [];
+
+  if (media.length === 0) {
+    return {
+      session,
+      reply: { body: '*No chit media for this appointment.*\n\nSend a photo or audio to add media.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const rows = await getChitMediaRows(media, apptId);
+  const patientName = appt.patient_name || 'Patient';
+  const body = `*📎 Chit Media — ${patientName}*\n${media.length} item(s)\n\nTap to view:`;
+
+  session = {
+    ...session,
+    state: 'DOCTOR_VIEW_CHIT',
+    context: { ...session.context, returnToState: 'DOCTOR_APPOINTMENT_DETAIL' },
+  };
+
+  return {
+    session,
+    reply: { body, buttonLabel: 'Media', sections: [{ title: 'Chit Media', rows }] },
+    replyType: 'list',
+  };
+}
+
+async function handleDoctorViewSingleMedia(session, mediaIdx, apptId) {
+  const mediaUrl = await getR2SignedUrl(mediaIdx, 3600);
+  // For audio, the URL will be playable; for images, viewable.
+  // WhatsApp only supports sending media URLs in limited ways.
+  // We send the signed URL as text so the doctor can tap to view.
+  if (!mediaUrl) {
+    return {
+      session,
+      reply: `Could not generate view link for item #${mediaIdx + 1}. It may have expired or been deleted.`,
+      replyType: 'text',
+    };
+  }
+
+  return {
+    session,
+    reply: `📎 *Media #${mediaIdx + 1}*\n\n${mediaUrl}\n\nTap the link to view.`,
+    replyType: 'text',
+  };
+}
+
+async function getChitMediaRows(media, apptId) {
+  const rows = [];
+  for (let i = 0; i < media.length; i++) {
+    const key = media[i];
+    const isAudio = key.includes('audio');
+    const isPhoto = key.includes('photo');
+    const icon = isAudio ? '🎵' : isPhoto ? '🖼️' : '📎';
+    const typeLabel = isAudio ? 'Audio' : isPhoto ? 'Photo' : 'File';
+    rows.push({
+      id: `chit_media_${i}_${apptId}`,
+      title: `${icon} ${typeLabel} #${i + 1}`,
+      description: key.split('/').pop() || '',
+    });
+  }
+  return rows;
 }
 
 // ───────────────────────────────────────────────
@@ -2064,7 +2249,25 @@ async function notifyDoctor(body) {
 // ───────────────────────────────────────────────
 // Doctor dispatch
 // ───────────────────────────────────────────────
-function handleDoctorDispatch(session, normalized, entities, intent) {
+async function handleDoctorDispatch(session, normalized, entities, intent) {
+  // Media message handling (images, audio) — intercept before state routing
+  if (normalized?.hasMedia && normalized?.mediaId) {
+    return handleDoctorMediaMessage(session, normalized, intent);
+  }
+
+  // Pending media: doctor sent an image earlier, now replying with patient name
+  if (session.context?.pendingMedia && session.state !== 'DOCTOR_SEARCH_PATIENT') {
+    const text = (normalized?.textClean || '').trim();
+    if (text && text.length >= 2) {
+      session = {
+        ...session,
+        state: 'DOCTOR_SEARCH_PATIENT',
+        context: { ...session.context, pendingMediaQuery: text },
+      };
+      return handleDoctorMediaPatientLookup(session, text);
+    }
+  }
+
   // Back navigation handled first
   if (intent === 'back') return handleDoctorBack(session);
 
@@ -2089,6 +2292,36 @@ function handleDoctorDispatch(session, normalized, entities, intent) {
       return handleDoctorManageSchedule(session, intent, entities);
     case 'DOCTOR_STATS':
       return handleDoctorStats(session);
+    case 'REGISTER_NAME':
+      return handleRegisterName(session, normalized, intent);
+    case 'REGISTER_AGE':
+      return handleRegisterAge(session, normalized, intent);
+    case 'REGISTER_SEX':
+      return handleRegisterSex(session, normalized, intent);
+    case 'REGISTER_PHONE':
+      return handleRegisterPhone(session, normalized, intent);
+    case 'REGISTER_APPOINTMENT':
+      return handleRegisterAppointment(session, intent, entities, normalized);
+    case 'LOG_TREATMENT':
+      return handleLogTreatment(session, normalized, intent);
+    case 'LOG_CONSULTATION_FEE':
+      return handleLogConsultationFee(session, normalized, intent);
+    case 'LOG_TREATMENT_CHARGES':
+      return handleLogTreatmentCharges(session, normalized, intent);
+    case 'LOG_MEDICINE_CHARGES':
+      return handleLogMedicineCharges(session, normalized, intent);
+    case 'LOG_NEXT_VISIT':
+      return handleLogNextVisit(session, normalized, intent);
+    case 'LOG_NOTES':
+      return handleLogNotes(session, normalized, intent);
+    case 'LOG_MEDIA':
+      return handleLogMedia(session, normalized, intent);
+    case 'DOCTOR_SEARCH_PATIENT':
+      return handleDoctorSearchPatient(session, normalized, intent, entities);
+    case 'DOCTOR_VIEW_CHIT':
+      return handleDoctorViewChit(session, normalized, intent, entities);
+    case 'DOCTOR_PATIENT_VISITS':
+      return handleDoctorPatientVisits(session, normalized, intent, entities);
     default:
       return handleDoctorGreeting(session);
   }
@@ -2104,6 +2337,66 @@ function handleDoctorBack(session) {
   }
 
   return handleDoctorMainMenu(session);
+}
+
+// ───────────────────────────────────────────────
+// Doctor media message handling
+// ───────────────────────────────────────────────
+async function handleDoctorMediaMessage(session, normalized, intent) {
+  const mediaId = normalized.mediaId;
+  const mimeType = normalized.mimeType;
+  const apptId = session.context?.selectedAppointmentId;
+  const vl = session.context?.visitLog || {};
+  const logApptId = vl.appointmentId;
+  const currentApptId = apptId || logApptId;
+
+  // Case 1: Doctor is in LOG_MEDIA flow — save media and proceed to finalize visit
+  if (session.state === 'LOG_MEDIA') {
+    if (currentApptId) {
+      await processAndStoreMedia({
+        mediaId,
+        mimeType,
+        appointmentId: currentApptId,
+        waId: normalized.waId,
+        patientId: null,
+      });
+    }
+    // Continue to finalize the visit save
+    return handleLogMedia(session, normalized, 'skip_media');
+  }
+
+  // Case 2: Doctor is viewing an appointment detail — save media directly
+  if (session.state === 'DOCTOR_APPOINTMENT_DETAIL' && currentApptId) {
+    await processAndStoreMedia({
+      mediaId,
+      mimeType,
+      appointmentId: currentApptId,
+      waId: normalized.waId,
+      patientId: null,
+    });
+    return {
+      session,
+      reply: '*✅ Media saved to this appointment.*',
+      replyType: 'text',
+    };
+  }
+
+  // Case 3: No active context — ask which patient
+  const mediaType = mimeType?.startsWith('audio/') ? 'audio' : 'image';
+  const mediaIcon = mediaType === 'audio' ? '🎵' : '📷';
+  session = {
+    ...session,
+    context: {
+      ...session.context,
+      pendingMedia: { mediaId, mimeType },
+    },
+  };
+
+  return {
+    session,
+    reply: `${mediaIcon} *Got the ${mediaType}.* Which patient? Type the name or phone number:`,
+    replyType: 'text',
+  };
 }
 
 // ───────────────────────────────────────────────
@@ -2171,6 +2464,13 @@ function getDoctorMenuSections() {
       ],
     },
     {
+      title: 'Patients',
+      rows: [
+        { id: 'search_pt', title: '🔍 Search Patient' },
+        { id: 'register', title: '➕ Register New Patient' },
+      ],
+    },
+    {
       title: 'Schedule & Reports',
       rows: [
         { id: 'doc_schedule', title: '⚙️ Manage Schedule' },
@@ -2206,6 +2506,22 @@ async function handleDoctorMainMenu(session, intent) {
   if (intent === 'doctor_view_stats') {
     session = { ...session, state: 'DOCTOR_STATS' };
     return handleDoctorStats(session);
+  }
+  if (intent === 'doctor_register_patient') {
+    session = { ...session, state: 'REGISTER_NAME', context: { ...session.context, registration: {} } };
+    return {
+      session,
+      reply: 'Enter patient name:',
+      replyType: 'text',
+    };
+  }
+  if (intent === 'doctor_search_patient') {
+    session = { ...session, state: 'DOCTOR_SEARCH_PATIENT' };
+    return {
+      session,
+      reply: 'Enter patient name or phone number:',
+      replyType: 'text',
+    };
   }
 
   const body = await buildDoctorMainMenuBody(session, false);
@@ -2346,10 +2662,46 @@ function handleDoctorAppointmentDetail(session, entities, intent) {
   const apptId = session.context?.selectedAppointmentId;
 
   if (intent === 'doctor_mark_completed') {
-    return handleMarkAppointment(session, apptId, 'completed');
+    if (!apptId) {
+      return { session, reply: 'No appointment selected.', replyType: 'text' };
+    }
+    session = {
+      ...session,
+      state: 'LOG_TREATMENT',
+      context: {
+        ...session.context,
+        visitLog: { appointmentId: apptId, treatment: null, consultationFee: null, treatmentCharges: null, medicineCharges: null, nextVisit: null, notes: null },
+      },
+    };
+    return {
+      session,
+      reply: '🦷 *Treatment done?*\n\nWhat treatment was performed? (e.g., RCT Sitting 1, Cleaning, Filling)',
+      replyType: 'text',
+    };
   }
   if (intent === 'doctor_mark_noshow') {
     return handleMarkAppointment(session, apptId, 'no_show');
+  }
+  if (intent === 'view_chit') {
+    if (!apptId) {
+      return { session, reply: 'No appointment selected.', replyType: 'text' };
+    }
+    session = {
+      ...session,
+      state: 'DOCTOR_VIEW_CHIT',
+      context: { ...session.context, returnToState: 'DOCTOR_APPOINTMENT_DETAIL' },
+    };
+    return handleDoctorViewChit(session, null, '');
+  }
+  if (intent === 'add_chit') {
+    if (!apptId) {
+      return { session, reply: 'No appointment selected.', replyType: 'text' };
+    }
+    return {
+      session,
+      reply: '📷 *Send a photo or audio* to attach to this appointment.\n\nTap Back when done.',
+      replyType: 'text',
+    };
   }
   if (!apptId) {
     return handleDoctorMainMenu(session);
@@ -2357,6 +2709,7 @@ function handleDoctorAppointmentDetail(session, entities, intent) {
 
   // If we have the appointment in context, show detail
   const appt = session.context?.selectedAppointment;
+  const mediaCount = appt?.chit_media?.length || 0;
 
   let body = '';
   if (appt) {
@@ -2367,17 +2720,26 @@ function handleDoctorAppointmentDetail(session, entities, intent) {
     body += `*Time:* ${appt.time}\n`;
     body += `*Treatment:* ${appt.treatment || 'N/A'}\n`;
     body += `*Status:* ${appt.status}\n`;
+    if (mediaCount > 0) {
+      body += `*Chit:* ${mediaCount} item(s) 📎\n`;
+    }
   } else {
     body += `*Appointment Details*\n`;
   }
 
+  const buttons = [
+    { id: 'mark_done', title: '✅ Completed' },
+    { id: 'mark_noshow', title: '❌ No Show' },
+  ];
+  if (mediaCount > 0) {
+    buttons.push({ id: 'view_chit', title: '📎 View Chit' });
+  }
+  buttons.push({ id: 'add_chit', title: '➕ Add Chit' });
+  buttons.push({ id: 'back', title: '🔙 Back' });
+
   return {
     session,
-    reply: { body, buttons: [
-      { id: 'mark_done', title: '✅ Completed' },
-      { id: 'mark_noshow', title: '❌ No Show' },
-      { id: 'back', title: '🔙 Back' },
-    ]},
+    reply: { body, buttons },
     replyType: 'buttons',
   };
 }
@@ -2400,15 +2762,10 @@ async function handleMarkAppointment(session, apptId, status) {
   const statusLabel = status === 'completed' ? '✅ Completed' : '❌ No Show';
   const patientName = result.patient_name || 'Patient';
 
-  // Post-appointment feedback request
-  if (status === 'completed' && result.wa_id) {
-    sendFeedbackRequest(result.wa_id, result.patient_name).catch(() => {});
-  }
-
   session = {
     ...session,
     state: 'DOCTOR_MAIN_MENU',
-    context: { ...session.context, selectedAppointmentId: undefined, selectedAppointment: undefined },
+    context: { ...session.context, selectedAppointmentId: undefined, selectedAppointment: undefined, visitLog: undefined },
   };
 
   return {
@@ -2416,6 +2773,538 @@ async function handleMarkAppointment(session, apptId, status) {
     reply: { body: `*${patientName}* marked as *${statusLabel}*.\n\nAppointment updated successfully.`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
     replyType: 'list',
   };
+}
+
+// ───────────────────────────────────────────────
+// Registration flow handlers
+// ───────────────────────────────────────────────
+function handleRegisterName(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const name = (normalized?.textClean || '').trim();
+  if (!name || name.length < 2) {
+    return { session: { ...session, metrics: { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 } },
+             reply: 'Please enter a valid name (at least 2 characters):', replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'REGISTER_AGE',
+    context: { ...session.context, registration: { ...(session.context.registration || {}), name } },
+  };
+  return { session, reply: `Thanks, *${name}*. Now enter age:`, replyType: 'text' };
+}
+
+function handleRegisterAge(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const age = parseInt((normalized?.textClean || '').trim(), 10);
+  if (isNaN(age) || age < 0 || age > 150) {
+    return { session: { ...session, metrics: { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 } },
+             reply: 'Please enter a valid age (0-150):', replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'REGISTER_SEX',
+    context: { ...session.context, registration: { ...(session.context.registration || {}), age } },
+  };
+  return { session, reply: 'Sex? *(M / F / Other)*', replyType: 'text' };
+}
+
+function handleRegisterSex(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const text = (normalized?.textClean || '').trim().toLowerCase();
+  const sexMap = { m: 'M', male: 'M', f: 'F', female: 'F', o: 'Other', other: 'Other' };
+  const sex = sexMap[text];
+  if (!sex) {
+    return { session: { ...session, metrics: { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 } },
+             reply: 'Please enter M, F, or Other:', replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'REGISTER_PHONE',
+    context: { ...session.context, registration: { ...(session.context.registration || {}), sex } },
+  };
+  return { session, reply: 'WhatsApp number (with country code, e.g., 9198xxxx50):', replyType: 'text' };
+}
+
+function handleRegisterPhone(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const text = (normalized?.textClean || '').trim().replace(/\s+/g, '');
+  const phoneResult = validatePhone(text);
+  if (!phoneResult.valid) {
+    return { session: { ...session, metrics: { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 } },
+             reply: 'Please enter a valid 10-digit Indian mobile number (e.g., 9876543210 or 919876543210):', replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'REGISTER_APPOINTMENT',
+    context: { ...session.context, registration: { ...(session.context.registration || {}), phone: phoneResult.parsed } },
+  };
+  return { session, reply: { body: 'Does this patient have an appointment time, or walk-in?', buttons: [
+    { id: 'walk_in', title: '🚶 Walk-in' },
+    { id: 'back', title: '🔙 Back' },
+  ]}, replyType: 'buttons' };
+}
+
+async function handleRegisterAppointment(session, intent, entities, normalized) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const reg = session.context.registration || {};
+  let date, time;
+
+  if (intent === 'walk_in') {
+    const today = new Date().toISOString().slice(0, 10);
+    date = today;
+    // Don't set a time for walk-in
+  } else if (intent === 'provide_appointment_time' || intent === 'unknown') {
+    // Try to parse date/time from text
+    const text = session.context?.lastMessageText || '';
+    const timeResult = validateTime(text);
+    if (timeResult.valid) {
+      time = timeResult.parsed;
+      date = new Date().toISOString().slice(0, 10);
+    } else {
+      // Try date
+      const dateResult = validateDate(text);
+      if (dateResult.valid) {
+        date = dateResult.parsed;
+      }
+      // Also try time
+      const altTime = validateTime(text);
+      if (altTime.valid) {
+        time = altTime.parsed;
+      }
+    }
+  }
+
+  // Create patient record
+  const patient = await createPatient({
+    name: reg.name,
+    age: reg.age,
+    sex: reg.sex,
+    phone: reg.phone,
+    waId: normalized?.waId || null,
+  });
+
+  // Create appointment for today
+  const appt = await createAppointmentForPatient({
+    patientName: reg.name,
+    patientPhone: reg.phone,
+    waId: null,
+    date: date || new Date().toISOString().slice(0, 10),
+    time: time || null,
+    treatment: null,
+  });
+
+  session = {
+    ...session,
+    state: 'DOCTOR_MAIN_MENU',
+    context: { ...session.context, registration: undefined },
+  };
+
+  const body = `*✅ Patient Registered*\n\n*Name:* ${reg.name}\n*Age:* ${reg.age}\n*Sex:* ${reg.sex}\n*Phone:* ${reg.phone}\n\nPatient is in the system and ready.`;
+
+  return {
+    session,
+    reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Visit log flow handlers
+// ───────────────────────────────────────────────
+function handleLogTreatment(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const treatment = (normalized?.textClean || '').trim();
+  if (!treatment) {
+    return { session, reply: 'Please enter the treatment performed (e.g., RCT Sitting 1, Cleaning):', replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'LOG_CONSULTATION_FEE',
+    context: { ...session.context, visitLog: { ...(session.context.visitLog || {}), treatment } },
+  };
+  return { session, reply: '💰 *Consultation fee?*\n\nEnter amount in rupees (e.g., 500):', replyType: 'text' };
+}
+
+function handleLogConsultationFee(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const fee = parseInt((normalized?.textClean || '').replace(/[^0-9]/g, ''), 10);
+  if (isNaN(fee) || fee < 0) {
+    return { session, reply: 'Please enter a valid amount (e.g., 500). Enter 0 if no fee:', replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'LOG_TREATMENT_CHARGES',
+    context: { ...session.context, visitLog: { ...(session.context.visitLog || {}), consultationFee: fee } },
+  };
+  return { session, reply: '💰 *Treatment charges?*\n\nEnter amount in rupees (e.g., 3000). Enter 0 if none:', replyType: 'text' };
+}
+
+function handleLogTreatmentCharges(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const charges = parseInt((normalized?.textClean || '').replace(/[^0-9]/g, ''), 10);
+  if (isNaN(charges) || charges < 0) {
+    return { session, reply: 'Please enter a valid amount (e.g., 3000). Enter 0 if none:', replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'LOG_MEDICINE_CHARGES',
+    context: { ...session.context, visitLog: { ...(session.context.visitLog || {}), treatmentCharges: charges } },
+  };
+  return { session, reply: '💊 *Medicine charges?*\n\nEnter amount in rupees (e.g., 200). Enter 0 if none:', replyType: 'text' };
+}
+
+function handleLogMedicineCharges(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const charges = parseInt((normalized?.textClean || '').replace(/[^0-9]/g, ''), 10);
+  if (isNaN(charges) || charges < 0) {
+    return { session, reply: 'Please enter a valid amount (e.g., 200). Enter 0 if none:', replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'LOG_NEXT_VISIT',
+    context: { ...session.context, visitLog: { ...(session.context.visitLog || {}), medicineCharges: charges } },
+  };
+  return { session, reply: '🗓 *Next visit?*\n\nEnter date and time (e.g., 7-Jun 11am) or type "none":', replyType: 'text' };
+}
+
+function handleLogNextVisit(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  if (intent === 'no_next_visit' || (normalized?.textLower || '').includes('none')) {
+    session = {
+      ...session,
+      state: 'LOG_NOTES',
+      context: { ...session.context, visitLog: { ...(session.context.visitLog || {}), nextVisit: null } },
+    };
+    return { session, reply: '📝 *Notes for patient?*\n\nAny instructions? Type "none" to skip:', replyType: 'text' };
+  }
+  const text = normalized?.textClean || '';
+  const dateResult = validateDate(text);
+  const timeResult = validateTime(text);
+  if (!dateResult.valid && !timeResult.valid) {
+    // Could be a date with time — try common patterns like "7-Jun 11am"
+    const parts = text.split(/[\s,]+/);
+    let nextDate = null;
+    let nextTime = null;
+    for (const p of parts) {
+      const dr = validateDate(p);
+      if (dr.valid) nextDate = dr.parsed;
+      const tr = validateTime(p);
+      if (tr.valid) nextTime = tr.parsed;
+    }
+    if (!nextDate && !nextTime) {
+      return { session, reply: 'Please enter a valid date & time (e.g., 7-Jun 11am) or "none":', replyType: 'text' };
+    }
+    session = {
+      ...session,
+      state: 'LOG_NOTES',
+      context: { ...session.context, visitLog: { ...(session.context.visitLog || {}), nextVisit: { date: nextDate, time: nextTime } } },
+    };
+  } else {
+    session = {
+      ...session,
+      state: 'LOG_NOTES',
+      context: { ...session.context, visitLog: { ...(session.context.visitLog || {}), nextVisit: { date: dateResult.parsed || null, time: timeResult.parsed || null } } },
+    };
+  }
+  return { session, reply: '📝 *Notes for patient?*\n\nAny instructions? Type "none" to skip:', replyType: 'text' };
+}
+
+async function handleLogNotes(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+  const notes = (intent === 'no_notes' || (normalized?.textLower || '').includes('none'))
+    ? ''
+    : (normalized?.textClean || '').trim();
+  session = {
+    ...session,
+    state: 'LOG_MEDIA',
+    context: { ...session.context, visitLog: { ...(session.context.visitLog || {}), notes } },
+  };
+  return {
+    session,
+    reply: { body: '📷 *Send photos / X-rays / prescription?*\n\nSend up to 5 images, or tap Skip.', buttons: [{ id: 'log_skip_media', title: '⏭️ Skip' }, { id: 'back', title: '🔙 Back' }] },
+    replyType: 'buttons',
+  };
+}
+
+async function handleLogMedia(session, normalized, intent) {
+  if (intent === 'back') return handleDoctorBack(session);
+
+  // Accept if doctor sends media, taps Skip, or types skip/done
+  const textLower = normalized?.textLower || '';
+  const proceed = intent === 'skip_media' || normalized?.hasMedia || textLower.includes('skip') || textLower.includes('done');
+  if (!proceed) {
+    return {
+      session,
+      reply: { body: 'Send photos/X-rays or tap Skip.', buttons: [{ id: 'log_skip_media', title: '⏭️ Skip' }, { id: 'back', title: '🔙 Back' }] },
+      replyType: 'buttons',
+    };
+  }
+  const vl = session.context.visitLog || {};
+  const apptId = vl.appointmentId;
+
+  if (!apptId) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, visitLog: undefined } },
+      reply: { body: 'Error: No appointment selected. Please try again.', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  // Save all visit data
+  const result = await updateVisitLog(apptId, {
+    consultationFee: vl.consultationFee || 0,
+    treatmentCharges: vl.treatmentCharges || 0,
+    medicineCharges: vl.medicineCharges || 0,
+    notes: vl.notes || '',
+  });
+
+  if (!result) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, visitLog: undefined } },
+      reply: { body: 'Could not save visit data. Please try again.', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const total = (vl.consultationFee || 0) + (vl.treatmentCharges || 0) + (vl.medicineCharges || 0);
+
+  let summary = `*✅ Visit Logged for ${result.patient_name || 'Patient'}*\n\n`;
+  summary += `*Treatment:* ${vl.treatment || 'N/A'}\n`;
+  summary += `*Fees:* Consult ₹${vl.consultationFee || 0} | Treatment ₹${vl.treatmentCharges || 0} | Medicine ₹${vl.medicineCharges || 0}\n`;
+  summary += `*Total:* ₹${total}\n`;
+  if (vl.notes) summary += `*Notes:* ${vl.notes}\n`;
+
+  // Send patient summary
+  if (result.wa_id) {
+    sendPatientSummary(result.wa_id, result.patient_name, vl, result).catch(() => {});
+  }
+
+  session = {
+    ...session,
+    state: 'DOCTOR_MAIN_MENU',
+    context: { ...session.context, selectedAppointmentId: undefined, selectedAppointment: undefined, visitLog: undefined },
+  };
+
+  return {
+    session,
+    reply: { body: summary, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+async function sendPatientSummary(waId, patientName, vl, appt) {
+  const total = (vl.consultationFee || 0) + (vl.treatmentCharges || 0) + (vl.medicineCharges || 0);
+  const dateStr = appt?.date ? formatDate(appt.date) : '';
+  const timeStr = appt?.time ? formatTime(appt.time) : '';
+
+  let body = `🏥 *${CLINIC.name}*\n\n`;
+  if (dateStr || timeStr) body += `📅 ${dateStr}${timeStr ? ' | ' + timeStr : ''}\n`;
+  body += `🦷 *${vl.treatment || 'Visit'}*\n\n`;
+  body += `💰 Consultation:    ₹${vl.consultationFee || 0}\n`;
+  body += `   Treatment:       ₹${vl.treatmentCharges || 0}\n`;
+  body += `   Medicines:       ₹${vl.medicineCharges || 0}\n`;
+  body += `   ─────────────────\n`;
+  body += `   *Total Paid:      ₹${total}*\n\n`;
+
+  // Don't show "next visit" in patient-facing if not set
+  if (vl.nextVisit?.date) {
+    body += `🗓 *Next visit:* ${vl.nextVisit.date}${vl.nextVisit?.time ? ' at ' + vl.nextVisit.time : ''}\n`;
+  }
+  if (vl.notes) {
+    body += `📝 *Note:* ${vl.notes}\n`;
+  }
+
+  await sendText(waId, body);
+}
+
+// ───────────────────────────────────────────────
+// Search Patient handler
+// ───────────────────────────────────────────────
+async function handleDoctorSearchPatient(session, normalized, intent, entities) {
+  if (intent === 'back') {
+    return handleDoctorBack(session);
+  }
+
+  // Patient selected from list
+  if (intent === 'select_patient' && entities?.patientId) {
+    const patient = await findPatientById(entities.patientId);
+    if (patient) {
+      // If we have pending media, save to this patient's most recent visit
+      const pm = session.context?.pendingMedia;
+      if (pm) {
+        const visits = await getVisitsByPatientPhone(patient.phone);
+        if (visits.length > 0) {
+          const latestVisit = visits[0];
+          await processAndStoreMedia({
+            mediaId: pm.mediaId,
+            mimeType: pm.mimeType,
+            appointmentId: latestVisit.id,
+            waId: null,
+            patientId: patient.id,
+          });
+        } else {
+          await processAndStoreMedia({
+            mediaId: pm.mediaId,
+            mimeType: pm.mimeType,
+            appointmentId: null,
+            waId: null,
+            patientId: patient.id,
+          });
+        }
+        session = {
+          ...session,
+          state: 'DOCTOR_MAIN_MENU',
+          context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined, searchResults: undefined },
+        };
+        const visitCount = patient.phone ? (await getVisitsByPatientPhone(patient.phone)).length : 0;
+        return {
+          session,
+          reply: { body: `*✅ Media saved for ${patient.name}* (${visitCount} visits).`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+          replyType: 'list',
+        };
+      }
+      return showPatientVisits(session, patient);
+    }
+    return {
+      session,
+      reply: { body: 'Patient not found. Try searching again.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back to Menu' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const query = (normalized?.textClean || '').trim();
+  if (!query || query.length < 2) {
+    return { session, reply: 'Enter at least 2 characters to search:', replyType: 'text' };
+  }
+
+  const patients = await searchPatients(query);
+
+  if (patients.length === 0) {
+    session = { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, searchResults: undefined } };
+    return {
+      session,
+      reply: { body: `No patients found matching "${query}". Try a different name or phone number.`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  // For single match, show visits directly
+  if (patients.length === 1) {
+    return showPatientVisits(session, patients[0]);
+  }
+
+  // For multiple matches, show list
+  const rows = patients.map(p => {
+    const phoneDisplay = p.phone ? p.phone.slice(-8) : '';
+    return {
+      id: `patient_${p.id}`,
+      title: `${p.name}${p.age ? ` (${p.age})` : ''}`,
+      description: `📞 ${phoneDisplay}`,
+    };
+  });
+
+  session = {
+    ...session,
+    state: 'DOCTOR_SEARCH_PATIENT',
+    context: { ...session.context, searchResults: patients.map(p => p.id) },
+  };
+
+  return {
+    session,
+    reply: { body: `Found ${patients.length} patients. Select one:`, buttonLabel: 'Patients', sections: [{ title: 'Matching Patients', rows }] },
+    replyType: 'list',
+  };
+}
+
+async function showPatientVisits(session, patient) {
+  const visits = await getVisitsByPatientPhone(patient.phone);
+
+  if (visits.length === 0) {
+    let body = `*📋 ${patient.name}*`;
+    if (patient.age) body += ` (${patient.age}/${patient.sex || ''})`;
+    if (patient.phone) body += `\n📞 ${patient.phone}`;
+    body += '\n*No past visits found.*';
+
+    session = {
+      ...session,
+      state: 'DOCTOR_MAIN_MENU',
+      context: { ...session.context, searchResults: undefined, selectedPatient: patient.id },
+    };
+    return {
+      session,
+      reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const title = `*📋 ${patient.name}*`;
+  const subtitle = patient.age ? ` (${patient.age}/${patient.sex || ''})` : '';
+  const phoneLine = patient.phone ? `\n📞 ${patient.phone}` : '';
+  const header = `${title}${subtitle}${phoneLine}\n*Total visits:* ${visits.length}\n`;
+
+  const rows = visits.map((v) => {
+    const statusIcon = v.status === 'completed' ? '✅' : v.status === 'no_show' ? '❌' : '📌';
+    const total = (v.consultation_fee || 0) + (v.treatment_charges || 0) + (v.medicine_charges || 0);
+    const mediaCount = v.chit_media?.length || 0;
+    let desc = v.treatment || 'Visit';
+    if (total > 0) desc += ` ₹${total}`;
+    if (mediaCount > 0) desc += ` 📎${mediaCount}`;
+    return {
+      id: `doc_appt_${v.id}`,
+      title: `${statusIcon} ${v.date}${v.time ? ' ' + v.time : ''}`,
+      description: desc,
+    };
+  });
+
+  // Add a "Back to Menu" row so they can exit
+  rows.push({ id: 'back', title: '🔙 Back to Menu', description: '' });
+
+  session = {
+    ...session,
+    state: 'DOCTOR_PATIENT_VISITS',
+    context: { ...session.context, searchResults: undefined, selectedPatient: patient.id },
+  };
+
+  return {
+    session,
+    reply: { body: header, buttonLabel: 'Visits', sections: [{ title: 'Visit History', rows }] },
+    replyType: 'list',
+  };
+}
+
+async function handleDoctorPatientVisits(session, normalized, intent, entities) {
+  if (intent === 'back') {
+    return handleDoctorBack(session);
+  }
+
+  // Appointment detail tap — route to DOCTOR_APPOINTMENT_DETAIL
+  if (intent === 'doctor_appt_detail' && entities?.appointmentId) {
+    const apptId = entities.appointmentId;
+    // Fetch this specific appointment from DB rather than from date list
+    const sql = getSql();
+    const [appt] = await sql`
+      SELECT * FROM appointments WHERE id = ${apptId}
+    `;
+    if (appt) {
+      session = {
+        ...session,
+        state: 'DOCTOR_APPOINTMENT_DETAIL',
+        context: {
+          ...session.context,
+          selectedAppointmentId: apptId,
+          selectedAppointment: appt,
+        },
+      };
+      return handleDoctorAppointmentDetail(session, entities, intent);
+    }
+    return {
+      session,
+      reply: { body: 'Appointment not found.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  return { session, reply: 'Tap a visit to see details.', replyType: 'text' };
 }
 
 async function sendFeedbackRequest(waId, patientName) {

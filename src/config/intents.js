@@ -26,7 +26,7 @@ export const STATE_INTENTS = {
                           services:    ['2','services','dental services','treatment','procedures','what we offer','what do you do'],
                           location:    ['3','location','clinic location','address','directions','where'],
                           timings:     ['4','timings','clinic timings','hours','open','close','schedule'],
-                          my_appointments: ['5','my appointments','my bookings','upcoming appointments','appointments','cancel my appointment',"reschedule","manage appointment"],
+                          my_appointments: ['5','my appointments','my bookings','upcoming appointments','appointments',"cancel my appointment","reschedule","manage appointment"],
                           callback:    ['callback','call back','call me back','ring me'] },
   BOOKING_COLLECTION:   { correction_date:   ['actually','change date','different date'],
                           correction_time:   ['actually','change time','different time','evening','morning','afternoon'],

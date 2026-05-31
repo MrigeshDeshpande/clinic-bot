@@ -4,25 +4,29 @@ This folder contains both current behavior docs and historical design/audit reco
 
 ## Read In This Order
 
-1. `user-flows.md` - current end-to-end bot behavior, intents, and enhancement backlog.
-2. `patient-flow-improvements.md` - most recent patient-facing changes (2026-05-30).
-3. `robustness-layer-changes.md` - correction handling, overwrite policy, replay testing.
-4. `doctor-flow-simple.md` - doctor command/flow quick reference.
-5. `testing-update-2026-05-31.md` - latest replay test fixes, coverage, and feature additions (Devanagari, evening check-in, timing update).
-6. `daily-flow-patient-doctor.md` - simple day-to-day flow for both users (includes all cron schedules and evening check-in flow).
-7. `daily-flow-patient-doctor-visual.md` - visual flowcharts for patient and doctor journeys (updated with evening check-in).
-8. `india-edge-cases-hardening-2026-05-31.md` - India-focused edge cases and hardening summary (updated with Devanagari support).
+1. `user-flow-guide.md` - comprehensive end-user conversation guide (34 states, all patient + doctor flows).
+2. `user-flows.md` - detailed patient intent/state catalog and enhancement backlog.
+3. `patient-flow-improvements.md` - patient-facing changes (reminder replies, patient name, feedback, time filtering).
+4. `robustness-layer-changes.md` - correction handling, overwrite policy, replay testing.
+5. `doctor-flow.md` - technical doctor flow design (all 22 doctor states, registration, visit logging, chit media).
+6. `doctor-flow-simple.md` - non-technical doctor command quick reference.
+7. `testing-update-2026-05-31.md` - replay test coverage (28 fixtures, Devanagari, evening check-in).
+8. `daily-flow-patient-doctor.md` - simple day-to-day flow for both users (all cron schedules).
+9. `daily-flow-patient-doctor-visual.md` - visual flowcharts (patient + doctor journeys).
+10. `india-edge-cases-hardening-2026-05-31.md` - India/Hinglish/Devanagari edge cases.
+11. `chit-media-flow.md` - technical design for chit photo/voice note storage.
+12. `chit-media-for-clinic.md` - non-technical guide for clinic staff.
 
 ## Architecture and Deep Design
 
-- `architecture.md` - foundational architecture spec and patterns.
+- `architecture.md` - foundational architecture spec (historical — implementation has evolved).
 - `truth-and-mutation-model.md` - mutation safety model and state-truth guidance.
-- `entity-extraction-design.md` - extraction strategy details.
+- `entity-extraction-design.md` - current extraction strategy details (validators.js implementation).
 
 ## Audits and Historical Notes
 
-- `audit-report-2026-05-26.md` - broad project audit snapshot.
-- `audit-and-improvements.md` - bug analysis + fix plan from earlier phase.
+- `audit-report-2026-05-26.md` - point-in-time audit snapshot (mostly fixed).
+- `audit-and-improvements.md` - bug analysis from earlier phase (mostly resolved).
 
 ## Cron Schedule Summary
 
@@ -36,13 +40,5 @@ All crons run via Vercel Cron Jobs (`vercel.json`):
 
 ## Source-of-Truth Notes
 
-- Some older docs describe planned or pre-fix behavior.
-- If documents conflict, treat these as primary:
-  1. `user-flows.md`
-  2. `patient-flow-improvements.md`
-  3. Code under `src/lib/`, `src/config/`, and `src/app/api/`
-
-## Known Documentation Gaps
-
-- `README.md` was upgraded from generic Next.js template to project-specific setup.
-- A dedicated `.env.example` file is still recommended but not yet added.
+- `docs/user-flow-guide.md` and `docs/user-flows.md` are the primary current-behavior references.
+- `docs/architecture.md`, `docs/audit-report-2026-05-26.md`, and `docs/audit-and-improvements.md` contain historical/design context — not strict current-state truth.

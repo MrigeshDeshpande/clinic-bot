@@ -192,3 +192,12 @@ export async function save(session) {
     logger.error('SESSION_SAVE_FAILED', { sessionId: session.id, error: error.message });
   }
 }
+
+/**
+ * Clear in-memory session cache. Used between replay fixtures to
+ * prevent cross-fixture state leakage when multiple fixtures share
+ * the same waId (e.g., doctor fixtures).
+ */
+export function clearSessionCache() {
+  sessionCache.clear();
+}

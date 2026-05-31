@@ -95,15 +95,15 @@ Configured schedules are in `vercel.json`.
 
 ## Docs Map
 
-- `docs/README.md` - documentation index and source-of-truth notes
-- `docs/architecture.md` - original architecture blueprint
-- `docs/user-flows.md` - detailed current conversation flows + backlog
-- `docs/patient-flow-improvements.md` - patient-facing improvements implemented
-- `docs/robustness-layer-changes.md` - correction/robustness hardening notes
-- `docs/audit-report-2026-05-26.md` - full project audit snapshot
-
-## Current Documentation Status
-
-- `docs/user-flows.md` and `docs/patient-flow-improvements.md` are closest to current behavior.
-- `docs/architecture.md` and older audit docs contain historical/planned sections; treat
-  them as design context, not strict current-state truth.
+- `docs/README.md` - documentation index and reading order
+- `docs/user-flow-guide.md` - comprehensive end-user guide (current)
+- `docs/user-flows.md` - detailed intent/state catalog
+- `docs/doctor-flow.md` - technical doctor flow design (current)
+- `docs/doctor-flow-simple.md` - non-technical doctor quick reference
+- `docs/entity-extraction-design.md` - current extraction implementation
+- `docs/patient-flow-improvements.md` - patient-facing improvements
+- `docs/robustness-layer-changes.md` - correction/robustness hardening
+- `docs/daily-flow-patient-doctor.md` - daily flow for both users
+- `docs/chit-media-flow.md` - chit media system design
+- `docs/architecture.md` - original architecture blueprint (historical)
+- `docs/audit-report-2026-05-26.md` - project audit snapshot (historical)

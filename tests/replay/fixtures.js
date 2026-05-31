@@ -117,7 +117,7 @@ export const FIXTURES = [
     name: 'Doctor Stats (Positive)',
     role: 'doctor',
     messages: [
-      { text: 'Back', type: 'interactive', interactiveId: 'back', intent: 'back' },
+      { text: 'Hi', intent: 'greeting' },
       { text: 'View Stats', type: 'interactive', interactiveId: 'doc_stats', intent: 'doctor_view_stats' },
     ],
     expectations: { finalState: 'DOCTOR_STATS' },
@@ -126,7 +126,7 @@ export const FIXTURES = [
     name: 'Doctor Invalid Date Input (Negative)',
     role: 'doctor',
     messages: [
-      { text: 'Back', type: 'interactive', interactiveId: 'back', intent: 'back' },
+      { text: 'Hi', intent: 'greeting' },
       { text: 'View by Date', type: 'interactive', interactiveId: 'doc_by_date', intent: 'doctor_view_by_date' },
       { text: 'banana', intent: 'unknown' },
     ],
@@ -136,7 +136,7 @@ export const FIXTURES = [
     name: 'Doctor Unknown Input Stays Menu (Negative)',
     role: 'doctor',
     messages: [
-      { text: 'Back', type: 'interactive', interactiveId: 'back', intent: 'back' },
+      { text: 'Hi', intent: 'greeting' },
       { text: 'abracadabra', intent: 'unknown' },
     ],
     expectations: { finalState: 'DOCTOR_MAIN_MENU' },
@@ -302,6 +302,30 @@ export const FIXTURES = [
     messages: [
       { text: 'Hi', intent: 'greeting' },
       { text: 'missed 11:30', intent: 'unknown' },
+    ],
+    expectations: { finalState: 'DOCTOR_MAIN_MENU' },
+  },
+  {
+    name: 'Doctor Search Patient (No Results)',
+    role: 'doctor',
+    messages: [
+      { text: 'Hi', intent: 'greeting' },
+      { text: 'Search Patient', type: 'interactive', interactiveId: 'search_pt', intent: 'doctor_search_patient' },
+      { text: 'UnknownName', intent: 'unknown' },
+    ],
+    expectations: { finalState: 'DOCTOR_MAIN_MENU' },
+  },
+  {
+    name: 'Doctor Register New Patient Walk-in',
+    role: 'doctor',
+    messages: [
+      { text: 'Hi', intent: 'greeting' },
+      { text: 'Register New Patient', type: 'interactive', interactiveId: 'register', intent: 'doctor_register_patient' },
+      { text: 'Ramesh', intent: 'unknown' },
+      { text: '28', intent: 'unknown' },
+      { text: 'M', intent: 'unknown' },
+      { text: '919876543210', intent: 'unknown' },
+      { text: 'Walk-in', type: 'interactive', interactiveId: 'walk_in', intent: 'walk_in' },
     ],
     expectations: { finalState: 'DOCTOR_MAIN_MENU' },
   },

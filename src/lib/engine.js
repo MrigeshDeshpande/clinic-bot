@@ -62,6 +62,8 @@ function normalizeMessage(msg, context) {
   let text = '';
   let type = msg.type || 'unknown';
   let interactiveId = '';
+  let mediaId = '';
+  let mimeType = '';
 
   switch (type) {
     case 'text':
@@ -81,6 +83,16 @@ function normalizeMessage(msg, context) {
     case 'button':
       text = (msg.button?.text || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
       break;
+    case 'image':
+      mediaId = msg.image?.id || '';
+      mimeType = msg.image?.mime_type || 'image/jpeg';
+      text = msg.image?.caption ? (msg.image.caption).normalize('NFKC').replace(/\s+/g, ' ').trim() : '';
+      break;
+    case 'audio':
+      mediaId = msg.audio?.id || '';
+      mimeType = msg.audio?.mime_type || 'audio/ogg';
+      text = '';
+      break;
     default:
       text = '';
   }
@@ -98,8 +110,10 @@ function normalizeMessage(msg, context) {
     textTrimmed: textClean.trim(),
     timestamp: parseInt(msg.timestamp, 10) * 1000,
     phoneNumberId: context.metadata?.phone_number_id,
-    hasMedia: msg.type !== 'text' && msg.type !== 'interactive',
+    hasMedia: ['image', 'audio', 'video', 'document'].includes(type),
     interactiveId,
+    mediaId,
+    mimeType,
   };
 }
 
