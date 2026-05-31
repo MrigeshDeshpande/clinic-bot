@@ -209,7 +209,10 @@ export async function handle(state, { session, normalized, entities, intent }) {
   }
   if (intent === 'thanks') return { session, reply: "You're welcome! Let me know if you need anything else.", replyType: 'text' };
   if (intent === 'help') return handleHelp(session);
-  if (intent === 'affirm') return handleAffirm(session);
+  if (intent === 'affirm') {
+    if (session.context?.role === 'doctor') return handleDoctorAffirm(session);
+    return handleAffirm(session);
+  }
   if (intent === 'location') return handleLocation(session);
   if (intent === 'timings') return handleTimings(session);
   if (intent === 'services') return handleServices(session);
@@ -2065,6 +2068,14 @@ function handleDoctorDispatch(session, normalized, entities, intent) {
   // Back navigation handled first
   if (intent === 'back') return handleDoctorBack(session);
 
+  // Evening check-in: mark no-show by time — detect "missed <time>" or "<time> noshow" pattern
+  if (intent === 'unknown' && entities?.time) {
+    const text = normalized?.textLower || '';
+    if (/\b(missed|noshow|no.?show|didn.?t.?come|absent)\b/i.test(text)) {
+      return handleDoctorEveningNoshow(session, entities.time);
+    }
+  }
+
   switch (session.state) {
     case 'DOCTOR_MAIN_MENU':
       return handleDoctorMainMenu(session, intent);
@@ -2558,6 +2569,59 @@ async function handleDoctorStats(session) {
 // ───────────────────────────────────────────────
 function singleRowSection(rows) {
   return [{ title: 'Options', rows }];
+}
+
+// ───────────────────────────────────────────────
+// Evening check-in: mark no-show by time
+// ───────────────────────────────────────────────
+async function handleDoctorEveningNoshow(session, time) {
+  const today = new Date().toISOString().slice(0, 10);
+  const appointments = await fetchAppointmentsByDate(today);
+  const matching = appointments.find(a => (a.time || '').slice(0, 5) === time);
+
+  if (!matching) {
+    const lines = appointments.map(a => `  ${a.time}  ${a.patient_name || 'Patient'}  ${a.treatment || ''}`).join('\n');
+    const body = appointments.length > 0
+      ? `No appointment at *${time}* today. Available times:\n${lines}`
+      : `No appointments at *${time}* today — no appointments were scheduled.`;
+    return {
+      session,
+      reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const result = await updateAppointmentStatus(matching.id, 'no_show');
+
+  if (!result) {
+    return {
+      session,
+      reply: { body: `Could not update *${matching.patient_name || 'Patient'}* at *${time}*. Status may have already been changed.`,
+               buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  logger.info('DOCTOR_EVENING_NOSHOW', { apptId: matching.id, time, patient: matching.patient_name });
+
+  return {
+    session: { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, selectedAppointmentId: undefined, selectedAppointment: undefined } },
+    reply: { body: `*${matching.patient_name || 'Patient'}* at *${time}* marked as *❌ No Show*.`,
+             buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Evening check-in: doctor says "all good" / general doctor affirm
+// ───────────────────────────────────────────────
+function handleDoctorAffirm(session) {
+  return {
+    session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+    reply: { body: 'Great! How can I help you?',
+             buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
 }
 
 // ───────────────────────────────────────────────

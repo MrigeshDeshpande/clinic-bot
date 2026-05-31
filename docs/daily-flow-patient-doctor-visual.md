@@ -8,13 +8,18 @@ This is a simple visual flow you can share with non-technical team members.
 
 ```mermaid
 flowchart TD
-    A[Start of Day] --> B[Doctor gets morning summary]
-    B --> C[Doctor checks menu actions]
+    A[Start of Day 9:20 AM] --> B[Doctor gets morning summary]
+    B --> C[Doctor checks menu actions during day]
     A --> D[Patients send messages during day]
     D --> E[Patient menu and booking/help/info]
     E --> F[Appointments created/managed]
     F --> G[Doctor sees and updates appointments]
-    G --> H[End of Day and session expiry]
+    G --> H[Evening check-in 7:30 PM]
+    H -->|Doctor replies missed <time>| I[No-show marked]
+    H -->|Doctor replies all good| J[Acknowledged]
+    I --> K[Session expiry / End of day]
+    J --> K
+    C --> K
 ```
 
 ---
@@ -62,6 +67,11 @@ flowchart TD
 
     D2 -->|Manage Schedule| D10[Block/View/Unblock dates]
     D2 -->|View Stats| D11[Stats screen]
+
+    D12[Evening check-in message] -->|Reply missed 14:00| D13[Find 14:00 appt → no-show]
+    D12 -->|Reply all good| D14[Acknowledge]
+    D13 --> D15[Back to main menu]
+    D14 --> D15
 ```
 
 ---
@@ -70,10 +80,13 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    C1[Cron: Morning summary] --> C2[Doctor gets today's schedule]
-    C3[Cron: Reminder run] --> C4[Patients get tomorrow reminder]
+    C1[Cron: Morning summary 9:20 AM IST] --> C2[Doctor gets today's schedule]
+    C3[Cron: Patient reminders 11:00 PM IST] --> C4[Patients get tomorrow reminder]
     C4 -->|confirm| C5[Bot acknowledges confirmed]
     C4 -->|cancel| C6[Bot starts cancel confirmation flow]
+    C7[Cron: Evening check-in 7:30 PM IST] --> C8[Doctor gets today's recap]
+    C8 -->|missed <time>| C9[No-show marked]
+    C8 -->|all good| C10[Acknowledged]
 ```
 
 ---

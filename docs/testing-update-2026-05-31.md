@@ -1,59 +1,47 @@
 # Replay Testing Update (2026-05-31)
 
-## What Was Updated
+## Current Test Suite
 
-### 1) Patient flow fixes
+**28 fixtures — 28 passed, 0 failed, 0 skipped**
 
-- Added missing treatment catalog entries in `src/config/clinic.js`:
-  - `General Dentistry`
-  - `Teeth Cleaning`
-- Added robust aliases for both so free-text inputs like "cleaning" and
-  "general dentistry" resolve as `provide_treatment`.
+### Coverage
 
-### 2) Doctor flow bug fix
+| Category | Count | Details |
+|---|---|---|
+| Patient happy path + variations | 6 | Booking, corrections, invalid-then-corrected, menu interruption, escalation, cancel |
+| Patient callback flow | 1 | Phone validation |
+| Doctor positive flows | 4 | Greeting, view today, manage schedule, stats |
+| Doctor negative flows | 2 | Invalid date, unknown input |
+| India date/time parsing | 6 | `kal` ambiguity, `baje`, `parso`, `saade`, relative days, mixed language |
+| India emergency phrases | 2 | `masoodon se khun`, `bahut dard` |
+| India phone validation | 1 | Invalid then valid callback phone |
+| India Devanagari | 2 | Date+time in Devanagari (`आज ५ बजे`), emergency (`बहुत दर्द`) |
+| Evening check-in | 2 | Doctor `all good`, doctor `missed <time>` no-show |
 
-- Fixed malformed list reply payload in `handleDoctorMainMenu` for
-  `doctor_view_by_date` in `src/lib/handlers.js`.
-- Before fix, the handler returned `reply` as a plain string with
-  `buttonLabel/sections` outside the `reply` object, which caused runtime
-  failure in list send path.
+### What Was Added (latest round)
 
-### 3) Replay runner improvements
+- **Devanagari intent keywords** in `src/config/intents.js`: `नमस्ते`, `हाँ`, `ठीक है`, `कर दो`, `रद्द`, `कैंसल`, `बहुत दर्द`
+- **Devanagari date/time parsing** in `src/lib/validators.js`: `आज`, `कल`, `परसों`, `५ बजे शाम`, `साढ़े`, `सुबह`/`दोपहर`/`शाम`/`रात`
+- **Indic digit normalization** in `src/lib/validators.js`: `०-९` → `0-9`
+- **Non-ASCII keyword matching** in `src/lib/router.js`: falls back to `includes()` for Devanagari terms
+- **Evening check-in cron** `src/app/api/cron/evening-checkin/route.js`: runs at 7:30 PM IST, sends doctor today's appointment list, supports `missed <time>` and `all good` replies
+- **Doctor no-show-by-time** in `src/lib/handlers.js`: `handleDoctorEveningNoshow` + `handleDoctorAffirm`
+- **Clinic timing update** in `src/config/clinic.js`: weekday hours changed from 09:00–20:00 to 10:00–20:00
+- **Cron schedule updates** in `vercel.json`:
+  - Daily summary: `30 2 * * *` → `50 3 * * *` (9:20 AM IST)
+  - Reminders: `30 4 * * *` → `30 17 * * *` (11 PM IST)
+  - Evening check-in (new): `0 14 * * *` (7:30 PM IST)
 
-- Updated `tests/replay/runner.js` to:
-  - set replay env before imports using dynamic imports,
-  - support doctor fixtures reliably,
-  - support interactive fixture messages (`interactiveId`, `interactiveTitle`).
+## Files Changed (latest round)
 
-### 4) Replay fixture coverage expansion
-
-- Rebuilt `tests/replay/fixtures.js` to include:
-  - Patient positive and negative flows aligned with current booking design
-    (including patient name step via `affirm` before final confirm).
-  - Doctor positive and negative flows based on current scope:
-    - doctor main menu,
-    - view today,
-    - manage schedule,
-    - stats,
-    - invalid date handling,
-    - unknown input handling.
-
-## Test Result
-
-Command:
-
-```bash
-REPLAY_MODE=true node --experimental-loader ./tests/replay/path-loader.js tests/replay/runner.js
-```
-
-Result:
-
-- **13 passed, 0 failed, 0 skipped**
-
-## Files Changed
-
-- `src/config/clinic.js`
-- `src/lib/handlers.js`
-- `tests/replay/runner.js`
-- `tests/replay/fixtures.js`
-- `docs/testing-update-2026-05-31.md`
+- `src/config/clinic.js` — updated timings to 10 AM – 8 PM
+- `src/config/intents.js` — Devanagari intent keywords
+- `src/lib/validators.js` — Devanagari date/time, Indic digit normalization
+- `src/lib/router.js` — non-ASCII keyword matching
+- `src/lib/handlers.js` — evening check-in handlers, doctor affirm
+- `src/db/pool.js` — added `reminder_sent_at` to base CREATE TABLE
+- `src/app/api/cron/evening-checkin/route.js` — new cron endpoint
+- `src/app/api/cron/daily-summary/route.js` — added phone to daily summary
+- `vercel.json` — updated cron schedules, added evening check-in
+- `tests/replay/fixtures.js` — 2 new evening check-in fixtures
+- `docs/testing-update-2026-05-31.md` — this file

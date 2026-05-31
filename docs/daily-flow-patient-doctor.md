@@ -6,8 +6,8 @@ This is a simple day-to-day flow of how the bot works for patients and doctor.
 
 ## 1) Start of Day (Doctor)
 
-1. A scheduled cron sends the doctor a morning summary.
-2. The summary includes today's appointments (or says no appointments).
+1. A scheduled cron sends the doctor a morning summary at **9:20 AM IST**.
+2. The summary includes today's appointments with patient name, time, phone, and treatment (or says no appointments).
 3. Doctor can open the bot and use quick options:
    - Today's Appointments
    - View by Date
@@ -75,8 +75,9 @@ Patient can type:
 
 ## 4) Reminder Flow (Patient)
 
-1. Daily cron sends reminders for tomorrow's appointments.
-2. Patient can reply:
+1. A scheduled cron sends patients a night-before reminder at **11:00 PM IST** for the next day's appointments.
+2. Message includes date, time, treatment, and clinic name.
+3. Patient can reply:
    - `confirm` -> bot confirms appointment is still on
    - `cancel` -> bot starts cancellation confirmation flow
 
@@ -117,7 +118,16 @@ Doctor can view appointment counts from stats view.
 
 ---
 
-## 6) End of Day Behavior
+## 6) End of Day (Evening Check-in)
+
+1. A scheduled cron sends the doctor an **evening check-in** at **7:30 PM IST** (just before 8 PM close).
+2. Message lists all of today's appointments with patient name, time, phone, and treatment.
+3. Doctor can reply directly to the message:
+   - `missed <time>` (e.g., `missed 11:30`) — marks that appointment as **No Show**
+   - `all good` — acknowledges everyone showed up
+4. Doctor can also use the bot menu normally to mark appointments as Completed or No Show from the appointment detail view.
+
+## 7) End of Day Session Behavior
 
 - Sessions expire after inactivity.
 - If patient returns later, bot can resume or start fresh based on state.
@@ -125,7 +135,7 @@ Doctor can view appointment counts from stats view.
 
 ---
 
-## 7) Reliability Notes
+## 8) Reliability Notes
 
 - Duplicate webhook events are handled safely.
 - Booking state is protected with session/version logic.
@@ -133,8 +143,8 @@ Doctor can view appointment counts from stats view.
 
 ---
 
-## 8) Quick Summary
+## 9) Quick Summary
 
 - Patient flow: menu -> booking fields -> confirm -> manage booking.
-- Doctor flow: summary -> view lists/details -> update status -> manage schedule/stats.
-- Automation: morning summary + reminder messages run daily.
+- Doctor flow: morning summary -> day ops (view/update/manage) -> evening check-in -> close.
+- Automation: morning summary at 9:20 AM, evening check-in at 7:30 PM, patient reminders at 11 PM.

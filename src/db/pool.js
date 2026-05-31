@@ -117,6 +117,7 @@ export async function runMigrations() {
         time                TIME NOT NULL,
         treatment           VARCHAR(100),
         status              VARCHAR(20) NOT NULL DEFAULT 'confirmed',
+        reminder_sent_at    TIMESTAMPTZ,
         cancelled_at        TIMESTAMPTZ,
         cancellation_reason VARCHAR(255),
         created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),

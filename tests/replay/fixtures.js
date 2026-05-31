@@ -287,4 +287,22 @@ export const FIXTURES = [
     ],
     expectations: { finalState: 'MAIN_MENU' },
   },
+  {
+    name: 'Doctor Evening All Good',
+    role: 'doctor',
+    messages: [
+      { text: 'Hi', intent: 'greeting' },
+      { text: 'all good', intent: 'affirm' },
+    ],
+    expectations: { finalState: 'DOCTOR_MAIN_MENU' },
+  },
+  {
+    name: 'Doctor Evening Missed No Appointments',
+    role: 'doctor',
+    messages: [
+      { text: 'Hi', intent: 'greeting' },
+      { text: 'missed 11:30', intent: 'unknown' },
+    ],
+    expectations: { finalState: 'DOCTOR_MAIN_MENU' },
+  },
 ];
