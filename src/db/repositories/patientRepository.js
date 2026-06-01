@@ -174,3 +174,34 @@ export async function findPatientsByWaId(waId) {
     return [];
   }
 }
+
+export async function updatePatient(id, fields) {
+  const sql = getSql();
+  if (!sql) return null;
+  try {
+    const setClauses = [];
+    const values = [];
+    let idx = 1;
+
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined && ['name', 'age', 'sex', 'phone'].includes(key)) {
+        setClauses.push(`${key} = $${idx++}`);
+        values.push(key === 'age' ? (value || null) : value);
+      }
+    }
+
+    if (setClauses.length === 0) return null;
+
+    setClauses.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const rows = await sql.query(
+      `UPDATE patients SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    return rows[0] || null;
+  } catch (error) {
+    logger.error('PATIENT_UPDATE_ERROR', { id, fields, error: error.message });
+    return null;
+  }
+}

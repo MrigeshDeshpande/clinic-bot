@@ -481,6 +481,27 @@ export async function updateArrivalStatus(id, status) {
   }
 }
 
+// Fetch today's confirmed appointments that haven't arrived yet (scheduled)
+export async function fetchTodayScheduledAppointments() {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await sql`
+      SELECT * FROM appointments
+      WHERE date = ${today}
+        AND status = 'confirmed'
+        AND arrival_status = 'scheduled'
+      ORDER BY time ASC
+    `;
+    return rows;
+  } catch (error) {
+    logger.error('QUEUE_FETCH_SCHEDULED_TODAY_ERROR', { error: error.message });
+    return [];
+  }
+}
+
 // Get count of today's appointments by arrival_status
 export async function countTodayByArrivalStatus(status) {
   const sql = getSql();

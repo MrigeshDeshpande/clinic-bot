@@ -3,7 +3,10 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
+import dynamic from 'next/dynamic';
 import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Sun, Moon, X, Menu } from 'lucide-react';
+
+const NotificationPanel = dynamic(() => import('@/components/NotificationPanel'), { ssr: false });
 
 export const DateContext = createContext();
 export const ThemeContext = createContext();
@@ -164,6 +167,11 @@ function SidebarContent({ pathname, onNavClick }) {
           );
         })}
       </nav>
+
+      {/* Notifications */}
+      <div className="px-3">
+        <NotificationPanel />
+      </div>
 
       {/* Logout + Theme */}
       <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">

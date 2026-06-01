@@ -43,4 +43,7 @@ export const STATE_INTENTS = {
   DOCTOR_APPOINTMENT_DETAIL: { doctor_mark_completed: ['done','complete','finished','mark done','completed'],
                                doctor_mark_noshow:    ['no show',"didn't come","did not come","missed","noshow"] },
   DOCTOR_MAIN_MENU: { doctor_view_queue: ['queue','waiting','line','next patient'] },
+  DOCTOR_EDIT_PATIENT: { provide_name: ['name','edit name','change name'],
+                          provide_age: ['age','edit age','change age'],
+                          provide_sex: ['sex','edit sex','change sex'] },
 };

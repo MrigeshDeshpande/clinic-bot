@@ -151,6 +151,43 @@ export default function AppointmentsPage() {
             </div>
           )}
 
+          {/* Bulk Actions */}
+          {data?.totals?.confirmed > 1 && (
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Bulk Actions:</span>
+              <button
+                onClick={async () => {
+                  if (!confirm(`Mark all ${data.totals.confirmed} confirmed appointments as completed?`)) return;
+                  const res = await fetch(`/api/dashboard/appointments/bulk?date=${selectedDate}&action=complete_all`, { method: 'POST' });
+                  const json = await res.json();
+                  if (json.success) {
+                    const r = await fetch(`/api/dashboard/appointments?date=${selectedDate}`);
+                    const d = await r.json();
+                    setData(d);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all hover:shadow-sm"
+              >
+                ✓ Complete All
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirm(`Cancel all ${data.totals.confirmed} confirmed appointments?`)) return;
+                  const res = await fetch(`/api/dashboard/appointments/bulk?date=${selectedDate}&action=cancel_all`, { method: 'POST' });
+                  const json = await res.json();
+                  if (json.success) {
+                    const r = await fetch(`/api/dashboard/appointments?date=${selectedDate}`);
+                    const d = await r.json();
+                    setData(d);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition-all hover:shadow-sm"
+              >
+                ✕ Cancel All
+              </button>
+            </div>
+          )}
+
           {/* Appointments Table */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">

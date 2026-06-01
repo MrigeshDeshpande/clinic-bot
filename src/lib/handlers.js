@@ -1,3 +1,4 @@
+import { getSql } from '@/db/pool';
 import { CLINIC } from '@/config/clinic';
 import { validateDate, validateTime, validateTreatment, validatePhone } from '@/lib/validators';
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
@@ -5,10 +6,11 @@ import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppo
          fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange,
           countAppointmentsBySlot, findBookedTimesForDate, findNextAvailableSlots, fetchLatestCompletedByWaId, fetchTodayQueue, updateArrivalStatus,
          countTodayByArrivalStatus, toggleAppointmentPriority,
-         findAppointmentById, bulkCompleteAppointmentsForDate, bulkCancelAppointmentsForDate } from '@/db/repositories/appointmentRepository';
+         findAppointmentById, bulkCompleteAppointmentsForDate, bulkCancelAppointmentsForDate,
+         fetchTodayScheduledAppointments } from '@/db/repositories/appointmentRepository';
 import { isDateBlocked, fetchBlockedDates, blockDate, unblockDate } from '@/db/repositories/blockedDateRepository';
 import { createPatient, searchPatients, findPatientById, createAppointmentForPatient, getVisitsByPatientPhone,
-         updateVisitLog, findPatientsByWaId } from '@/db/repositories/patientRepository';
+         updateVisitLog, findPatientsByWaId, updatePatient } from '@/db/repositories/patientRepository';
 import { insertFeedback } from '@/db/repositories/feedbackRepository';
 import { processAndStoreMedia, downloadMediaFromMeta } from '@/lib/media';
 import { transcribeAudio } from '@/lib/transcriber';
@@ -2652,9 +2654,14 @@ async function handleDoctorDispatch(session, normalized, entities, intent) {
     case 'DOCTOR_VIEW_QUEUE':
       if (intent === 'doctor_call_patient') return handleDoctorCallPatient(session, entities);
       if (intent === 'doctor_call_next') return handleDoctorCallNext(session);
+      if (intent === 'queue_mark_arrived') return handleDoctorMarkArrived(session, entities);
       return handleDoctorViewQueue(session);
     case 'DOCTOR_LOG_VISIT_NAME':
       return handleDoctorLogVisitName(session, normalized, intent, entities);
+    case 'DOCTOR_FEEDBACK':
+      return handleDoctorFeedback(session);
+    case 'DOCTOR_EDIT_PATIENT':
+      return handleDoctorEditPatient(session, normalized, intent, entities);
     default:
       return handleDoctorGreeting(session);
   }
@@ -2875,6 +2882,7 @@ function getDoctorMenuSections() {
       rows: [
         { id: 'doc_schedule', title: '⚙️ Manage Schedule' },
         { id: 'doc_stats', title: '📊 View Stats' },
+        { id: 'doc_feedback', title: '💬 View Feedback' },
       ],
     },
   ];
@@ -2936,6 +2944,10 @@ async function handleDoctorMainMenu(session, intent) {
       reply: 'Enter the walk-in patient name:',
       replyType: 'text',
     };
+  }
+  if (intent === 'doctor_view_feedback') {
+    session = { ...session, state: 'DOCTOR_FEEDBACK' };
+    return handleDoctorFeedback(session);
   }
 
   const body = await buildDoctorMainMenuBody(session, false);
@@ -3850,7 +3862,8 @@ async function showPatientVisits(session, patient) {
     };
   });
 
-  // Add a "Back to Menu" row so they can exit
+  // Add edit and back options
+  rows.push({ id: 'edit_patient', title: '✏️ Edit Patient Details', description: '' });
   rows.push({ id: 'back', title: '🔙 Back to Menu', description: '' });
 
   session = {
@@ -3869,6 +3882,36 @@ async function showPatientVisits(session, patient) {
 async function handleDoctorPatientVisits(session, normalized, intent, entities) {
   if (intent === 'back') {
     return handleDoctorBack(session);
+  }
+
+  // Edit patient detail
+  if (intent === 'doctor_edit_patient') {
+    const patientId = session.context?.selectedPatient;
+    if (!patientId) {
+      return { session, reply: '*No patient selected.*', replyType: 'text' };
+    }
+    const patient = await findPatientById(patientId);
+    if (!patient) {
+      return { session, reply: '*Patient not found.*', replyType: 'text' };
+    }
+    const body = `*✏️ Edit Patient: ${patient.name}*\n\nCurrent details:\nName: ${patient.name}\nAge: ${patient.age || '—'}\nSex: ${patient.sex || '—'}\nPhone: ${patient.phone}\n\nWhat would you like to edit?`;
+    return {
+      session: { ...session, state: 'DOCTOR_EDIT_PATIENT', context: { ...session.context, editField: undefined } },
+      reply: {
+        body,
+        buttonLabel: 'Edit',
+        sections: [{
+          title: 'Edit Field',
+          rows: [
+            { id: 'provide_name', title: '✏️ Name' },
+            { id: 'provide_age', title: '✏️ Age' },
+            { id: 'provide_sex', title: '✏️ Sex' },
+            { id: 'back', title: '🔙 Cancel' },
+          ],
+        }],
+      },
+      replyType: 'list',
+    };
   }
 
   // Appointment detail tap — route to DOCTOR_APPOINTMENT_DETAIL
@@ -4089,9 +4132,137 @@ function getDoctorScheduleSections() {
 }
 
 // ───────────────────────────────────────────────
+// Aggregated feedback view for doctor
+// ───────────────────────────────────────────────
+async function handleDoctorFeedback(session) {
+  const { getFeedbackSummary } = await import('@/db/repositories/feedbackRepository');
+  const summary = await getFeedbackSummary();
+
+  if (!summary) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: '*Could not retrieve feedback data.*', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back to Menu' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const { stats, recent, pendingCallbacks } = summary;
+  let body = `*📊 Feedback Summary (Last 30 Days)*\n\n`;
+  body += `Total Responses: *${stats.total}*\n`;
+  body += `Average Rating: *${stats.avg_rating}/5*${stats.total > 0 ? ` ⭐` : ''}\n`;
+  if (stats.total > 0) {
+    const satisfaction = Math.round((stats.positive / stats.total) * 100);
+    body += `Satisfaction: *${satisfaction}%* (${stats.positive} positive, ${stats.negative} negative)\n`;
+  }
+  body += `Pending Callbacks: *${pendingCallbacks.length}*\n`;
+
+  if (recent.length > 0) {
+    body += `\n*Recent Feedback:*\n`;
+    recent.forEach(f => {
+      const stars = '⭐'.repeat(f.rating) + '☆'.repeat(5 - f.rating);
+      body += `\n${stars} — ${f.patient_name || 'Anonymous'}`;
+      if (f.comment) body += `\n  "${f.comment.slice(0, 80)}"`;
+    });
+  }
+
+  if (pendingCallbacks.length > 0) {
+    body += `\n\n*📞 Pending Callbacks:*\n`;
+    pendingCallbacks.forEach((cb, i) => {
+      body += `\n${i + 1}. ${cb.patient_name || 'Unknown'} — ${cb.patient_phone || cb.wa_id || 'N/A'}`;
+      if (cb.comment) body += ` (${cb.comment.slice(0, 50)})`;
+    });
+  }
+
+  return {
+    session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+    reply: { body, buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back to Menu' }]) },
+    replyType: 'list',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Patient edit on bot
+// ───────────────────────────────────────────────
+async function handleDoctorEditPatient(session, normalized, intent, entities) {
+  if (intent === 'back') return handleDoctorBack(session);
+
+  const patientId = session.context?.selectedPatient;
+  if (!patientId) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: '*No patient selected.*', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const patient = await findPatientById(patientId);
+  if (!patient) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: '*Patient not found.*', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const editField = session.context?.editField;
+
+  if (!editField) {
+    // Show edit options menu
+    const body = `*✏️ Edit Patient: ${patient.name}*\n\nCurrent details:\nName: ${patient.name}\nAge: ${patient.age || '—'}\nSex: ${patient.sex || '—'}\nPhone: ${patient.phone}\n\nWhat would you like to edit?`;
+    return {
+      session: { ...session, state: 'DOCTOR_EDIT_PATIENT' },
+      reply: {
+        body,
+        buttonLabel: 'Edit',
+        sections: [{
+          title: 'Edit Field',
+          rows: [
+            { id: 'provide_name', title: '✏️ Name' },
+            { id: 'provide_age', title: '✏️ Age' },
+            { id: 'provide_sex', title: '✏️ Sex' },
+            { id: 'back', title: '🔙 Cancel' },
+          ],
+        }],
+      },
+      replyType: 'list',
+    };
+  }
+
+  // Handle text input for the field being edited
+  const text = (normalized?.textClean || '').trim();
+  if (!text) {
+    return { session, reply: `Enter new ${editField}:`, replyType: 'text' };
+  }
+
+  const updateFields = {};
+  if (editField === 'name') updateFields.name = text;
+  else if (editField === 'age') {
+    const age = parseInt(text, 10);
+    if (isNaN(age) || age < 0 || age > 150) {
+      return { session, reply: 'Please enter a valid age (0-150):', replyType: 'text' };
+    }
+    updateFields.age = age;
+  } else if (editField === 'sex') {
+    const sex = text.toLowerCase();
+    if (!['male', 'female', 'm', 'f', 'other'].includes(sex)) {
+      return { session, reply: 'Please enter Male, Female, or Other:', replyType: 'text' };
+    }
+    updateFields.sex = sex === 'm' ? 'Male' : sex === 'f' ? 'Female' : sex.charAt(0).toUpperCase() + sex.slice(1);
+  }
+
+  const updated = await updatePatient(patientId, updateFields);
+  if (!updated) {
+    return { session, reply: 'Could not update patient. Try again.', replyType: 'text' };
+  }
+
+  return showPatientVisits({ ...session, context: { ...session.context, editField: undefined } }, updated);
+}
+
+// ───────────────────────────────────────────────
 // Stats view
 // ───────────────────────────────────────────────
 async function handleDoctorStats(session) {
+  const sql = getSql();
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const weekAgo = new Date(now);
@@ -4101,16 +4272,47 @@ async function handleDoctorStats(session) {
   monthAgo.setMonth(monthAgo.getMonth() - 1);
   const monthStart = monthAgo.toISOString().slice(0, 10);
 
-  const [todayCount, weekCount, monthCount] = await Promise.all([
+  const [todayCount, weekCount, monthCount, todayRevenue, todayNewPatients, todayStatusBreakdown] = await Promise.all([
     countAppointmentsByDateRange(today, today),
     countAppointmentsByDateRange(weekStart, today),
     countAppointmentsByDateRange(monthStart, today),
+    sql`
+      SELECT COALESCE(SUM(a.consultation_fee + a.treatment_charges + a.medicine_charges), 0)::int AS revenue
+      FROM appointments a
+      WHERE a.date = ${today}
+        AND a.status = 'completed'
+    `.then(r => r[0]?.revenue || 0),
+    sql`
+      SELECT COUNT(*)::int AS count
+      FROM patients
+      WHERE created_at::date = ${today}
+    `.then(r => r[0]?.count || 0),
+    sql`
+      SELECT a.status, COUNT(*)::int AS count
+      FROM appointments a
+      WHERE a.date = ${today}
+        AND a.status IN ('confirmed', 'completed', 'no_show')
+      GROUP BY a.status
+    `.then(r => {
+      const map = { confirmed: 0, completed: 0, no_show: 0 };
+      r.forEach(row => { map[row.status] = parseInt(row.count, 10); });
+      return map;
+    }),
   ]);
 
-  let body = `*📊 Appointment Stats*\n\n`;
-  body += `*Today:* ${todayCount} appointments\n`;
-  body += `*This Week:* ${weekCount} appointments\n`;
-  body += `*This Month:* ${monthCount} appointments\n`;
+  let body = `*📊 Clinic Stats*\n\n`;
+
+  body += `*📅 Today (${new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}):*\n`;
+  body += `Appointments: ${todayCount}\n`;
+  body += `    ✅ Completed: ${todayStatusBreakdown.completed || 0}\n`;
+  body += `    📌 Confirmed: ${todayStatusBreakdown.confirmed || 0}\n`;
+  body += `    ❌ No Show: ${todayStatusBreakdown.no_show || 0}\n`;
+  body += `💰 Revenue: ₹${todayRevenue}\n`;
+  body += `🆕 New Patients: ${todayNewPatients}\n\n`;
+
+  body += `*📈 Trends:*\n`;
+  body += `This Week: ${weekCount} appointments\n`;
+  body += `This Month: ${monthCount} appointments\n`;
 
   return {
     session: { ...session, state: 'DOCTOR_MAIN_MENU' },
@@ -4584,15 +4786,10 @@ async function handleReceptionistDispatch(session, normalized, entities, intent)
 // Doctor queue handlers
 // ───────────────────────────────────────────────
 async function handleDoctorViewQueue(session) {
-  const queue = await fetchTodayQueue();
-
-  if (queue.length === 0) {
-    return {
-      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
-      reply: { body: '*No patients in queue.*', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
-      replyType: 'list',
-    };
-  }
+  const [queue, scheduled] = await Promise.all([
+    fetchTodayQueue(),
+    fetchTodayScheduledAppointments(),
+  ]);
 
   const [arrived, waiting, called, inSession] = await Promise.all([
     countTodayByArrivalStatus('arrived'),
@@ -4601,21 +4798,49 @@ async function handleDoctorViewQueue(session) {
     countTodayByArrivalStatus('in_session'),
   ]);
 
-  const rows = queue.map((a) => ({
-    id: `call_patient_${a.id}`,
-    title: `${a.is_priority ? '⭐ ' : ''}${formatQueueTime(a)} — ${a.patient_name || 'Patient'}`,
-    description: `${a.arrival_status === 'called' ? '📞 Called' : '📞 Tap to call'}${a.is_priority ? ' ⭐' : ''}`,
-  }));
+  const sections = [];
+
+  // Scheduled patients pending arrival
+  if (scheduled.length > 0) {
+    sections.push({
+      title: `⏳ Pending Arrival (${scheduled.length})`,
+      rows: scheduled.map(a => ({
+        id: `queue_mark_arrived_appt_${a.id}`,
+        title: `${a.time?.slice(0, 5) || 'Walk-in'} — ${a.patient_name || 'Patient'}`,
+        description: `📍 Tap to mark arrived`,
+      })),
+    });
+  }
+
+  // Active queue
+  if (queue.length > 0) {
+    sections.push({
+      title: `🚶 In Queue (${queue.length})`,
+      rows: queue.map((a) => ({
+        id: `call_patient_${a.id}`,
+        title: `${a.is_priority ? '⭐ ' : ''}${formatQueueTime(a)} — ${a.patient_name || 'Patient'}`,
+        description: `${a.arrival_status === 'called' ? '📞 Called' : '📞 Tap to call'}${a.is_priority ? ' ⭐' : ''}`,
+      })),
+    });
+  }
+
+  if (queue.length === 0 && scheduled.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: '*No patients in queue or pending arrival.*', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
 
   let body = `*🚶 Today's Queue*\n`;
   body += `Arrived: ${arrived} | Waiting: ${waiting} | Called: ${called} | In Session: ${inSession}\n\n`;
-  body += `⭐ = Priority | Tap a patient to call them in, or use "Call Next":`;
+  body += `📍 Mark pending patients as arrived, 📞 tap to call patients in:`;
 
   session = { ...session, state: 'DOCTOR_VIEW_QUEUE' };
 
   return {
     session,
-    reply: { body, buttonLabel: 'Queue', sections: [{ title: 'Queue', rows }] },
+    reply: { body, buttonLabel: 'Queue', sections },
     replyType: 'list',
   };
 }
@@ -4647,6 +4872,30 @@ async function handleDoctorCallNext(session) {
 
   const remaining = waitingPatients.length - 1;
   const body = `*📞 Called: ${appt.patient_name || 'Patient'}*\n\n${remaining} patient(s) still waiting.`;
+
+  return {
+    session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+    reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+    replyType: 'list',
+  };
+}
+
+async function handleDoctorMarkArrived(session, entities) {
+  const apptId = entities?.appointmentId;
+  if (!apptId) {
+    return handleDoctorViewQueue(session);
+  }
+
+  const appt = await updateArrivalStatus(apptId, 'arrived');
+  if (!appt) {
+    return {
+      session,
+      reply: { body: 'Could not mark patient as arrived. They may have already been marked.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const body = `*📍 ${appt.patient_name || 'Patient'} marked as arrived.*\n\nThey are now in the waiting queue.`;
 
   return {
     session: { ...session, state: 'DOCTOR_MAIN_MENU' },

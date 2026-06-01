@@ -84,6 +84,11 @@ const ID_TO_INTENT = {
   'feedback_okay': 'feedback_okay',
   'feedback_poor': 'feedback_poor',
   'feedback_callback': 'feedback_callback',
+  'doc_feedback': 'doctor_view_feedback',
+  'edit_patient': 'doctor_edit_patient',
+  'save_patient_name': 'provide_name',
+  'save_patient_age': 'provide_age',
+  'save_patient_sex': 'provide_sex',
 };
 
 function resolveDateId(id) {
@@ -169,6 +174,14 @@ export function classifyIntent(normalized, session) {
         if (!isNaN(mediaIdx) && apptId) {
           return { intent: 'view_media', confidence: 1.0, source: 'interactive_id', entities: { mediaIdx, appointmentId: apptId } };
         }
+      }
+    }
+
+    // Doctor mark arrived from queue view: queue_mark_arrived_appt_<apptId>
+    if (id.startsWith('queue_mark_arrived_appt_')) {
+      const apptId = id.replace('queue_mark_arrived_appt_', '');
+      if (apptId) {
+        return { intent: 'queue_mark_arrived', confidence: 1.0, source: 'interactive_id', entities: { appointmentId: apptId } };
       }
     }
 

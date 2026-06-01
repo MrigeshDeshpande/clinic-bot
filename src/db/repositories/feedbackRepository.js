@@ -53,3 +53,49 @@ export async function markFeedbackSent(appointmentId) {
     logger.error('FEEDBACK_MARK_SENT_ERROR', { appointmentId, error: error.message });
   }
 }
+
+export async function getFeedbackSummary() {
+  const sql = getSql();
+  if (!sql) return null;
+
+  try {
+    const [stats, recent, callbackRows] = await Promise.all([
+      sql`
+        SELECT
+          COUNT(*)::int AS total,
+          ROUND(AVG(rating)::numeric, 1)::float AS avg_rating,
+          COUNT(*) FILTER (WHERE rating >= 4)::int AS positive,
+          COUNT(*) FILTER (WHERE rating <= 2)::int AS negative,
+          COUNT(*) FILTER (WHERE callback = true)::int AS callbacks
+        FROM feedback
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      `,
+      sql`
+        SELECT f.id, f.rating, f.comment, f.created_at,
+               a.patient_name, a.patient_phone
+        FROM feedback f
+        LEFT JOIN appointments a ON f.appointment_id = a.id
+        ORDER BY f.created_at DESC
+        LIMIT 5
+      `,
+      sql`
+        SELECT f.id, f.rating, f.comment, f.wa_id, f.created_at,
+               a.patient_name, a.patient_phone
+        FROM feedback f
+        LEFT JOIN appointments a ON f.appointment_id = a.id
+        WHERE f.callback = true
+        ORDER BY f.created_at DESC
+        LIMIT 10
+      `,
+    ]);
+
+    return {
+      stats: stats[0] || { total: 0, avg_rating: 0, positive: 0, negative: 0, callbacks: 0 },
+      recent,
+      pendingCallbacks: callbackRows,
+    };
+  } catch (error) {
+    logger.error('FEEDBACK_SUMMARY_ERROR', { error: error.message });
+    return null;
+  }
+}
