@@ -217,9 +217,14 @@ export async function processEvent(payload) {
           metadata: {},
         }).catch(err => logger.error('MANUAL_CHAT_SAVE_FAILED', { msgId: normalized.msgId, error: err.message }));
         notifyNewMessage(normalized.waId);
-        // Send acknowledgment to patient
-        sendText(normalized.waId, 'Your message has been forwarded to the clinic. Dr. will respond shortly.')
-          .catch(() => {});
+        // Send acknowledgment only once per manual chat session
+        if (!session.context.manualModeAckSent) {
+          session.context.manualModeAckSent = true;
+          sendText(normalized.waId, 'Your message has been forwarded to the clinic. Dr. will respond shortly.')
+            .catch(() => {});
+        }
+        // Persist the ackSent flag so it survives cache detachment
+        save(session).catch(() => {});
         continue;
       }
 

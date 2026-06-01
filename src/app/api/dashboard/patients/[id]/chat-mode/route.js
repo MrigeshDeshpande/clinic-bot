@@ -64,6 +64,7 @@ export async function PATCH(req, { params }) {
 
     session.context.manualMode = manualMode;
     session.context.manualModeStartedAt = manualMode ? new Date().toISOString() : null;
+    if (!manualMode) session.context.manualModeAckSent = false;
     await save(session);
 
     logger.info('CHAT_MODE_UPDATED', { patientId: id, waId, manualMode });
