@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
-import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Sun, Moon, X, Menu } from 'lucide-react';
 
 export const DateContext = createContext();
 export const ThemeContext = createContext();
@@ -19,12 +19,12 @@ const NAV = [
   { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
 ];
 
-function ThemeToggle() {
+function ThemeToggle({ compact }) {
   const { darkMode, setDarkMode } = useContext(ThemeContext);
   return (
     <button
       onClick={() => setDarkMode(!darkMode)}
-      className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+      className={`flex items-center gap-2 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 ${compact ? 'p-2' : 'px-3.5 py-2'}`}
       title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {darkMode ? (
@@ -32,7 +32,7 @@ function ThemeToggle() {
       ) : (
         <Moon className="w-4 h-4 text-gray-400" />
       )}
-      <span className="hidden sm:inline text-xs">{darkMode ? 'Light' : 'Dark'}</span>
+      {!compact && <span className="hidden sm:inline text-xs">{darkMode ? 'Light' : 'Dark'}</span>}
     </button>
   );
 }
@@ -114,9 +114,80 @@ function GlobalSearch() {
   );
 }
 
+function SidebarContent({ pathname, onNavClick }) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch('/api/dashboard/logout', { method: 'POST' });
+    router.push('/dashboard/login');
+  }
+
+  return (
+    <>
+      {/* Logo */}
+      <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800">
+        <Link href="/dashboard" onClick={onNavClick} className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-gray-900 dark:bg-white rounded-lg flex items-center justify-center flex-shrink-0 transition-colors duration-200">
+            <span className="text-white dark:text-gray-900 text-xs font-bold tracking-tight">SB</span>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">Dental Clinic</p>
+          </div>
+        </Link>
+      </div>
+
+      {/* Search */}
+      <div className="px-4 py-3">
+        <GlobalSearch />
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 pb-4 space-y-0.5 overflow-y-auto">
+        {NAV.map(item => {
+          const Icon = item.icon;
+          const active = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavClick}
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative ${
+                active
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Logout + Theme */}
+      <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">
+        <ThemeToggle />
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all w-full group"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+            />
+          </svg>
+          Logout
+        </button>
+      </div>
+    </>
+  );
+}
+
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dashboard-dark-mode');
@@ -141,81 +212,81 @@ export default function DashboardLayout({ children }) {
     localStorage.setItem('dashboard-dark-mode', String(darkMode));
   }, [darkMode]);
 
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSidebarOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when sidebar is open on mobile
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [sidebarOpen]);
+
   if (pathname === '/dashboard/login') {
     return children;
-  }
-
-  async function handleLogout() {
-    await fetch('/api/dashboard/logout', { method: 'POST' });
-    router.push('/dashboard/login');
   }
 
   return (
     <ThemeContext.Provider value={{ darkMode, setDarkMode }}>
       <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
-          {/* Sidebar */}
-          <aside className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex flex-col transition-colors duration-200">
-            {/* Logo */}
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-              <Link href="/dashboard" className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-gray-900 dark:bg-white rounded-lg flex items-center justify-center flex-shrink-0 transition-colors duration-200">
-                  <span className="text-white dark:text-gray-900 text-xs font-bold tracking-tight">SB</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500">Dental Clinic</p>
-                </div>
-              </Link>
-            </div>
+          {/* Mobile Header Bar */}
+          <div className="md:hidden fixed top-0 left-0 right-0 z-20 flex items-center justify-between px-4 h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 -ml-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
+              aria-label="Open sidebar"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-gray-900 dark:bg-white rounded-md flex items-center justify-center">
+                <span className="text-white dark:text-gray-900 text-[10px] font-bold">SB</span>
+              </div>
+              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shri Balaji</span>
+            </Link>
+            <ThemeToggle compact />
+          </div>
 
-            {/* Search */}
-            <div className="px-4 py-3">
-              <GlobalSearch />
-            </div>
-
-            {/* Navigation */}
-            <nav className="flex-1 px-3 pb-4 space-y-0.5 overflow-y-auto">
-              {NAV.map(item => {
-                const Icon = item.icon;
-                const active = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative ${
-                      active
-                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
+          {/* Mobile Sidebar Drawer */}
+          <div className={`md:hidden fixed inset-0 z-30 transition-opacity duration-300 ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
+            />
+            {/* Drawer */}
+            <div className={`absolute left-0 top-0 h-full w-72 max-w-[85vw] bg-white dark:bg-gray-900 shadow-2xl transition-transform duration-300 ease-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+              <div className="flex flex-col h-full">
+                {/* Close button */}
+                <div className="absolute top-3 right-3 z-10">
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 dark:text-gray-500"
+                    aria-label="Close sidebar"
                   >
-                    <Icon className={`w-4 h-4 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            {/* Logout + Theme */}
-            <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">
-              <ThemeToggle />
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all w-full group"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                  />
-                </svg>
-                Logout
-              </button>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <SidebarContent pathname={pathname} onNavClick={() => setSidebarOpen(false)} />
+              </div>
             </div>
+          </div>
+
+          {/* Desktop Sidebar */}
+          <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-colors duration-200">
+            <SidebarContent pathname={pathname} />
           </aside>
 
           {/* Main Content */}
-          <main className="ml-64 p-8 min-h-screen transition-colors duration-200" key={pathname}>
-            <div className="animate-fade-in max-w-7xl mx-auto relative">
+          <main className="md:ml-64 pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-colors duration-200" key={pathname}>
+            <div className="animate-fade-in max-w-7xl mx-auto">
               {children}
             </div>
           </main>
