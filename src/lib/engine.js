@@ -8,6 +8,7 @@ import { detectCorrection } from '@/lib/correction-detector';
 import { evaluateOverwrite } from '@/lib/overwrite-policy';
 import { sendText, sendButtons, sendList, markAsRead } from '@/lib/whatsapp';
 import { createMessage, createMessages } from '@/db/repositories/messageRepository';
+import { notifyNewMessage } from '@/lib/messageEvents';
 import { logger } from '@/lib/logger';
 
 export const PIPELINE_HALT = Symbol('PIPELINE_HALT');
@@ -202,6 +203,26 @@ export async function processEvent(payload) {
       // Step 2d: loadSession
       const session = await getOrCreate(normalized.waId, normalized.phoneNumberId, normalized.profileName);
 
+      // Step 2d-i: Manual mode — doctor is chatting with patient, skip bot pipeline
+      if (session.context.manualMode) {
+        logger.info('MANUAL_MODE_ACTIVE', { waId: normalized.waId, text: normalized.textClean });
+        // Save the patient's reply to DB
+        createMessage({
+          msgId: normalized.msgId,
+          sessionId: session.id,
+          waId: normalized.waId,
+          role: 'user',
+          content: normalized.textClean || normalized.text,
+          intent: 'manual_chat',
+          metadata: {},
+        }).catch(err => logger.error('MANUAL_CHAT_SAVE_FAILED', { msgId: normalized.msgId, error: err.message }));
+        notifyNewMessage(normalized.waId);
+        // Send acknowledgment to patient
+        sendText(normalized.waId, 'Your message has been forwarded to the clinic. Dr. will respond shortly.')
+          .catch(() => {});
+        continue;
+      }
+
       // Step 2d-ii: Rapid fire safety check
       const safety = checkRapidFireSafety(normalized, session);
       if (safety.rapidFireRisk) {
@@ -308,6 +329,7 @@ export async function processEvent(payload) {
         intent: intentResult.intent,
         metadata: { replyType: handlerResult.replyType, stateAfter: handlerResult.session.state },
       }).catch(err => logger.error('BOT_MSG_SAVE_FAILED', { msgId: botMsgId, error: err.message }));
+      notifyNewMessage(normalized.waId);
 
       // Step 2k: log completion
       logger.info('MESSAGE_PROCESSED', {

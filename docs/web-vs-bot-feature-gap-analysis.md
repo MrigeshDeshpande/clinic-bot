@@ -102,14 +102,75 @@
 
 ---
 
+## Architecture: Doctor Chat vs Bot Auto-Reply
+
+When the doctor sends a message from the dashboard, the patient's session enters **manual mode**. The bot stops auto-replying until the doctor explicitly ends the chat.
+
+### Flow
+
+```
+Doctor sends message from Dashboard
+  │
+  ├── WhatsApp message delivered to patient
+  ├── Message saved to messages table (role='bot')
+  └── Patient's session.context.manualMode = true
+
+Patient replies to the message
+  │
+  └── Webhook → Engine.processEvent()
+        │
+        ├── session.manualMode === true?
+        │
+        ├─ YES ──────────────────────────────────
+        │    ├── Save reply to messages table
+        │    ├── Send ack: "Your message has been
+        │    │   forwarded to the clinic..."
+        │    └── SKIP classifyIntent / handle /
+        │        sendReply / state transition
+        │
+        └─ NO ── Normal bot pipeline (as before)
+
+Doctor sees reply in Messages tab (via SSE)
+  │
+  ├── Server pushes "new_message" event
+  │   └── Client calls loadMessages() → UI updates instantly
+  │
+  ├── Blue banner: "Doctor Chat Active" (while manualMode=true)
+  ├── No polling — SSE connection open only when tab is active
+  │
+  └── Clicks "End Chat"
+        └── session.context.manualMode = false
+              └── Patient back to normal bot flow
+```
+
+### Safety
+
+- **Auto-timeout**: Manual mode auto-releases after 24 hours of inactivity (checked on session load in `rowToSession()`).
+- **Acknowledgment**: Patient always gets a message confirming their reply was received.
+- **No data loss**: All messages are saved to the DB regardless of mode.
+
+### Key Files
+
+| File | Purpose |
+|---|---|---|
+| `src/lib/session.js` | `manualMode` / `manualModeStartedAt` in context + 24h auto-timeout |
+| `src/app/api/dashboard/patients/[id]/send-message/route.js` | Sets `manualMode=true` after sending + emits SSE event |
+| `src/lib/engine.js` | Early-exit when `manualMode=true` — saves msg + sends ack + emits SSE event |
+| `src/lib/messageEvents.js` | **New** — global EventEmitter for SSE pub/sub |
+| `src/app/api/dashboard/patients/[id]/messages/stream/route.js` | **New** — SSE endpoint, pushes `new_message` events |
+| `src/app/api/dashboard/patients/[id]/chat-mode/route.js` | **New** — GET/PATCH endpoint for chat status |
+| `src/app/dashboard/patients/[id]/page.js` | Chat banner + End Chat button + SSE client in Messages tab |
+
+---
+
 ## Recommended Improvements (Priority Order)
 
 > Status key: ✅ Implemented · 🚧 In Progress · ❌ Not Started
 
 ### 🔴 High Priority
 
-1. ✅ **Patient communication from dashboard** — "Send Message" button + modal on patient detail page. Message history tab with full WhatsApp transcript.
-   - Files: `src/app/dashboard/patients/[id]/page.js`, `src/app/api/dashboard/patients/[id]/send-message/route.js`, `src/app/api/dashboard/patients/[id]/messages/route.js`
+1. ✅ **Patient communication from dashboard** — "Send Message" button + modal on patient detail page. Message history tab with full WhatsApp transcript (chronological, auto-scroll, 200 msg limit, pagination). Real-time updates via SSE — no polling.
+   - Files: `src/app/dashboard/patients/[id]/page.js`, `src/app/api/dashboard/patients/[id]/send-message/route.js`, `src/app/api/dashboard/patients/[id]/messages/route.js`, `src/app/api/dashboard/patients/[id]/messages/stream/route.js`, `src/lib/messageEvents.js`
 
 2. ✅ **Patient detail & edit on bot** — `DOCTOR_EDIT_PATIENT` state allows editing name/age/sex. Rich visit history shown via `showPatientVisits` handler.
 

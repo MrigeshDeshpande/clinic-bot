@@ -26,6 +26,9 @@ export default function PatientDetailPage() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualModeStartedAt, setManualModeStartedAt] = useState(null);
+  const [endingChat, setEndingChat] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -51,6 +54,17 @@ export default function PatientDetailPage() {
           const fbRes = await fetch(`/api/dashboard/feedback?limit=20&waId=${encodeURIComponent(data.patient.wa_id)}`);
           const fbData = await fbRes.json();
           setFeedback(fbData?.entries || []);
+        }
+        // Fetch chat mode status
+        try {
+          const cmRes = await fetch(`/api/dashboard/patients/${id}/chat-mode`);
+          if (cmRes.ok) {
+            const cmData = await cmRes.json();
+            setManualMode(cmData.manualMode);
+            setManualModeStartedAt(cmData.manualModeStartedAt);
+          }
+        } catch (cmErr) {
+          // non-critical
         }
       } catch (e) {
         console.error('Failed to load patient', e);
@@ -80,6 +94,39 @@ export default function PatientDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // SSE: listen for new message events while messages tab is active
+  useEffect(() => {
+    if (activeTab !== 'messages') return;
+    const eventSource = new EventSource(`/api/dashboard/patients/${id}/messages/stream`);
+    eventSource.onmessage = (event) => {
+      if (event.data === 'new_message') {
+        loadMessages();
+      }
+    };
+    eventSource.onerror = () => eventSource.close();
+    return () => eventSource.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, id]);
+
+  async function endChat() {
+    setEndingChat(true);
+    try {
+      const res = await fetch(`/api/dashboard/patients/${id}/chat-mode`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manualMode: false }),
+      });
+      if (res.ok) {
+        setManualMode(false);
+        setManualModeStartedAt(null);
+      }
+    } catch (err) {
+      console.error('Failed to end chat', err);
+    } finally {
+      setEndingChat(false);
+    }
+  }
 
   async function handleSave(e) {
     e.preventDefault();
@@ -579,10 +626,31 @@ export default function PatientDetailPage() {
         {/* Tab Content: Messages */}
         {activeTab === 'messages' && (
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
-              <MessageSquare className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-              Message History
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2.5">
+                <MessageSquare className="w-5 h-5 text-blue-500 dark:text-blue-400" />
+                Message History
+              </h2>
+              {manualMode && (
+                <button
+                  onClick={endChat}
+                  disabled={endingChat}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {endingChat ? 'Ending...' : 'End Chat'}
+                </button>
+              )}
+            </div>
+
+            {manualMode && (
+              <div className="mb-4 flex items-center gap-2.5 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />
+                <span className="text-blue-700 dark:text-blue-300 font-medium">
+                  Doctor Chat Active — patient replies go directly to you
+                </span>
+              </div>
+            )}
+
             {messagesLoading ? (
               <div className="space-y-3 animate-pulse">
                 {[1,2,3,4,5].map(i => (
@@ -675,6 +743,8 @@ export default function PatientDetailPage() {
                       if (res.ok) {
                         setMessageText('');
                         setShowMessageModal(false);
+                        setManualMode(true);
+                        setManualModeStartedAt(new Date().toISOString());
                         // Refresh messages tab
                         if (activeTab === 'messages') {
                           loadMessages();

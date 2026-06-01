@@ -3,6 +3,8 @@ import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { sendText } from '@/lib/whatsapp';
 import { createMessage } from '@/db/repositories/messageRepository';
+import { notifyNewMessage } from '@/lib/messageEvents';
+import { getOrCreate, save } from '@/lib/session';
 
 export async function POST(req, { params }) {
   try {
@@ -50,6 +52,19 @@ export async function POST(req, { params }) {
       intent: 'dashboard_send_message',
       metadata: { sentFrom: 'dashboard', patientId: id, patientName: patient.name },
     });
+    notifyNewMessage(recipient);
+
+    // Activate manual mode on patient's session so bot doesn't auto-reply
+    try {
+      const session = await getOrCreate(recipient, null, patient.name || 'Patient');
+      if (session) {
+        session.context.manualMode = true;
+        session.context.manualModeStartedAt = new Date().toISOString();
+        save(session).catch(() => {});
+      }
+    } catch (sessionErr) {
+      logger.warn('MANUAL_MODE_ACTIVATE_FAILED', { waId: recipient, error: sessionErr.message });
+    }
 
     logger.info('DASHBOARD_SEND_MESSAGE', { patientId: id, waId: recipient, msgId });
     return NextResponse.json({ success: true, msgId });

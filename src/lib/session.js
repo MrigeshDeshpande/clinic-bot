@@ -2,6 +2,8 @@ import { findSessionByWaId, upsertSession, saveSession } from '@/db/repositories
 import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
 
+export const MANUAL_MODE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24h before auto-release
+
 // In-memory session cache for replay mode and no-DB scenarios.
 // Ensures session continuity when Neon persistence is unavailable.
 const sessionCache = new Map();
@@ -52,6 +54,8 @@ function emptySession(waId, phoneNumberId, profileName) {
       lastCorrection: { field: null, fromValue: null, toValue: null, timestamp: null },
       messageSequence: 0,
       lastMessageIds: [],
+      manualMode: false,
+      manualModeStartedAt: null,
       appointmentId: null,
       logicalId: null,
       reschedulingLogicalId: null,
@@ -103,6 +107,8 @@ function rowToSession(row) {
       },
       messageSequence: contextRaw.messageSequence || 0,
       lastMessageIds: Array.isArray(contextRaw.lastMessageIds) ? contextRaw.lastMessageIds : [],
+      manualMode: contextRaw.manualMode === true,
+      manualModeStartedAt: contextRaw.manualModeStartedAt || null,
       appointmentId: contextRaw.appointmentId || null,
       logicalId: contextRaw.logicalId || null,
       reschedulingLogicalId: contextRaw.reschedulingLogicalId || null,
@@ -125,6 +131,15 @@ function rowToSession(row) {
   if (row.expires_at && new Date(row.expires_at) < new Date() && !['DONE', 'ABANDONED'].includes(row.state)) {
     session.state = 'ABANDONED';
     session.previousState = row.state;
+  }
+
+  // Auto-release manual mode after timeout
+  if (session.context.manualMode && session.context.manualModeStartedAt) {
+    const elapsed = Date.now() - new Date(session.context.manualModeStartedAt).getTime();
+    if (elapsed > MANUAL_MODE_TIMEOUT_MS) {
+      session.context.manualMode = false;
+      session.context.manualModeStartedAt = null;
+    }
   }
 
   return session;
