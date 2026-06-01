@@ -17,20 +17,30 @@ export async function PATCH(req) {
       return NextResponse.json({ error: 'Invalid arrival status' }, { status: 400 });
     }
 
-    const sets = [];
-    if (arrivalStatus) sets.push(sql`arrival_status = ${arrivalStatus}`);
-    if (arrivalStatus === 'arrived') sets.push(sql`arrived_at = NOW()`);
-    if (arrivalStatus === 'called') sets.push(sql`called_at = NOW()`);
+    // Build SET clause manually — @neondatabase/serverless does not support sql.join
+    const setClauses = [];
+    const params = [];
+    let p = 1;
 
-    if (sets.length === 0) {
+    if (arrivalStatus) {
+      setClauses.push(`arrival_status = $${p++}`);
+      params.push(arrivalStatus);
+    }
+    if (arrivalStatus === 'arrived') {
+      setClauses.push('arrived_at = NOW()');
+    }
+    if (arrivalStatus === 'called') {
+      setClauses.push('called_at = NOW()');
+    }
+
+    if (setClauses.length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
-    await sql`
-      UPDATE appointments
-      SET ${sql.join(sets, sql`, `)}, updated_at = NOW()
-      WHERE id = ${appointmentId}
-    `;
+    setClauses.push('updated_at = NOW()');
+    params.push(appointmentId);
+
+    await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${p}`, params);
 
     const updated = await sql`
       SELECT id, status, arrival_status, arrived_at, called_at

@@ -2,6 +2,61 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
+export async function POST(req) {
+  try {
+    const sql = getSql();
+    const body = await req.json();
+    const { patientName, patientPhone, date, time, treatment } = body;
+
+    if (!patientName || !date || !time) {
+      return NextResponse.json({ error: 'patientName, date, and time are required' }, { status: 400 });
+    }
+
+    // Find or create patient record
+    let patientId = null;
+    if (patientPhone) {
+      const existing = await sql`
+        SELECT id FROM patients WHERE phone = ${patientPhone} LIMIT 1
+      `;
+      if (existing && existing.length > 0) {
+        patientId = existing[0].id;
+      } else {
+        const created = await sql`
+          INSERT INTO patients (name, phone, wa_id)
+          VALUES (${patientName}, ${patientPhone}, ${patientPhone})
+          ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name
+          RETURNING id
+        `;
+        if (created && created.length > 0) patientId = created[0].id;
+      }
+    }
+
+    // Check if slot is already booked
+    const existingAppt = await sql`
+      SELECT id FROM appointments
+      WHERE date = ${date}::date AND time = ${time} AND status = 'confirmed'
+      LIMIT 1
+    `;
+    if (existingAppt && existingAppt.length > 0) {
+      return NextResponse.json({ error: 'This slot is already booked' }, { status: 409 });
+    }
+
+    // Create appointment — use phone as wa_id for walk-in tracking, or a placeholder if no phone
+    const waId = patientPhone || `w-${Date.now()}`;
+    const rows = await sql`
+      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, status)
+      VALUES (gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, 'confirmed')
+      RETURNING *
+    `;
+
+    logger.info('QUICK_BOOK_DASHBOARD', { patientName, date, time, treatment });
+    return NextResponse.json({ appointment: rows[0] || null });
+  } catch (error) {
+    logger.error('QUICK_BOOK_ERROR', { error: error.message });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function GET(req) {
   try {
     const sql = getSql();

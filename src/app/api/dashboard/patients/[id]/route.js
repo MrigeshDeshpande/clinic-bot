@@ -45,3 +45,59 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function PATCH(req, { params }) {
+  try {
+    const sql = getSql();
+    const { id } = await params;
+    const body = await req.json();
+    const { name, age, sex, phone } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Patient ID required' }, { status: 400 });
+    }
+
+    const setClauses = [];
+    const queryParams = [];
+    let p = 1;
+
+    if (name !== undefined) {
+      setClauses.push(`name = $${p++}`);
+      queryParams.push(name);
+    }
+    if (age !== undefined) {
+      setClauses.push(`age = $${p++}`);
+      queryParams.push(age || null);
+    }
+    if (sex !== undefined) {
+      setClauses.push(`sex = $${p++}`);
+      queryParams.push(sex || null);
+    }
+    if (phone !== undefined) {
+      setClauses.push(`phone = $${p++}`);
+      queryParams.push(phone);
+    }
+
+    if (setClauses.length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+    }
+
+    setClauses.push('updated_at = NOW()');
+    queryParams.push(id);
+
+    const rows = await sql.query(
+      `UPDATE patients SET ${setClauses.join(', ')} WHERE id = $${p} RETURNING *`,
+      queryParams
+    );
+
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    }
+
+    logger.info('PATIENT_UPDATED', { id, fields: setClauses.map(c => c.split(' =')[0]) });
+    return NextResponse.json({ patient: rows[0] });
+  } catch (error) {
+    logger.error('PATIENT_UPDATE_ERROR', { params, error: error.message });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { CLINIC } from '@/config/clinic';
 
 export async function GET(req) {
   try {
@@ -19,21 +20,83 @@ export async function GET(req) {
 
     const sql = getSql();
 
-    const rows = await sql`
-      SELECT date::text, COUNT(*)::int AS count
-      FROM appointments
-      WHERE date >= ${startDate}::date AND date < ${endDate}::date
-        AND status IN ('confirmed', 'completed', 'no_show')
-      GROUP BY date
-      ORDER BY date
-    `;
+    // 1. Get all confirmed appointments for the month (with time)
+    const [apptRows, blockedRows] = await Promise.all([
+      sql`
+        SELECT date::text, time, patient_name
+        FROM appointments
+        WHERE date >= ${startDate}::date AND date < ${endDate}::date
+          AND status IN ('confirmed', 'completed')
+        ORDER BY date, time
+      `,
+      // 2. Get blocked dates for the month
+      sql`
+        SELECT date::text, reason
+        FROM blocked_dates
+        WHERE date >= ${startDate}::date AND date < ${endDate}::date
+        ORDER BY date
+      `,
+    ]);
 
-    const dates = {};
-    for (const r of rows) {
-      dates[r.date] = r.count;
+    // Build blocked date lookup
+    const blockedSet = new Set();
+    const blockedReasons = {};
+    for (const r of blockedRows) {
+      blockedSet.add(r.date);
+      blockedReasons[r.date] = r.reason;
     }
 
-    return NextResponse.json({ dates });
+    // Build per-date booked slots lookup
+    const bookedByDate = {};
+    for (const r of apptRows) {
+      if (!bookedByDate[r.date]) bookedByDate[r.date] = [];
+      bookedByDate[r.date].push({ time: r.time, patientName: r.patient_name });
+    }
+
+    // Enrich each day of the month with slot/blocked info
+    const dates = {};
+    const cursor = new Date(`${startDate}T12:00:00`);
+    const endCursor = new Date(`${endDate}T12:00:00`);
+
+    while (cursor < endCursor) {
+      const dateStr = cursor.toISOString().slice(0, 10);
+      const dayOfWeek = cursor.getDay();
+      const isSunday = dayOfWeek === 0;
+
+      if (blockedSet.has(dateStr)) {
+        // Date is blocked — no slots available
+        dates[dateStr] = {
+          count: 0,
+          totalSlots: 0,
+          isBlocked: true,
+          blockedReason: blockedReasons[dateStr] || null,
+          bookedSlots: [],
+          availableCount: 0,
+        };
+      } else {
+        const totalSlots = isSunday ? CLINIC.slots.sunday.length : CLINIC.slots.weekday.length;
+        const booked = bookedByDate[dateStr] || [];
+        dates[dateStr] = {
+          count: booked.length,
+          totalSlots,
+          isBlocked: false,
+          blockedReason: null,
+          bookedSlots: booked,
+          availableCount: totalSlots - booked.length,
+        };
+      }
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return NextResponse.json({
+      dates,
+      blockedDates: blockedRows.map(r => r.date),
+      slotDefinitions: {
+        weekday: CLINIC.slots.weekday,
+        sunday: CLINIC.slots.sunday,
+      },
+    });
   } catch (error) {
     logger.error('CALENDAR_ERROR', { error: error.message });
     return NextResponse.json({ error: error.message }, { status: 500 });

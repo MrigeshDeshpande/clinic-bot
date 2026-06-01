@@ -2,17 +2,40 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef, createContext } from 'react';
+import { useState, useEffect, useRef, createContext, useContext } from 'react';
+import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Sun, Moon } from 'lucide-react';
 
 export const DateContext = createContext();
+export const ThemeContext = createContext();
 
 const NAV = [
-  { href: '/dashboard', label: 'Overview', icon: '📊' },
-  { href: '/dashboard/appointments', label: 'Appointments', icon: '📋' },
-  { href: '/dashboard/patients', label: 'Patients', icon: '👥' },
-  { href: '/dashboard/stats', label: 'Statistics', icon: '📈' },
-  { href: '/dashboard/visit', label: 'Log Visit', icon: '✏️' },
+  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { href: '/dashboard/appointments', label: 'Appointments', icon: CalendarDays },
+  { href: '/dashboard/patients', label: 'Patients', icon: Users },
+  { href: '/dashboard/stats', label: 'Statistics', icon: BarChart3 },
+  { href: '/dashboard/visit', label: 'Log Visit', icon: PenSquare },
+  { href: '/dashboard/queue', label: 'Queue Board', icon: ClipboardList },
+  { href: '/dashboard/feedback', label: 'Feedback', icon: Star },
+  { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
 ];
+
+function ThemeToggle() {
+  const { darkMode, setDarkMode } = useContext(ThemeContext);
+  return (
+    <button
+      onClick={() => setDarkMode(!darkMode)}
+      className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+      title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {darkMode ? (
+        <Sun className="w-4 h-4 text-amber-400" />
+      ) : (
+        <Moon className="w-4 h-4 text-gray-400" />
+      )}
+      <span className="hidden sm:inline text-xs">{darkMode ? 'Light' : 'Dark'}</span>
+    </button>
+  );
+}
 
 function GlobalSearch() {
   const [query, setQuery] = useState('');
@@ -31,9 +54,9 @@ function GlobalSearch() {
   }, []);
 
   useEffect(() => {
-    if (query.length < 2) { setResults([]); return; }
-    setLoading(true);
+    if (query.length < 2) return;
     const timer = setTimeout(() => {
+      setLoading(true);
       fetch(`/api/dashboard/patients?q=${encodeURIComponent(query)}&limit=5`)
         .then(r => r.json())
         .then(d => { setResults(d.patients || []); setOpen(true); setLoading(false); })
@@ -51,37 +74,37 @@ function GlobalSearch() {
   return (
     <div className="relative" ref={ref}>
       <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <input
           type="text"
           value={query}
-          onChange={e => setQuery(e.target.value)}
+          onChange={e => { setQuery(e.target.value); if (e.target.value.length < 2) { setResults([]); } }}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder="Search patients..."
-          className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100/50 outline-none text-xs text-gray-700 placeholder-gray-400 transition-all duration-200"
+          className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 outline-none text-xs text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <div className="animate-spin w-3 h-3 border-2 border-blue-200 border-t-blue-600 rounded-full" />
+            <div className="animate-spin w-3 h-3 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full" />
           </div>
         )}
       </div>
       {open && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden animate-slide-down">
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50 z-50 overflow-hidden animate-slide-down">
           {results.map(p => (
             <button
               key={p.id}
               onClick={() => handleSelect(p.id)}
-              className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors text-sm flex items-center gap-3 border-b border-gray-50 last:border-0 group"
+              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-sm flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0 group"
             >
-              <span className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-700 flex items-center justify-center text-xs font-semibold flex-shrink-0 group-hover:from-blue-200 group-hover:to-blue-100 transition-all">
+              <span className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-xs font-semibold flex-shrink-0">
                 {(p.name || '?')[0].toUpperCase()}
               </span>
               <div className="min-w-0">
-                <p className="font-medium text-gray-900 truncate">{p.name || 'Unnamed'}</p>
-                <p className="text-xs text-gray-400 truncate">{p.phone || '—'} · {p.visit_count || 0} visits</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.name || 'Unnamed'}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{p.phone || '—'} · {p.visit_count || 0} visits</p>
               </div>
             </button>
           ))}
@@ -94,17 +117,29 @@ function GlobalSearch() {
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [pageKey, setPageKey] = useState(0);
-
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dashboard-dark-mode');
+      return saved === 'true';
+    }
+    return false;
+  });
   // Shared selectedDate state persists across page navigations
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
 
+  // Apply/remove dark class on <html> and persist to localStorage
   useEffect(() => {
-    setPageKey(prev => prev + 1);
-  }, [pathname]);
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('dashboard-dark-mode', String(darkMode));
+  }, [darkMode]);
 
   if (pathname === '/dashboard/login') {
     return children;
@@ -116,75 +151,76 @@ export default function DashboardLayout({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-100 shadow-sm z-10 flex flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-100">
-          <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
-              <span className="text-white text-sm font-bold">S</span>
-            </div>
-            <div>
-              <p className="font-semibold text-gray-900 text-sm leading-tight">Smile Dental</p>
-              <p className="text-xs text-gray-400">Clinic Dashboard</p>
-            </div>
-          </Link>
-        </div>
-
-        {/* Search */}
-        <div className="px-4 py-3">
-          <GlobalSearch />
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-3 pb-4 space-y-0.5 overflow-y-auto">
-          {NAV.map(item => {
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative ${
-                  active
-                    ? 'bg-gradient-to-r from-blue-50 to-blue-50/50 text-blue-700 shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                {active && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-600 rounded-full" />
-                )}
-                <span className="text-lg">{item.icon}</span>
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Logout */}
-        <div className="p-4 border-t border-gray-100">
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all w-full group"
-          >
-            <svg className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
+    <ThemeContext.Provider value={{ darkMode, setDarkMode }}>
       <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
-        <main className="ml-64 p-8 min-h-screen" key={pageKey}>
-          <div className="animate-fade-in max-w-7xl mx-auto">
-            {children}
-          </div>
-        </main>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
+          {/* Sidebar */}
+          <aside className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex flex-col transition-colors duration-200">
+            {/* Logo */}
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
+              <Link href="/dashboard" className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-gray-900 dark:bg-white rounded-lg flex items-center justify-center flex-shrink-0 transition-colors duration-200">
+                  <span className="text-white dark:text-gray-900 text-xs font-bold tracking-tight">SB</span>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500">Dental Clinic</p>
+                </div>
+              </Link>
+            </div>
+
+            {/* Search */}
+            <div className="px-4 py-3">
+              <GlobalSearch />
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 px-3 pb-4 space-y-0.5 overflow-y-auto">
+              {NAV.map(item => {
+                const Icon = item.icon;
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative ${
+                      active
+                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Logout + Theme */}
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">
+              <ThemeToggle />
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all w-full group"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  />
+                </svg>
+                Logout
+              </button>
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <main className="ml-64 p-8 min-h-screen transition-colors duration-200" key={pathname}>
+            <div className="animate-fade-in max-w-7xl mx-auto relative">
+              {children}
+            </div>
+          </main>
+        </div>
       </DateContext.Provider>
-    </div>
+    </ThemeContext.Provider>
   );
 }

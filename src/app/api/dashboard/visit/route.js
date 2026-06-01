@@ -11,21 +11,58 @@ export async function POST(req) {
 
     // ── Update existing appointment ──
     if (appointmentId) {
-      const sets = [];
-      if (treatment !== undefined) sets.push(sql`treatment = ${treatment}`);
-      if (diagnosis !== undefined) sets.push(sql`diagnosis = ${diagnosis}`);
-      if (medicines !== undefined) sets.push(sql`medicines = ${JSON.stringify(medicines)}`);
-      if (consultationFee !== undefined) sets.push(sql`consultation_fee = ${parseInt(consultationFee, 10) || 0}`);
-      if (treatmentCharges !== undefined) sets.push(sql`treatment_charges = ${parseInt(treatmentCharges, 10) || 0}`);
-      if (medicineCharges !== undefined) sets.push(sql`medicine_charges = ${parseInt(medicineCharges, 10) || 0}`);
-      if (notes !== undefined) sets.push(sql`notes = ${notes}`);
-      if (followUpDate !== undefined) sets.push(sql`follow_up_date = ${followUpDate || null}`);
-      if (followUpInstructions !== undefined) sets.push(sql`follow_up_instructions = ${followUpInstructions}`);
-      if (newStatus !== undefined) sets.push(sql`status = ${newStatus}`);
+      // Build SET clause manually — @neondatabase/serverless does not support sql.join
+      const setClauses = [];
+      const params = [];
+      let p = 1;
 
-      if (sets.length === 0) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      if (treatment !== undefined) {
+        setClauses.push(`treatment = $${p++}`);
+        params.push(treatment);
+      }
+      if (diagnosis !== undefined) {
+        setClauses.push(`diagnosis = $${p++}`);
+        params.push(diagnosis);
+      }
+      if (medicines !== undefined) {
+        setClauses.push(`medicines = $${p++}`);
+        params.push(JSON.stringify(medicines));
+      }
+      if (consultationFee !== undefined) {
+        setClauses.push(`consultation_fee = $${p++}`);
+        params.push(parseInt(consultationFee, 10) || 0);
+      }
+      if (treatmentCharges !== undefined) {
+        setClauses.push(`treatment_charges = $${p++}`);
+        params.push(parseInt(treatmentCharges, 10) || 0);
+      }
+      if (medicineCharges !== undefined) {
+        setClauses.push(`medicine_charges = $${p++}`);
+        params.push(parseInt(medicineCharges, 10) || 0);
+      }
+      if (notes !== undefined) {
+        setClauses.push(`notes = $${p++}`);
+        params.push(notes);
+      }
+      if (followUpDate !== undefined) {
+        setClauses.push(`follow_up_date = $${p++}`);
+        params.push(followUpDate || null);
+      }
+      if (followUpInstructions !== undefined) {
+        setClauses.push(`follow_up_instructions = $${p++}`);
+        params.push(followUpInstructions);
+      }
+      if (newStatus !== undefined) {
+        setClauses.push(`status = $${p++}`);
+        params.push(newStatus);
+      }
 
-      await sql`UPDATE appointments SET ${sql.join(sets, sql`, `)}, updated_at = NOW() WHERE id = ${appointmentId}`;
+      if (setClauses.length === 0) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+
+      setClauses.push(`updated_at = NOW()`);
+      params.push(appointmentId);
+
+      await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${p}`, params);
 
       const updated = await sql`
         SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,

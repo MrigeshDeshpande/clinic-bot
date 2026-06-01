@@ -27,7 +27,7 @@ export default function PatientsPage() {
 
   useEffect(() => {
     fetchPatients(search);
-  }, [fetchPatients]);
+  }, [fetchPatients, search]);
 
   function getInitials(name) {
     if (!name || name === '?') return '?';
@@ -51,36 +51,36 @@ export default function PatientsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900">
       <div className="max-w-6xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-200">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-200 dark:shadow-blue-900/50">
             <Users className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Patients</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Search and manage patient records</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Patients</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Search and manage patient records</p>
           </div>
         </div>
 
         {/* Search */}
         <div className="relative group">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-emerald-500/10 rounded-2xl blur-xl transition-opacity opacity-0 group-focus-within:opacity-100" />
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-emerald-500/10 dark:from-blue-500/5 dark:to-emerald-500/5 rounded-2xl blur-xl transition-opacity opacity-0 group-focus-within:opacity-100" />
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
             <input
               ref={searchRef}
               type="text"
               placeholder="Search by name or phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all duration-200 shadow-sm text-base"
+              className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-all duration-200 shadow-sm text-base"
             />
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               >
                 ✕
               </button>
@@ -92,12 +92,12 @@ export default function PatientsPage() {
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 animate-pulse">
+              <div key={i} className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-100 dark:border-gray-800 animate-pulse">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gray-200" />
+                  <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-1/3" />
-                    <div className="h-3 bg-gray-100 rounded w-1/4" />
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
+                    <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-1/4" />
                   </div>
                 </div>
               </div>
@@ -105,11 +105,11 @@ export default function PatientsPage() {
           </div>
         ) : patients.length === 0 ? (
           <div className="text-center py-20">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 mb-6">
-              <Users className="w-10 h-10 text-gray-400" />
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 mb-6">
+              <Users className="w-10 h-10 text-gray-400 dark:text-gray-500" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No patients found</h3>
-            <p className="text-gray-500 text-sm max-w-sm mx-auto">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No patients found</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm mx-auto">
               {search ? 'Try a different search term or clear the search filter' : 'Patients will appear here once they book appointments through WhatsApp'}
             </p>
           </div>
@@ -119,7 +119,7 @@ export default function PatientsPage() {
               <button
                 key={patient.id}
                 onClick={() => router.push(`/dashboard/patients/${patient.id}`)}
-                className="group relative w-full text-left bg-white rounded-2xl border border-gray-100 p-4 md:p-5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-100/50 transition-all duration-200 animate-in"
+                className="group relative w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4 md:p-5 hover:border-blue-200 dark:hover:border-blue-700 hover:shadow-lg hover:shadow-blue-100/50 dark:hover:shadow-blue-900/20 transition-all duration-200 animate-in"
                 style={{ animationDelay: `${idx * 50}ms` }}
               >
                 <div className="flex items-center gap-4">
@@ -131,17 +131,17 @@ export default function PatientsPage() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {patient.name === '?' ? 'Unknown Patient' : patient.name}
                       </h3>
                       {patient.visit_count > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                           <Activity className="w-3 h-3" />
                           {patient.visit_count} visit{patient.visit_count !== 1 ? 's' : ''}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                    <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                       <span className="flex items-center gap-1.5">
                         <Phone className="w-3.5 h-3.5" />
                         {patient.phone || 'N/A'}
@@ -158,8 +158,8 @@ export default function PatientsPage() {
                   </div>
 
                   {/* Arrow */}
-                  <div className="shrink-0 w-8 h-8 rounded-xl bg-gray-50 group-hover:bg-blue-50 flex items-center justify-center transition-colors">
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                  <div className="shrink-0 w-8 h-8 rounded-xl bg-gray-50 dark:bg-gray-800 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 flex items-center justify-center transition-colors">
+                    <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
                   </div>
                 </div>
               </button>
