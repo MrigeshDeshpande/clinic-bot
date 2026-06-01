@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Activity, DollarSign, Calendar, Clock, Phone,
@@ -23,6 +23,16 @@ export default function PatientDetailPage() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('visits');
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (activeTab === 'messages' && messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, activeTab]);
 
   useEffect(() => {
     async function load() {
@@ -107,7 +117,8 @@ export default function PatientDetailPage() {
 
   function formatDate(d) {
     if (!d) return 'N/A';
-    return new Date(d + 'T12:00:00').toLocaleDateString('en-IN', {
+    const dateStr = typeof d === 'string' ? d.slice(0, 10) : String(d).slice(0, 10);
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-IN', {
       weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
     });
   }
@@ -320,6 +331,13 @@ export default function PatientDetailPage() {
                       >
                         <Edit3 className="w-4 h-4" />
                         Edit
+                      </button>
+                      <button
+                        onClick={() => setShowMessageModal(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-all active:scale-95 shadow-md"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        Message
                       </button>
                       <button
                         onClick={() => window.print()}
@@ -612,19 +630,121 @@ export default function PatientDetailPage() {
                     )}
                   </div>
                 ))}
+                <div ref={messagesEndRef} />
               </div>
             )}
           </div>
         )}
       </div>
 
+        {/* Send Message Modal */}
+        {showMessageModal && (
+          <>
+            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm" onClick={() => setShowMessageModal(false)} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+                <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getAvatarColor(patient.name)} flex items-center justify-center text-white font-bold text-sm shadow-md`}>
+                      {getInitials(patient.name)}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Send Message to {patient.name === '?' ? 'Patient' : patient.name}</h3>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Message will be sent via WhatsApp</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setShowMessageModal(false); setMessageText(''); }}
+                    className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!messageText.trim() || sendingMessage) return;
+                    setSendingMessage(true);
+                    try {
+                      const res = await fetch(`/api/dashboard/patients/${id}/send-message`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: messageText.trim() }),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setMessageText('');
+                        setShowMessageModal(false);
+                        // Refresh messages tab
+                        if (activeTab === 'messages') {
+                          loadMessages();
+                        }
+                      } else {
+                        alert(data.error || 'Failed to send message');
+                      }
+                    } catch (err) {
+                      alert('Network error — could not send message');
+                    } finally {
+                      setSendingMessage(false);
+                    }
+                  }}
+                  className="p-6"
+                >
+                  <div className="relative">
+                    <textarea
+                      value={messageText}
+                      onChange={e => setMessageText(e.target.value)}
+                      placeholder="Type your message here…"
+                      rows={4}
+                      autoFocus
+                      className="w-full resize-none rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3.5 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 dark:focus:border-blue-400 transition-all"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                          e.currentTarget.closest('form').requestSubmit();
+                        }
+                      }}
+                    />
+                    <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500 text-right">
+                      {patient.phone ? `Via WhatsApp — ${patient.phone}` : 'No phone number on file'}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-end gap-3 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => { setShowMessageModal(false); setMessageText(''); }}
+                      className="px-5 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!messageText.trim() || sendingMessage}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 active:scale-95 shadow-md"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      {sendingMessage ? 'Sending…' : 'Send Message'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </>
+        )}
+
       <style jsx>{`
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(16px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95) translateY(8px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
         .animate-in {
           animation: fadeInUp 0.4s ease-out both;
+        }
+        .animate-scale-in {
+          animation: scaleIn 0.2s ease-out both;
         }
         @media print {
           .animate-in {

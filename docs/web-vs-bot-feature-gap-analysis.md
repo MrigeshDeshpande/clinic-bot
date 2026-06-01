@@ -58,7 +58,7 @@
 
 | Feature | Bot Equivalent | Priority |
 |---|---|---|
-| **KPI cards** (today's appointments, revenue, new patients) | ⚠️ Partial — bot has DOCTOR_STATS | **Needed** |
+| **KPI cards** (today's appointments, revenue, new patients) | ✅ Yes — bot `DOCTOR_STATS` shows revenue, count, trends | Already covered |
 | **Treatment breakdown** with visual bar chart | ❌ No text equivalent | Nice to have |
 
 ### 📋 Schedule (`/dashboard/schedule`)

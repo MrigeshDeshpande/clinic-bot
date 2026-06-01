@@ -7,7 +7,8 @@ export async function GET(req, { params }) {
     const sql = getSql();
     const { id } = await params;
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '200', 10), 500);
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10), 0);
 
     // Get patient's wa_id first
     const patientRows = await sql`
@@ -33,8 +34,8 @@ export async function GET(req, { params }) {
       FROM messages m
       LEFT JOIN sessions s ON m.session_id = s.id
       WHERE m.wa_id = ANY(${searchIds})
-      ORDER BY m.created_at DESC
-      LIMIT ${limit}
+      ORDER BY m.created_at ASC
+      LIMIT ${limit} OFFSET ${offset}
     `;
 
     return NextResponse.json({ messages: messages || [] });

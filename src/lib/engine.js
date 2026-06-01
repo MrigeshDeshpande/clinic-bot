@@ -250,10 +250,22 @@ export async function processEvent(payload) {
         session.context.receivedEntities = receivedEntities;
       }
 
+      // Step 2g(i): Save user message IMMEDIATELY (before handle/sendReply)
+      // so it's never lost even if processing throws.
+      createMessage({
+        msgId: normalized.msgId,
+        sessionId: session.id,
+        waId: normalized.waId,
+        role: 'user',
+        content: normalized.textClean || normalized.text,
+        intent: intentResult.intent,
+        metadata: { stateBefore: session.state },
+      }).catch(err => logger.error('USER_MSG_SAVE_FAILED', { msgId: normalized.msgId, error: err.message }));
+
       // Determine next state
       const nextState = getNextState(session.state, intentResult.intent, entities);
 
-      // Step 2g: handle
+      // Step 2h: handle
       const handlerResult = await handle(session.state, {
         session,
         normalized,
@@ -269,7 +281,7 @@ export async function processEvent(payload) {
         handlerResult.session.state = nextState;
       }
 
-      // Step 2h: sendReply
+      // Step 2i: sendReply
       const sentMsgId = await sendReply(normalized.waId, handlerResult.reply, handlerResult.replyType);
 
       // Track sent message IDs for future continuity checks
@@ -285,28 +297,17 @@ export async function processEvent(payload) {
       // (getOrCreate checks sessionCache first), so eventual consistency is fine.
       save(handlerResult.session).catch(() => {});
 
-      // Step 2i: saveMessages — batch both messages in a single INSERT
+      // Step 2k: Save bot message after reply sent successfully
       const botMsgId = sentMsgId || `bot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      createMessages([
-        {
-          msgId: normalized.msgId,
-          sessionId: handlerResult.session.id,
-          waId: normalized.waId,
-          role: 'user',
-          content: normalized.textClean || normalized.text,
-          intent: intentResult.intent,
-          metadata: { stateBefore: session.state, stateAfter: handlerResult.session.state },
-        },
-        {
-          msgId: botMsgId,
-          sessionId: handlerResult.session.id,
-          waId: normalized.waId,
-          role: 'bot',
-          content: typeof handlerResult.reply === 'string' ? handlerResult.reply : handlerResult.reply.body,
-          intent: intentResult.intent,
-          metadata: { replyType: handlerResult.replyType },
-        },
-      ]).catch(() => {});
+      createMessage({
+        msgId: botMsgId,
+        sessionId: handlerResult.session.id,
+        waId: normalized.waId,
+        role: 'bot',
+        content: typeof handlerResult.reply === 'string' ? handlerResult.reply : handlerResult.reply.body,
+        intent: intentResult.intent,
+        metadata: { replyType: handlerResult.replyType, stateAfter: handlerResult.session.state },
+      }).catch(err => logger.error('BOT_MSG_SAVE_FAILED', { msgId: botMsgId, error: err.message }));
 
       // Step 2k: log completion
       logger.info('MESSAGE_PROCESSED', {
