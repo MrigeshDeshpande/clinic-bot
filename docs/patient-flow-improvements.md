@@ -44,6 +44,8 @@
 ### `handleBookingCollection` (`src/lib/handlers.js`)
 - Added `patientName` validation: accepts any non-empty text
 - Allows `unknown` intent to fall through to field processing when `patientName` is the current pending field
+- Handles `add_treatment` intent: re-prompts treatment list while `multiTreatmentActive` flag is set
+- Handles `treatment_done` intent: clears `multiTreatmentActive` flag, advances to next pending field
 
 ### `handleAffirm` (`src/lib/handlers.js`)
 - When `patientName` is the pending field and user says "ok"/"yes", accepts the WhatsApp profile name as the patient name
@@ -95,3 +97,27 @@ Date → Time → Treatment → "What name?" → Confirmation (shows name) → B
 - `getTimeListReply` — passes `booking?.date`
 - `handleGreeting` — passes `session.context?.booking?.date`
 - `buildFieldPrompt` — passes `booking?.date`
+
+---
+
+## 5. Multi-Treatment Booking
+
+**Problem:** Patients could only select a single treatment per appointment. Many patients need multiple procedures (e.g. cleaning + checkup, or root canal + crown).
+
+**Changes:**
+
+### `handleBookingCollection` (`src/lib/handlers.js`)
+- Added `add_treatment` intent handler: re-prompts treatment selection while `multiTreatmentActive` flag is set
+- Added `treatment_done` intent handler: clears `multiTreatmentActive`, transitions to next pending field via `computePendingFields`
+- Treatment duplicates prevented: `validateTreatment()` checks `booking.treatment` for existing entries before appending
+
+### State management
+- `session.context.multiTreatmentActive` — boolean flag, set to `true` after first treatment selection (non-correction path only)
+- `booking.treatment` stores treatments as comma-separated string (e.g. `"Root Canal, Whitening"`)
+- `treatment_done` clears the flag; bot then advances to date/time/name collection
+
+### Flow
+```
+Treatment picked → "Add Another?" prompt → "+ Add Another" → re-prompt treatment list
+                                         → "Done" → proceed to date
+```

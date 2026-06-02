@@ -204,6 +204,26 @@ Bot:   Which date works for you?
        Examples: "tomorrow", "next Monday", or "25 May".
 ```
 
+### Step 2a (optional): Add More Treatments
+
+After picking a treatment, if multiple treatments are available, the bot offers to add more:
+
+```
+Bot:   Root Canal — got it. 🦷
+       Tap "Add Another" to add more treatments or "Done" when finished.
+
+       [➕ Add Another] [✅ Done]
+```
+
+| User taps | Intent | What happens |
+|---|---|---|
+| `"Add Another"` | **add_treatment** | Re-prompts treatment list — user picks another |
+| `"✅ Done"` | **treatment_done** | Proceeds to next pending field (date) |
+
+**On "Add Another":** The user re-enters the treatment selection loop. Each new treatment is appended to a comma-separated list (e.g. `"Root Canal, Whitening"`). Multi-treatment mode stays active until the user signals done.
+
+**On "Done":** The `multiTreatmentActive` flag is cleared, and the bot advances to the next field (normally date).
+
 ### Step 3: Pick a Date
 
 **Valid user inputs for date:**

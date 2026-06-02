@@ -13,6 +13,7 @@ import { createPatient, searchPatients, findPatientById, createAppointmentForPat
          updateVisitLog, findPatientsByWaId, updatePatient } from '@/db/repositories/patientRepository';
 import { insertFeedback } from '@/db/repositories/feedbackRepository';
 import { processAndStoreMedia, downloadMediaFromMeta } from '@/lib/media';
+import { T } from '@/config/translations';
 import { transcribeAudio } from '@/lib/transcriber';
 import { getR2SignedUrl, r2Configured } from '@/lib/r2';
 import { sendList, sendText, sendDocument } from '@/lib/whatsapp';
@@ -58,54 +59,36 @@ function getLang(session) {
   return session?.context?.language || 'en';
 }
 
-function tr(session, en, hi) {
-  return getLang(session) === 'hi' ? hi : en;
+function tr(session, keyOrEn, hi) {
+  const lang = getLang(session);
+  // Key-based lookup: tr(session, 'welcome', { clinic: '...' })
+  if (hi === undefined && typeof keyOrEn === 'string') {
+    const entry = T[keyOrEn];
+    if (!entry) return keyOrEn;
+    const text = entry[lang] || entry.en || keyOrEn;
+    return text;
+  }
+  // Template variable substitution
+  if (hi && typeof hi === 'object' && !Array.isArray(hi)) {
+    const entry = T[keyOrEn];
+    if (!entry) return keyOrEn;
+    let text = entry[lang] || entry.en || keyOrEn;
+    for (const [k, v] of Object.entries(hi)) {
+      text = text.replace(`{${k}}`, v);
+    }
+    return text;
+  }
+  // Legacy inline: tr(session, 'English text', 'Hindi text')
+  return lang === 'hi' ? hi : keyOrEn;
 }
 
-const PROMPT_VARIANTS = {
-  date: [
-    'Which date works for you?',
-    'What date is best for your visit?',
-    'Please choose a date for your appointment.',
-    'When would you like to come in?',
-    'Pick a date that works for you.',
-  ],
-  time: [
-    'Which time works for you?',
-    'What time is best for you?',
-    'Please choose a time for your visit.',
-    'What time should I book for you?',
-    'Pick a time that works for you.',
-  ],
-  timeWithSlots: [
-    'Which time works for you?\nSlots are every 30 minutes.',
-    'What time is best for you?\nWe have 30-minute slots.',
-    'Please choose a time.\nSlots are available every 30 minutes.',
-    'What time should I book for you?\nAvailable in 30-minute slots.',
-    'Pick a time that works for you.\nSlots are every 30 minutes.',
-  ],
-  treatment: [
-    'What problem are you facing? Pick the closest option.',
-    'Which treatment do you need? Choose the closest option.',
-    'Please pick what you need help with.',
-    'What brings you in today? Pick the nearest option.',
-    'Choose the option that matches your concern.',
-  ],
-  patientName: [
-    'What name should I use for this appointment?',
-    'Please tell me the name for this booking.',
-    'Whose name should I put on the appointment?',
-    'What name should this appointment be under?',
-    'Please share the patient name for this booking.',
-  ],
-  callbackPhone: [
-    'Please share your 10-digit phone number, and we will call you back.',
-    'Please send your 10-digit phone number for the callback.',
-    'Kindly share your 10-digit number so we can call you back.',
-    'Please type your 10-digit phone number for a callback.',
-    'Share your 10-digit number and our team will call you back.',
-  ],
-};
+function _tr(key, vars) {
+  return function(session) {
+    return tr(session, key, vars);
+  };
+}
+
+
 
 // ───────────────────────────────────────────────
 // Frustration score
@@ -223,7 +206,7 @@ export async function handle(state, { session, normalized, entities, intent }) {
     }
     return handleGreeting(session);
   }
-  if (intent === 'thanks') return { session, reply: "You're welcome! Let me know if you need anything else.", replyType: 'text' };
+  if (intent === 'thanks') return { session, reply: tr(session, 'thanks_reply'), replyType: 'text' };
   if (intent === 'help') return handleHelp(session);
   if (intent === 'affirm') {
     if (session.context?.role === 'doctor') return handleDoctorAffirm(session);
@@ -296,7 +279,7 @@ export async function handle(state, { session, normalized, entities, intent }) {
     session.context = { ...session.context, awaitingTreatmentHelp: true };
     return {
       session,
-      reply: "No problem! Tell me a bit about what you're experiencing:\n\n• Tooth pain or sensitivity?\n• Need a routine checkup?\n• Looking for cosmetic treatment (whitening, braces)?\n• Something else?\n\nJust describe your symptoms and I'll recommend the right treatment.",
+      reply: tr(session, 'treatment_help_prompt'),
     replyType: 'text',
   };
 }
@@ -407,7 +390,7 @@ async function handleDoctorMediaPatientLookup(session, query) {
     session.context.lastCorrection = { field: 'date', timestamp: new Date().toISOString() };
     return {
       session,
-      reply: getDateListReply('Sure! What date would you like instead?'),
+      reply: getDateListReply(tr(session, 'ask_date_again'), session),
       replyType: 'list',
     };
   }
@@ -446,9 +429,9 @@ async function handleDoctorMediaPatientLookup(session, query) {
     return {
       session,
       reply: {
-        body: 'Sure! Which treatment would you like instead?',
-        buttonLabel: 'Select treatment',
-        sections: treatmentSections(),
+        body: tr(session, 'change_treatment_q'),
+        buttonLabel: tr(session, 'select_option'),
+        sections: treatmentSections(session),
       },
       replyType: 'list',
     };
@@ -492,7 +475,7 @@ async function handleDoctorMediaPatientLookup(session, query) {
       session = { ...session, state: 'MAIN_MENU' };
       return {
         session,
-        reply: { body: 'How can I help you today?', buttonLabel: 'Select option', sections: mainMenuSections() },
+        reply: { body: tr(session, 'what_next'), buttonLabel: tr(session, 'select_option'), sections: mainMenuSections(session) },
         replyType: 'list',
       };
 
@@ -531,7 +514,7 @@ async function handleFamilySelection(session, intent, entities, normalized) {
       };
       return {
         session,
-        reply: { body: `For *${patient.name}* — what date works?`, buttonLabel: 'Select date', sections: getDateQuickPickSections() },
+        reply: { body: tr(session, 'ask_date_for_name', { name: patient.name }), buttonLabel: tr(session, 'select_date'), sections: getDateQuickPickSections(session) },
         replyType: 'list',
       };
     }
@@ -658,7 +641,7 @@ function handleIdle(session) {
   session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, frustrationScore: 0 };
   return {
     session,
-    reply: { body: `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, buttonLabel: 'Select option', sections: mainMenuSections() },
+    reply: { body: `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, buttonLabel: 'Select option', sections: mainMenuSections(session) },
     replyType: 'list',
   };
 }
@@ -675,9 +658,9 @@ function handleMainMenu(session, intent) {
     return {
       session,
       reply: {
-        body: 'What date works for you?',
-        buttonLabel: 'Select date',
-        sections: getDateQuickPickSections(),
+        body: tr(session, 'ask_date'),
+        buttonLabel: tr(session, 'select_date'),
+        sections: getDateQuickPickSections(session),
       },
       replyType: 'list',
     };
@@ -687,19 +670,19 @@ function handleMainMenu(session, intent) {
   session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, frustrationScore: 0 };
   return {
     session,
-    reply: { body: `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, buttonLabel: 'Select option', sections: mainMenuSections() },
+    reply: { body: `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, buttonLabel: 'Select option', sections: mainMenuSections(session) },
     replyType: 'list',
   };
 }
 
-function mainMenuSections() {
+function mainMenuSections(session) {
   return [{
-    title: 'Menu',
+    title: session ? tr(session, 'menu_section') : 'Menu',
     rows: [
-      { id: 'apt',  title: 'Book Appointment', description: 'Schedule a visit' },
-      { id: 'svc',  title: 'Dental Services',  description: 'What we offer' },
-      { id: 'loc',  title: 'Clinic Location',  description: 'Address & directions' },
-      { id: 'tim',  title: 'Clinic Timings',   description: 'Opening hours' },
+      { id: 'apt',  title: session ? tr(session, 'menu_book') : 'Book Appointment', description: session ? tr(session, 'menu_book_desc') : 'Schedule a visit' },
+      { id: 'svc',  title: session ? tr(session, 'menu_services') : 'Dental Services',  description: session ? tr(session, 'menu_services_desc') : 'What we offer' },
+      { id: 'loc',  title: session ? tr(session, 'menu_location') : 'Clinic Location',  description: session ? tr(session, 'menu_location_desc') : 'Address & directions' },
+      { id: 'tim',  title: session ? tr(session, 'menu_timings') : 'Clinic Timings',   description: session ? tr(session, 'menu_timings_desc') : 'Opening hours' },
     ],
   }];
 }
@@ -715,30 +698,24 @@ async function handleBookingCollection(session, entities, normalized, intent) {
   if (intent === 'date_custom') {
     return {
       session,
-      reply: tr(session,
-        'Please type your preferred date.\n\nExamples: "tomorrow", "next Monday", "28 May"',
-        'Apni date type karein.\n\nExamples: "kal", "next Monday", "28 May"'
-      ),
+      reply: tr(session, 'ask_date_custom'),
       replyType: 'text',
     };
   }
   if (intent === 'date_more') {
     const pending = computePendingFields(session.context, session.context.receivedEntities || {});
     const currentField = pending[0];
-    const body = currentField === 'date' ? 'Here are more available dates:' : 'Pick a date:';
+    const body = currentField === 'date' ? tr(session, 'pick_a_date') : tr(session, 'select_date');
     return {
       session,
-      reply: { body, buttonLabel: 'Select date', sections: getDateMoreSections() },
+      reply: { body, buttonLabel: tr(session, 'select_date'), sections: getDateMoreSections(session) },
       replyType: 'list',
     };
   }
   if (intent === 'time_custom') {
     return {
       session,
-      reply: tr(session,
-        'Please type your preferred time.\n\nExamples: "10am", "2:30pm"\nSlots are every 30 minutes.',
-        'Apna time type karein.\n\nExamples: "10am", "2:30pm"\nSlots har 30 minute me hain.'
-      ),
+      reply: tr(session, 'ask_time_custom'),
       replyType: 'text',
     };
   }
@@ -755,7 +732,7 @@ async function handleBookingCollection(session, entities, normalized, intent) {
         session: filledSession,
         reply: {
           body: buildConfirmationBody(filledSession.context.booking, filledSession),
-          buttons: confirmationButtons(),
+          buttons: confirmationButtons(filledSession),
         },
         replyType: 'buttons',
       };
@@ -789,7 +766,7 @@ async function handleBookingCollection(session, entities, normalized, intent) {
         session: filledSession,
         reply: {
           body: buildConfirmationBody(filledSession.context.booking, filledSession),
-          buttons: confirmationButtons(),
+          buttons: confirmationButtons(filledSession),
         },
         replyType: 'buttons',
       };
@@ -814,7 +791,7 @@ async function handleBookingCollection(session, entities, normalized, intent) {
         reply: {
           body: "I'm not quite sure based on what you described. Pick the closest symptom or tell me more:",
           buttonLabel: 'Select symptom',
-          sections: symptomSectionsWithBack(),
+          sections: symptomSectionsWithBack(session),
         },
         replyType: 'list',
       };
@@ -861,7 +838,7 @@ async function handleBookingCollection(session, entities, normalized, intent) {
       session: filledSession,
       reply: {
         body: buildConfirmationBody(filledSession.context.booking, filledSession),
-        buttons: confirmationButtons(),
+        buttons: confirmationButtons(session),
       },
       replyType: 'buttons',
     };
@@ -964,7 +941,7 @@ async function handleBookingCollection(session, entities, normalized, intent) {
           session: filledSession,
           reply: {
             body: buildConfirmationBody(filledSession.context.booking, filledSession),
-            buttons: confirmationButtons(),
+            buttons: confirmationButtons(session),
           },
           replyType: 'buttons',
         };
@@ -1009,7 +986,7 @@ async function handleBookingCollection(session, entities, normalized, intent) {
 // ───────────────────────────────────────────────
 // Time quick pick sections
 // ───────────────────────────────────────────────
-function timeQuickPickSections(slots, bookingDate, bookedSet) {
+function timeQuickPickSections(slots, bookingDate, bookedSet, session) {
   let availableSlots = slots;
   if (bookingDate) {
     const today = new Date().toISOString().slice(0, 10);
@@ -1032,24 +1009,24 @@ function timeQuickPickSections(slots, bookingDate, bookedSet) {
   const unique = [...new Set(picked)].slice(0, 3);
 
   return [{
-    title: 'Quick Pick',
+    title: session ? tr(session, 'quick_pick') : 'Quick Pick',
     rows: [
       ...unique.map(t => ({
         id: `time_${t.replace(':', '')}`,
         title: t,
       })),
-      { id: 'time_other', title: 'Type a different time' },
+      { id: 'time_other', title: tr(session, 'type_time') },
     ],
   }];
 }
 
-function timeQuickPickSectionsWithBack(slots, bookingDate, bookedSet) {
-  const sections = timeQuickPickSections(slots, bookingDate, bookedSet);
+function timeQuickPickSectionsWithBack(slots, bookingDate, bookedSet, session) {
+  const sections = timeQuickPickSections(slots, bookingDate, bookedSet, session);
   sections.push({
-    title: 'Navigation',
+    title: session ? tr(session, 'navigation') : 'Navigation',
     rows: [
-      { id: 'back', title: '← Back' },
-      { id: 'cancel', title: 'Cancel' },
+      { id: 'back', title: tr(session, 'back') },
+      { id: 'cancel', title: tr(session, 'cancel') },
     ],
   });
   return sections;
@@ -1060,28 +1037,28 @@ async function getTimeListReply(session) {
   const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
   const dayType = isSunday ? 'sunday' : 'weekday';
   const slots = CLINIC.slots[dayType];
-  const progress = session.context?.booking?.date ? buildProgressSummary(session.context.booking) : '';
-  const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}\nSlots: ${slots.join(', ')}` : '';
+  const progress = session.context?.booking?.date ? buildProgressSummary(session.context.booking, getLang(session)) : '';
+  const sundayWarn = isSunday ? `\n${tr(session, 'sunday_warning')}` : '';
   const bookedTimes = dateStr ? await findBookedTimesForDate(dateStr) : [];
   const bookedSet = new Set(bookedTimes);
   const availableCount = slots ? slots.filter(s => !bookedSet.has(s)).length : 0;
   const availNote = availableCount < (slots?.length || 0)
-    ? `\n${bookedTimes.length} slot(s) already booked — ${availableCount} remaining.`
+    ? `\n${tr(session, 'slots_remaining', { booked: String(bookedTimes.length), avail: String(availableCount) })}`
     : '';
   const body = progress
-    ? `${progress}${sundayWarn}${availNote}\n\nWhat time works for you?\nSlots available every 30 minutes.`
-    : `What time works for you?${sundayWarn}${availNote}\nSlots available every 30 minutes.`;
+    ? `${progress}${sundayWarn}${availNote}\n\n${tr(session, 'time_slots_available')}`
+    : `${tr(session, 'time_slots_available')}${sundayWarn}${availNote}`;
   return {
     body,
-    buttonLabel: 'Select time',
-    sections: timeQuickPickSectionsWithBack(slots, session.context?.booking?.date, bookedSet),
+    buttonLabel: tr(session, 'select_time'),
+    sections: timeQuickPickSectionsWithBack(slots, session.context?.booking?.date, bookedSet, session),
   };
 }
 
 // ───────────────────────────────────────────────
 // Date list sections
 // ───────────────────────────────────────────────
-function getDateQuickPickSections() {
+function getDateQuickPickSections(session) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -1100,17 +1077,17 @@ function getDateQuickPickSections() {
   while (nextMon.getDay() !== 1) nextMon.setDate(nextMon.getDate() + 1);
 
   return [{
-    title: 'Quick Picks',
+    title: session ? tr(session, 'quick_pick') : 'Quick Picks',
     rows: [
-      { id: 'date_today', title: `Today (${fmt(today)})` },
-      { id: 'date_tomorrow', title: `Tomorrow (${fmt(tomorrow)})` },
-      { id: 'date_next_mon', title: `Next Monday (${fmt(nextMon)})` },
-      { id: 'date_more', title: 'More dates…' },
+      { id: 'date_today', title: `${tr(session, 'today')} (${fmt(today)})` },
+      { id: 'date_tomorrow', title: `${tr(session, 'tomorrow_prefix')} (${fmt(tomorrow)})` },
+      { id: 'date_next_mon', title: `${tr(session, 'next_monday_prefix')} (${fmt(nextMon)})` },
+      { id: 'date_more', title: tr(session, 'more_dates_btn') },
     ],
   }];
 }
 
-function getDateMoreSections() {
+function getDateMoreSections(session) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -1154,79 +1131,79 @@ function getDateMoreSections() {
   }
 
   if (upcomingRows.length > 0) {
-    sections.push({ title: 'Upcoming Dates', rows: upcomingRows });
+    sections.push({ title: session ? tr(session, 'upcoming_dates') : 'Upcoming Dates', rows: upcomingRows });
   }
 
   sections.push({
-    title: 'Custom',
+    title: session ? tr(session, 'type_date') : 'Custom',
     rows: [
-      { id: 'date_other', title: 'Type a different date' },
+      { id: 'date_other', title: tr(session, 'type_date') },
     ],
   });
 
   sections.push({
-    title: 'Navigation',
+    title: session ? tr(session, 'navigation') : 'Navigation',
     rows: [
-      { id: 'back', title: '← Back' },
-      { id: 'cancel', title: 'Cancel' },
+      { id: 'back', title: tr(session, 'back') },
+      { id: 'cancel', title: tr(session, 'cancel') },
     ],
   });
 
   return sections;
 }
 
-function getDateListReply(body) {
+function getDateListReply(body, session) {
   return {
     body,
-    buttonLabel: 'Select date',
-    sections: getDateQuickPickSections(),
+    buttonLabel: session ? tr(session, 'select_date') : 'Select date',
+    sections: getDateQuickPickSections(session),
   };
 }
 
 // ── Old handler block removed — functionality consolidated into handleBookingCollection above
 
-function treatmentSections() {
+function treatmentSections(session) {
   return [{
-    title: 'Available Treatments',
+    title: session ? tr(session, 'treatments_title') : 'Available Treatments',
     rows: [
       ...CLINIC.treatments.map((t, i) => ({
         id: t.id,
         title: `${i + 1}. ${t.name}`,
         description: t.hinglish || t.symptom,
       })),
-      { id: 'treatment_help', title: "I'm not sure — help me choose", description: 'Describe your symptoms' },
+      { id: 'treatment_help', title: session ? tr(session, 'not_sure') : "I'm not sure — help me choose", description: session ? tr(session, 'describe_symptoms') : 'Describe your symptoms' },
     ],
   }];
 }
 
-function treatmentSectionsWithBack() {
-  return [...treatmentSections(), {
-    title: 'Navigation',
+function treatmentSectionsWithBack(session) {
+  return [...treatmentSections(session), {
+    title: session ? tr(session, 'navigation') : 'Navigation',
     rows: [
-      { id: 'back', title: '← Back' },
+      { id: 'back', title: tr(session, 'back') },
     ],
   }];
 }
 
-function symptomSections() {
+function symptomSections(session) {
   return [{
-    title: 'What brings you in?',
+    title: session ? tr(session, 'symptoms_title') : 'What brings you in?',
     rows: [
       ...CLINIC.treatments.map(t => ({
         id: t.id,
         title: t.symptom,
         description: t.hinglish || '',
       })),
-      { id: 'treatment_help', title: "Something else — tell me more", description: "Describe what you're feeling" },
+      { id: 'treatment_help', title: session ? tr(session, 'tell_more') : "Something else — tell me more", description: session ? tr(session, 'treatment_help_desc') : "Describe what you're feeling" },
     ],
   }];
 }
 
-function symptomSectionsWithBack() {
-  return [...symptomSections(), {
-    title: 'Navigation',
+function symptomSectionsWithBack(session) {
+  return [...symptomSections(session), {
+    title: session ? tr(session, 'navigation') : 'Navigation',
     rows: [
-      { id: 'back', title: '← Back' },
+      { id: 'back', title: tr(session, 'back') },
     ],
   }];
 }
@@ -1244,7 +1221,7 @@ async function handleBookingConfirmation(session, intent, entities) {
     if (booking.date && await isDateBlocked(booking.date)) {
       return {
         session,
-        reply: tr(session, 'Sorry, that date is not available now. Please pick another date.', 'Sorry, wo date ab available nahi hai. Please dusri date choose karein.'),
+        reply: tr(session, 'date_unavailable'),
         replyType: 'text',
       };
     }
@@ -1262,9 +1239,7 @@ async function handleBookingConfirmation(session, intent, entities) {
           const suggestions = nextSlots.map(t => `• ${t}`).join('\n');
           return {
             session,
-            reply: tr(session,
-              `Sorry, ${booking.time} is already booked.\n\nNext available:\n${suggestions}\n\nTap one or type a different time.`,
-              `Sorry, ${booking.time} already booked hai.\n\nAgle available slots:\n${suggestions}\n\nEk choose karein ya alag time type karein.`),
+            reply: tr(session, 'slot_booked', { time: booking.time, suggestions }),
             replyType: 'text',
           };
         }
@@ -1292,23 +1267,21 @@ async function handleBookingConfirmation(session, intent, entities) {
         if (suggestionDate && suggestionSlots.length > 0) {
           const dateParts = suggestionDate.split('-');
           const dateObj = new Date(+dateParts[0], +dateParts[1] - 1, +dateParts[2]);
-          const dayName = dateObj.toLocaleDateString('en-IN', { weekday: 'long' });
-          const dateLabel = dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+          const lang = getLang(session);
+          const locale = lang === 'hi' ? 'hi-IN' : 'en-IN';
+          const dayName = dateObj.toLocaleDateString(locale, { weekday: 'long' });
+          const dateLabel = dateObj.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
           const suggestions = suggestionSlots.map(t => `• ${t}`).join('\n');
           return {
             session,
-            reply: tr(session,
-              `Sorry, no slots available today.\n\nNext available: ${dayName}, ${dateLabel}\n${suggestions}\n\nTap a time, pick another date, or type a different time.`,
-              `Sorry, aaj koi slot available nahi hai.\n\nAgli available: ${dayName}, ${dateLabel}\n${suggestions}\n\nTime choose karein, dusri date pick karein, ya alag time type karein.`),
+            reply: tr(session, 'no_slots_today', { day: dayName, date: dateLabel, suggestions }),
             replyType: 'text',
           };
         }
 
         return {
           session,
-          reply: tr(session,
-            `Sorry, ${booking.time} is already booked and no later slots are available today. Please pick another date.`,
-            `Sorry, ${booking.time} already booked hai aur aaj koi aur slot available nahi hai. Please koi aur date choose karein.`),
+          reply: tr(session, 'no_slots_later', { time: booking.time }),
           replyType: 'text',
         };
       }
@@ -1395,7 +1368,7 @@ async function handleBookingConfirmation(session, intent, entities) {
       session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, messagesInState: 0 };
       return {
         session,
-        reply: tr(session, 'Sorry, I could not save your appointment due to a technical issue. Please try again.', 'Sorry, technical issue ki wajah se appointment save nahi hua. Please dobara try karein.'),
+        reply: tr(session, 'booking_failed'),
         replyType: 'text',
       };
     }
@@ -1416,22 +1389,28 @@ async function handleBookingConfirmation(session, intent, entities) {
       notifyDoctorNewBooking(appointment);
     }
 
-    const header = isReschedule ? '✅ Rescheduled!' : '✅ Confirmed!';
-
     const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
+    const key = isReschedule ? 'rescheduled' : 'confirmed';
+    const body = tr(session, key, {
+      date: formatDateDisplay(booking.date, getLang(session)),
+      time: formatTime(booking.time),
+      treatment: booking.treatment,
+      doctor: doctorSuffix,
+      clinic: CLINIC.name,
+    });
 
     return {
       session,
       reply: {
-        body: `${header}\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}${doctorSuffix}\n\nWe look forward to seeing you!`,
-        buttonLabel: 'Options',
+        body,
+        buttonLabel: tr(session, 'select_option'),
         sections: [{
-          title: 'Manage Booking',
+          title: tr(session, 'menu_section'),
           rows: [
-            { id: 'book_another', title: 'Book Another', description: 'Schedule a new appointment' },
-            { id: 'resched', title: 'Reschedule', description: 'Change date, time, or treatment' },
-            { id: 'cancel_appt', title: 'Cancel', description: 'Cancel this appointment' },
-            { id: 'main_menu', title: 'Main Menu', description: 'Back to home' },
+            { id: 'book_another', title: tr(session, 'book_another'), description: tr(session, 'book_another_desc') },
+            { id: 'resched', title: tr(session, 'reschedule_action'), description: tr(session, 'reschedule_action_desc') },
+            { id: 'cancel_appt', title: tr(session, 'cancel_action'), description: tr(session, 'cancel_action_desc') },
+            { id: 'main_menu', title: tr(session, 'main_menu_action'), description: tr(session, 'main_menu_action_desc') },
           ],
         }],
       },
@@ -1452,7 +1431,7 @@ async function handleBookingConfirmation(session, intent, entities) {
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
     return {
       session,
-      reply: getDateListReply('What date would you like instead?'),
+      reply: getDateListReply(tr(session, 'ask_date_again')),
       replyType: 'list',
     };
   }
@@ -1467,7 +1446,7 @@ async function handleBookingConfirmation(session, intent, entities) {
       },
     };
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
-    return { session, reply: 'Which time works better?', replyType: 'text' };
+    return { session, reply: tr(session, 'ask_time_again'), replyType: 'text' };
   }
 
   if (intent === 'edit_treatment') {
@@ -1483,9 +1462,9 @@ async function handleBookingConfirmation(session, intent, entities) {
     return {
       session,
       reply: {
-        body: 'Which treatment would you like instead?',
-        buttonLabel: 'Select treatment',
-        sections: treatmentSections(),
+        body: tr(session, 'change_treatment_q'),
+        buttonLabel: tr(session, 'select_option'),
+        sections: treatmentSections(session),
       },
       replyType: 'list',
     };
@@ -1495,9 +1474,9 @@ async function handleBookingConfirmation(session, intent, entities) {
     return {
       session,
       reply: {
-        body: 'What would you like to change?',
-        buttonLabel: 'Select option',
-        sections: changeOptionsSections(),
+        body: tr(session, 'what_to_change'),
+        buttonLabel: tr(session, 'select_option'),
+        sections: changeOptionsSections(session),
       },
       replyType: 'list',
     };
@@ -1512,7 +1491,7 @@ async function handleBookingConfirmation(session, intent, entities) {
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
     return {
       session,
-      reply: { body: 'No problem. What would you like to do instead?', buttonLabel: 'Menu', sections: mainMenuSections() },
+      reply: { body: tr(session, 'what_next_instead'), buttonLabel: tr(session, 'menu_section'), sections: mainMenuSections(session) },
       replyType: 'list',
     };
   }
@@ -1522,7 +1501,7 @@ async function handleBookingConfirmation(session, intent, entities) {
     session,
     reply: {
       body: buildConfirmationBody(session.context.booking, session),
-      buttons: confirmationButtons(),
+      buttons: confirmationButtons(session),
     },
     replyType: 'buttons',
   };
@@ -1538,7 +1517,7 @@ function handleBooked(session, intent) {
 
   if (intent === 'reschedule') {
     // Capture current booking summary BEFORE resetting context (for doctor notification)
-    const currentSummary = buildProgressSummary(session.context.booking);
+    const currentSummary = buildProgressSummary(session.context.booking, getLang(session));
     session = {
       ...session,
       state: 'BOOKING_COLLECTION',
@@ -1554,7 +1533,7 @@ function handleBooked(session, intent) {
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
     return {
       session,
-      reply: getDateListReply(`Sure! Let's reschedule your current appointment:\n${currentSummary}\n\nWhat date would you like instead?`),
+      reply: getDateListReply(`${tr(session, 'ask_date_reschedule')}\n\n${currentSummary}`, session),
       replyType: 'list',
     };
   }
@@ -1569,7 +1548,7 @@ function handleBooked(session, intent) {
     session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
     return {
       session,
-      reply: getDateListReply('Sure! What date works for you?'),
+      reply: getDateListReply(tr(session, 'ask_date_quick'), session),
       replyType: 'list',
     };
   }
@@ -1588,7 +1567,7 @@ function handleBack(session) {
   if (targetState === 'MAIN_MENU') {
     return {
       session,
-      reply: { body: 'What would you like to do?', buttonLabel: 'Menu', sections: mainMenuSections() },
+      reply: { body: tr(session, 'what_next'), buttonLabel: tr(session, 'menu_section'), sections: mainMenuSections(session) },
       replyType: 'list',
     };
   }
@@ -1608,7 +1587,7 @@ function handleBack(session) {
       reply: {
         body: 'Okay, going back. Where were we?',
         buttonLabel: 'Select',
-        sections: getDateQuickPickSections(),
+        sections: getDateQuickPickSections(session),
       },
       replyType: 'list',
     };
@@ -1616,7 +1595,7 @@ function handleBack(session) {
   // Fallback — show main menu
   return {
     session,
-    reply: { body: 'What would you like to do?', buttonLabel: 'Menu', sections: mainMenuSections() },
+    reply: { body: tr(session, 'what_next'), buttonLabel: tr(session, 'menu_section'), sections: mainMenuSections(session) },
     replyType: 'list',
   };
 }
@@ -1640,7 +1619,7 @@ async function handleAffirm(session) {
       session,
       reply: {
         body: buildConfirmationBody(session.context.booking, session),
-        buttons: confirmationButtons(),
+        buttons: confirmationButtons(session),
       },
       replyType: 'buttons',
     };
@@ -1672,7 +1651,7 @@ async function handleAffirm(session) {
             session,
             reply: {
               body: buildConfirmationBody(session.context.booking, session),
-              buttons: confirmationButtons(),
+              buttons: confirmationButtons(session),
             },
             replyType: 'buttons',
           };
@@ -1697,12 +1676,14 @@ async function handleAffirm(session) {
       const appointments = await findUpcomingByWaId(session.waId);
       if (appointments && appointments.length > 0) {
         const apt = appointments[0];
+        const lang = getLang(session);
+        const locale = lang === 'hi' ? 'hi-IN' : 'en-IN';
         const d = new Date(apt.date + 'T' + apt.time);
-        const dateStr = d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
-        const timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        const dateStr = d.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+        const timeStr = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: true });
         return {
           session,
-          reply: `Great! Your appointment on ${dateStr} at ${timeStr} is confirmed. See you then! 😊`,
+          reply: tr(session, 'confirmed_short', { date: dateStr, time: timeStr }),
           replyType: 'text',
         };
       }
@@ -1712,19 +1693,19 @@ async function handleAffirm(session) {
   }
 
   // Default: just repeat current prompt
-  return { session, reply: 'Got it! How can I help?', replyType: 'text' };
+  return { session, reply: tr(session, 'state_hint_default'), replyType: 'text' };
 }
 
 // ───────────────────────────────────────────────
 // Info section options (shared by Services / Location / Timings)
 // ───────────────────────────────────────────────
-function infoOptionsSections(currentState) {
+function infoOptionsSections(session) {
   const rows = [];
-  if (currentState === 'MAIN_MENU') {
-    rows.push({ id: 'apt', title: 'Book Appointment', description: 'Schedule a visit' });
+  if (session.state === 'MAIN_MENU') {
+    rows.push({ id: 'apt', title: tr(session, 'book_from_info'), description: tr(session, 'book_from_info_desc') });
   }
-  rows.push({ id: 'main_menu', title: 'Main Menu', description: 'Back to home' });
-  return [{ title: 'Options', rows }];
+  rows.push({ id: 'main_menu', title: tr(session, 'main_menu_action'), description: tr(session, 'main_menu_action_desc') });
+  return [{ title: tr(session, 'menu_section'), rows }];
 }
 
 // ───────────────────────────────────────────────
@@ -1735,9 +1716,9 @@ function handleServices(session) {
   return {
     session,
     reply: {
-      body: `\uD83E\uDDB7 Our Services:\n\n${servicesBullets}`,
-      buttonLabel: 'Select option',
-      sections: infoOptionsSections(session.state),
+      body: tr(session, 'our_services', { services: servicesBullets }),
+      buttonLabel: tr(session, 'select_option'),
+      sections: infoOptionsSections(session),
     },
     replyType: 'list',
   };
@@ -1750,9 +1731,9 @@ function handleLocation(session) {
   return {
     session,
     reply: {
-      body: `\uD83D\uDCCD ${CLINIC.name}\n${CLINIC.address}\n\nPhone: ${CLINIC.phone}\n\uD83D\uDCCD Maps: ${CLINIC.mapsLink}`,
-      buttonLabel: 'Select option',
-      sections: infoOptionsSections(session.state),
+      body: tr(session, 'our_location', { clinic: CLINIC.name, address: CLINIC.address, phone: CLINIC.phone, maps: CLINIC.mapsLink }),
+      buttonLabel: tr(session, 'select_option'),
+      sections: infoOptionsSections(session),
     },
     replyType: 'list',
   };
@@ -1765,9 +1746,9 @@ function handleTimings(session) {
   return {
     session,
     reply: {
-      body: `\uD83D\uDD50 Clinic Hours\n\n${CLINIC.hours.weekday.label}\n${CLINIC.hours.sunday.label}`,
-      buttonLabel: 'Select option',
-      sections: infoOptionsSections(session.state),
+      body: tr(session, 'clinic_hours', { weekdays: CLINIC.hours.weekday.label, sunday: CLINIC.hours.sunday.label }),
+      buttonLabel: tr(session, 'select_option'),
+      sections: infoOptionsSections(session),
     },
     replyType: 'list',
   };
@@ -1788,9 +1769,9 @@ function handleEmergency(session) {
   return {
     session,
     reply: {
-      body: `⚠️ *DENTAL EMERGENCY*\n\nIf this is a dental emergency, please call *${CLINIC.phone}* immediately or visit the nearest hospital.\n\nFor any urgent dental concern, call us anytime and we will guide you on the next steps.\n\nHow can I help you today?`,
-      buttonLabel: 'Select option',
-      sections: mainMenuSections(),
+      body: tr(session, 'emergency', { phone: CLINIC.phone, address: CLINIC.address }),
+      buttonLabel: tr(session, 'select_option'),
+      sections: mainMenuSections(session),
     },
     replyType: 'list',
   };
@@ -1816,10 +1797,10 @@ async function handleFeedbackRating(session, intent, normalized) {
     return {
       session,
       reply: {
-        body: `We're sorry your experience wasn't great. Would you like someone to call you?`,
+        body: tr(session, 'feedback_poor'),
         buttons: [
-          { id: 'feedback_callback', title: '✅ Yes, Call Me' },
-          { id: 'main_menu', title: 'No, Thanks' },
+          { id: 'feedback_callback', title: tr(session, 'feedback_yes_call') },
+          { id: 'main_menu', title: tr(session, 'feedback_no_thanks') },
         ],
       },
       replyType: 'buttons',
@@ -1828,7 +1809,7 @@ async function handleFeedbackRating(session, intent, normalized) {
 
   return {
     session,
-    reply: 'Thank you for your feedback! 😊 We\'re glad you had a good experience.',
+    reply: tr(session, 'feedback_thanks'),
     replyType: 'text',
   };
 }
@@ -1846,7 +1827,7 @@ async function handleFeedbackCallback(session) {
   session = { ...session, state: 'HUMAN_ESCALATION', previousState: session.state, isEscalated: true };
   return {
     session,
-    reply: `We've noted your request. Someone from ${CLINIC.name} will call you back shortly.`,
+    reply: tr(session, 'callback_requested', { clinic: CLINIC.name }),
     replyType: 'text',
   };
 }
@@ -1865,7 +1846,7 @@ function handleHumanEscalation(session) {
 
   return {
     session,
-    reply: `Let me connect you to our team. Please call *${CLINIC.phone}* or expect a call back shortly.`,
+    reply: tr(session, 'human_escalation', { phone: CLINIC.phone }),
     replyType: 'text',
   };
 }
@@ -1886,7 +1867,7 @@ function handleCallbackRequested(session, entities) {
 
       return {
         session,
-        reply: { body: `Thanks! We will call you back at ${formatPhone(result.parsed)} during clinic hours.\n\nIs there anything else I can help with?`, buttonLabel: 'Menu', sections: mainMenuSections() },
+        reply: { body: tr(session, 'callback_success', { phone: formatPhone(result.parsed) }), buttonLabel: tr(session, 'menu_section'), sections: mainMenuSections(session) },
         replyType: 'list',
       };
     }
@@ -1894,10 +1875,7 @@ function handleCallbackRequested(session, entities) {
 
   session = { ...session };
   session.metrics = { ...session.metrics, failedAttempts: session.metrics.failedAttempts + 1, totalFailedAttempts: session.metrics.totalFailedAttempts + 1 };
-  const callbackPrompt = getLang(session) === 'hi'
-    ? 'Please apna 10-digit phone number bhejiye, hum callback karenge.'
-    : pick(PROMPT_VARIANTS.callbackPhone);
-  return { session, reply: callbackPrompt, replyType: 'text' };
+  return { session, reply: tr(session, 'ask_phone_hi'), replyType: 'text' };
 }
 
 // ───────────────────────────────────────────────
@@ -1919,25 +1897,25 @@ function handleUnknown(session, normalized) {
   if (frustration >= 4) {
     return {
       session,
-      reply: `I'm sorry you're having trouble. Would you like me to connect you with our team? Call *${CLINIC.phone}* or type "agent" to speak with someone.`,
+      reply: tr(session, 'escalate', { phone: CLINIC.phone }),
       replyType: 'text',
     };
   }
 
   // Context-aware reprompt
   const hints = {
-    BOOKING_COLLECTION:   'Try a date, time, or treatment name.',
-    BOOKING_CONFIRMATION: 'Reply "confirm" to book, "date" or "time" to change, or "cancel" to start over.',
-    MAIN_MENU:            'Tap an option or type what you need (e.g., "book", "services").',
-    CANCEL_CONFIRM:       'Tap "Yes, Cancel It" to cancel or "No, Keep It" to keep your appointment.',
+    BOOKING_COLLECTION:   tr(session, 'state_hint_collecting'),
+    BOOKING_CONFIRMATION: tr(session, 'state_hint_confirming'),
+    MAIN_MENU:            tr(session, 'state_hint_options'),
+    CANCEL_CONFIRM:       tr(session, 'state_hint_cancelling'),
   };
 
-  const hint = hints[session.state] || 'Type "0" for the menu or tell me what you need.';
-  return { session, reply: tr(session, `Sorry, I missed that. ${hint}`, `Sorry, samajh nahi aaya. ${hint}`), replyType: 'text' };
+  const hint = hints[session.state] || tr(session, 'state_hint_default');
+  return { session, reply: tr(session, 'fallback', { hint }), replyType: 'text' };
 }
 
-function buildResumePrompt(booking, pendingFields) {
-  const progress = booking ? buildProgressSummary(booking) : '';
+function buildResumePrompt(booking, pendingFields, lang) {
+  const progress = booking ? buildProgressSummary(booking, lang) : '';
   const nextField = pendingFields && pendingFields[0];
 
   if (!nextField) {
@@ -1945,18 +1923,18 @@ function buildResumePrompt(booking, pendingFields) {
   }
 
   const fieldHints = {
-    date: 'What date works for you?',
-    time: 'What time works for you?',
-    treatment: 'What seems to be the problem?',
+    date: lang === 'hi' ? 'Kaunsi date chahiye?' : 'What date works for you?',
+    time: lang === 'hi' ? 'Kaunsa samay chahiye?' : 'What time works for you?',
+    treatment: lang === 'hi' ? 'Kya problem hai?' : 'What seems to be the problem?',
   };
 
-  const hint = fieldHints[nextField] || 'Where were we?';
+  const hint = fieldHints[nextField] || (lang === 'hi' ? 'Kahan the hum?' : 'Where were we?');
 
   if (progress && progress !== '📋 ') {
     return `${progress}\n\n${hint}`;
   }
 
-    return `We were booking your appointment. ${hint}`;
+    return `${lang === 'hi' ? 'Hum aapka appointment book kar rahe the.' : 'We were booking your appointment.'} ${hint}`;
 }
 
 // ───────────────────────────────────────────────
@@ -1987,9 +1965,9 @@ function handleGreeting(session) {
     return {
       session,
       reply: {
-        body: tr(session, `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, `${CLINIC.name} me swagat hai 🦷\nAaj main aapki kaise help karun?`),
-        buttonLabel: tr(session, 'Select option', 'Option chunein'),
-        sections: mainMenuSections(),
+        body: tr(session, 'welcome', { clinic: CLINIC.name }),
+        buttonLabel: tr(session, 'select_option'),
+        sections: mainMenuSections(session),
       },
       replyType: 'list',
     };
@@ -2003,7 +1981,7 @@ function handleGreeting(session) {
         session,
         reply: {
           body: buildConfirmationBody(session.context.booking, session),
-          buttons: confirmationButtons(),
+          buttons: confirmationButtons(session),
         },
         replyType: 'buttons',
       };
@@ -2011,24 +1989,24 @@ function handleGreeting(session) {
     return {
       session,
       reply: {
-        body: `Welcome back. ${buildResumePrompt(session.context.booking, pending)}`,
-        buttonLabel: 'Select',
-        sections:           pending[0] === 'date' ? getDateQuickPickSections() :
-          pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday, session.context?.booking?.date) :
-          symptomSectionsWithBack(),
+        body: tr(session, 'welcome_back') + ' ' + buildResumePrompt(session.context.booking, pending, getLang(session)),
+        buttonLabel: tr(session, 'select_option'),
+        sections:           pending[0] === 'date' ? getDateQuickPickSections(session) :
+          pending[0] === 'time' ? timeQuickPickSectionsWithBack(CLINIC.slots.weekday, session.context?.booking?.date, undefined, session) :
+          symptomSectionsWithBack(session),
       },
       replyType: 'list',
     };
   }
 
-  const greeting = STATE_GREETING[session.state] || 'Welcome back!';
+  const greeting = STATE_GREETING[session.state] || tr(session, 'welcome_back_short');
 
   if (session.state === 'BOOKING_CONFIRMATION') {
     return {
       session,
       reply: {
         body: buildConfirmationBody(session.context.booking, session),
-        buttons: confirmationButtons(),
+        buttons: confirmationButtons(session),
       },
       replyType: 'buttons',
     };
@@ -2039,14 +2017,14 @@ function handleGreeting(session) {
       session,
       reply: {
         body: greeting,
-        buttonLabel: 'Options',
+        buttonLabel: tr(session, 'select_option'),
         sections: [{
-          title: 'Manage Booking',
+          title: tr(session, 'menu_section'),
           rows: [
-            { id: 'book_another', title: 'Book Another', description: 'Schedule a new appointment' },
-            { id: 'resched', title: 'Reschedule', description: 'Change date, time, or treatment' },
-            { id: 'cancel_appt', title: 'Cancel', description: 'Cancel this appointment' },
-            { id: 'main_menu', title: 'Main Menu', description: 'Back to home' },
+            { id: 'book_another', title: tr(session, 'book_another'), description: tr(session, 'book_another_desc') },
+            { id: 'resched', title: tr(session, 'reschedule_action'), description: tr(session, 'reschedule_action_desc') },
+            { id: 'cancel_appt', title: tr(session, 'cancel_action'), description: tr(session, 'cancel_action_desc') },
+            { id: 'main_menu', title: tr(session, 'main_menu_action'), description: tr(session, 'main_menu_action_desc') },
           ],
         }],
       },
@@ -2057,7 +2035,7 @@ function handleGreeting(session) {
   if (session.state === 'MAIN_MENU') {
     return {
       session,
-      reply: { body: greeting, buttonLabel: 'Select option', sections: mainMenuSections() },
+      reply: { body: greeting, buttonLabel: tr(session, 'select_option'), sections: mainMenuSections(session) },
       replyType: 'list',
     };
   }
@@ -2082,13 +2060,13 @@ function handleCancelAppointment(session) {
   return {
     session,
     reply: {
-      body: 'Do you want to cancel this appointment?',
-      buttonLabel: 'Select option',
+      body: tr(session, 'confirm_cancel'),
+      buttonLabel: tr(session, 'select_option'),
       sections: [{
-        title: 'Cancel Appointment',
+        title: tr(session, 'cancel_section'),
         rows: [
-          { id: 'confirm_cancel_yes', title: 'Yes, Cancel It' },
-          { id: 'confirm_cancel_no', title: 'No, Keep It' },
+          { id: 'confirm_cancel_yes', title: tr(session, 'yes_cancel') },
+          { id: 'confirm_cancel_no', title: tr(session, 'no_keep') },
         ],
       }],
     },
@@ -2129,19 +2107,19 @@ async function handleCancelConfirm(session, intent) {
       // Fire-and-forget the main menu after a short delay so the empathetic
       // cancellation message lands first and breathes before options appear
       setTimeout(() => {
-        sendList(session.waId, 'What would you like to do next?', 'Menu', mainMenuSections()).catch(() => {});
+        sendList(session.waId, tr(session, 'what_next'), tr(session, 'menu_section'), mainMenuSections(session)).catch(() => {});
       }, 1500);
 
       return {
         session,
-        reply: '✅ Your appointment is cancelled.\n\nNo worries. If you want, I can help you book another time.',
+        reply: tr(session, 'cancelled'),
         replyType: 'text',
       };
     }
 
     return {
       session,
-      reply: 'Sorry, I could not cancel it right now. Please call us at ' + CLINIC.phone + ' or try again in a bit.',
+      reply: tr(session, 'cancel_failed', { phone: CLINIC.phone }),
       replyType: 'text',
     };
   }
@@ -2156,7 +2134,7 @@ async function handleCancelConfirm(session, intent) {
   session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0 };
   return {
     session,
-    reply: { body: 'No problem. What would you like to do instead?', buttonLabel: 'Menu', sections: mainMenuSections() },
+    reply: { body: tr(session, 'what_next_instead'), buttonLabel: tr(session, 'menu_section'), sections: mainMenuSections(session) },
     replyType: 'list',
   };
 }
@@ -2169,15 +2147,19 @@ function showBookedSummary(session) {
   return {
     session,
     reply: {
-      body: `📋 Your Appointment\n\nDate: ${formatDateDisplay(booking.date)}\nTime: ${formatTime(booking.time)}\nTreatment: ${booking.treatment}${doctorSuffix}`,
-      buttonLabel: 'Options',
+      body: tr(session, 'your_appt', {
+        date: formatDateDisplay(booking.date, getLang(session)),
+        time: formatTime(booking.time),
+        treatment: `${booking.treatment}${doctorSuffix}`,
+      }),
+      buttonLabel: tr(session, 'select_option'),
       sections: [{
-        title: 'Manage Booking',
+        title: tr(session, 'menu_section'),
         rows: [
-          { id: 'book_another', title: 'Book Another', description: 'Schedule a new appointment' },
-          { id: 'resched', title: 'Reschedule', description: 'Change date, time, or treatment' },
-          { id: 'cancel_appt', title: 'Cancel', description: 'Cancel this appointment' },
-          { id: 'main_menu', title: 'Main Menu', description: 'Back to home' },
+          { id: 'book_another', title: tr(session, 'book_another'), description: tr(session, 'book_another_desc') },
+          { id: 'resched', title: tr(session, 'reschedule_action'), description: tr(session, 'reschedule_action_desc') },
+          { id: 'cancel_appt', title: tr(session, 'cancel_action'), description: tr(session, 'cancel_action_desc') },
+          { id: 'main_menu', title: tr(session, 'main_menu_action'), description: tr(session, 'main_menu_action_desc') },
         ],
       }],
     },
@@ -2199,19 +2181,21 @@ async function handleMyAppointments(session) {
       return {
         session,
         reply: {
-          body: 'You have no upcoming appointments.\n\nWould you like to book one now?',
-          buttonLabel: 'Menu',
-          sections: mainMenuSections(),
+          body: tr(session, 'no_appointments'),
+          buttonLabel: tr(session, 'menu_section'),
+          sections: mainMenuSections(session),
         },
         replyType: 'list',
       };
     }
 
     const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
+    const lang = getLang(session);
+    const locale = lang === 'hi' ? 'hi-IN' : 'en-IN';
     let body = '📋 *Your Upcoming Appointments*\n\n';
     appointments.forEach((apt, i) => {
       const d = new Date(apt.date + 'T' + apt.time);
-      body += `${i + 1}. ${d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} at ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}\n`;
+      body += `${i + 1}. ${d.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })} at ${d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: true })}\n`;
       body += `   Treatment: ${apt.treatment || 'N/A'}${doctorSuffix}\n`;
       body += `   Status: ${apt.status}\n\n`;
     });
@@ -2219,14 +2203,14 @@ async function handleMyAppointments(session) {
 
     return {
       session,
-      reply: { body, buttonLabel: 'Menu', sections: mainMenuSections() },
+      reply: { body, buttonLabel: tr(session, 'menu_section'), sections: mainMenuSections(session) },
       replyType: 'list',
     };
   } catch {
     // DB error fallback — just show the main menu
     return {
       session,
-      reply: { body: `Welcome to ${CLINIC.name} 🦷\nHow can I help you today?`, buttonLabel: 'Select option', sections: mainMenuSections() },
+      reply: { body: tr(session, 'welcome', { clinic: CLINIC.name }), buttonLabel: tr(session, 'select_option'), sections: mainMenuSections(session) },
       replyType: 'list',
     };
   }
@@ -2268,13 +2252,13 @@ async function handleCancel(session) {
         return {
           session,
           reply: {
-            body: 'Are you sure you want to cancel this appointment?',
-            buttonLabel: 'Select option',
+            body: tr(session, 'sure_cancel'),
+            buttonLabel: tr(session, 'select_option'),
             sections: [{
-              title: 'Cancel Appointment',
+              title: tr(session, 'cancel_section'),
               rows: [
-                { id: 'confirm_cancel_yes', title: 'Yes, Cancel It' },
-                { id: 'confirm_cancel_no', title: 'No, Keep It' },
+                { id: 'confirm_cancel_yes', title: tr(session, 'yes_cancel') },
+                { id: 'confirm_cancel_no', title: tr(session, 'no_keep') },
               ],
             }],
           },
@@ -2295,7 +2279,7 @@ async function handleCancel(session) {
   session.metrics = { ...session.metrics, failedAttempts: 0, messagesInState: 0, frustrationScore: 0, currentField: null };
   return {
     session,
-    reply: { body: 'No problem. What would you like to do instead?', buttonLabel: 'Menu', sections: mainMenuSections() },
+    reply: { body: tr(session, 'what_next_instead'), buttonLabel: tr(session, 'menu_section'), sections: mainMenuSections(session) },
     replyType: 'list',
   };
 }
@@ -2360,10 +2344,10 @@ async function buildFieldPrompt(field, booking, ack, suggestion, session) {
   }
 
   if (field === 'date') {
-    const prompt = suggestion || pick(PROMPT_VARIANTS.date);
+    const prompt = suggestion || tr(session, 'ask_date');
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;
     return {
-      reply: { body: fullBody, buttonLabel: 'Select date', sections: getDateQuickPickSections() },
+      reply: { body: fullBody, buttonLabel: tr(session, 'select_date'), sections: getDateQuickPickSections(session) },
       replyType: 'list',
     };
   }
@@ -2372,7 +2356,7 @@ async function buildFieldPrompt(field, booking, ack, suggestion, session) {
     const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
     const dayType = isSunday ? 'sunday' : 'weekday';
     const slots = CLINIC.slots[dayType] || CLINIC.slots.weekday;
-    const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}\nSlots: ${slots.join(', ')}` : '';
+    const sundayWarn = isSunday ? `\n${tr(session, 'sunday_warning')}` : '';
     let bookedSet;
     if (dateStr) {
       const bookedTimes = await findBookedTimesForDate(dateStr);
@@ -2382,29 +2366,29 @@ async function buildFieldPrompt(field, booking, ack, suggestion, session) {
     const totalSlots = slots ? slots.length : 0;
     const availCount = totalSlots - bookedCount;
     const availNote = bookedCount > 0
-      ? `\n${bookedCount} slot(s) already booked — ${availCount} remaining.`
+      ? `\n${tr(session, 'slots_remaining', { booked: String(bookedCount), avail: String(availCount) })}`
       : '';
     const prompt = suggestion
-      ? `${pick(PROMPT_VARIANTS.time)}\n${suggestion}`
-      : pick(PROMPT_VARIANTS.timeWithSlots);
+      ? `${tr(session, 'ask_time')}\n${suggestion}`
+      : tr(session, 'time_slots_available');
     const fullBody = body ? `${body}${sundayWarn}${availNote}\n\n${prompt}` : `${prompt}${sundayWarn}${availNote}`;
     return {
-      reply: { body: fullBody, buttonLabel: 'Select time', sections: timeQuickPickSectionsWithBack(slots, booking?.date, bookedSet) },
+        reply: { body: fullBody, buttonLabel: tr(session, 'select_time'), sections: timeQuickPickSectionsWithBack(slots, booking?.date, bookedSet, session) },
       replyType: 'list',
     };
   }
   if (field === 'treatment') {
-    const prompt = suggestion || pick(PROMPT_VARIANTS.treatment);
+    const prompt = suggestion || tr(session, 'ask_treatment');
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;
     return {
-      reply: { body: fullBody, buttonLabel: 'Select symptom', sections: symptomSectionsWithBack() },
+      reply: { body: fullBody, buttonLabel: tr(session, 'select_option'), sections: symptomSectionsWithBack(session) },
       replyType: 'list',
     };
   }
   if (field === 'patientName') {
     const defaultName = session?.profileName || '';
-    const nameHint = defaultName ? `\n\n(default: ${defaultName} — type "ok" to use this)` : '';
-    const prompt = suggestion || `${pick(PROMPT_VARIANTS.patientName)}${nameHint}`;
+    const nameHint = defaultName ? `\n\n${tr(session, 'name_default', { name: defaultName })}` : '';
+    const prompt = suggestion || `${tr(session, 'ask_name')}${nameHint}`;
     const fullBody = body ? `${body}\n\n${prompt}` : prompt;      return {
       reply: fullBody,
       replyType: 'text',
@@ -2412,7 +2396,7 @@ async function buildFieldPrompt(field, booking, ack, suggestion, session) {
   }
 
   // Fallback
-  return { reply: body || 'What would you like to do?', replyType: 'text' };
+  return { reply: body || tr(session, 'what_next'), replyType: 'text' };
 }
 
 function resetBookingContext(context) {
@@ -2432,58 +2416,60 @@ function resetBookingContext(context) {
 function buildConfirmationBody(booking, session) {
   const doctorSuffix = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
   const name = booking?.patientName || (session ? firstName(session) : '');
-  const namePrefix = name ? `${name}, here's your booking:\n\n` : '';
-  let body = `📋 ${namePrefix}`;
-  body += `📅 ${formatDateDisplay(booking.date)}\n`;
-  body += `⏰ ${formatTime(booking.time)}\n`;
-  body += `🦷 ${booking.treatment}${doctorSuffix}`;
-  return body;
+  return tr(session, 'booking_summary', {
+    name,
+    date: formatDateDisplay(booking.date, getLang(session)),
+    time: formatTime(booking.time),
+    treatment: booking.treatment,
+    doctor: doctorSuffix,
+    clinic: CLINIC.name,
+  });
 }
 
-function confirmationSections() {
+function confirmationSections(session) {
   return [{
-    title: 'Options',
+    title: tr(session, 'confirm_section'),
     rows: [
-      { id: 'confirm',    title: 'Confirm',      description: 'Book this appointment' },
-      { id: 'edit_date',  title: 'Change Date',  description: 'Pick a different date' },
-      { id: 'edit_time',  title: 'Change Time',  description: 'Pick a different time' },
-      { id: 'cancel',     title: 'Cancel',       description: 'Start over' },
+      { id: 'confirm',    title: tr(session, 'confirm_btn'),      description: tr(session, 'confirm_desc') },
+      { id: 'edit_date',  title: tr(session, 'change_date'),      description: tr(session, 'change_date_desc') },
+      { id: 'edit_time',  title: tr(session, 'change_time'),      description: tr(session, 'change_time_desc') },
+      { id: 'cancel',     title: tr(session, 'cancel_btn'),       description: tr(session, 'cancel_desc') },
     ],
   }];
 }
 
-function confirmationSectionsWithBack() {
-  return [...confirmationSections(), {
-    title: 'Navigation',
+function confirmationSectionsWithBack(session) {
+  return [...confirmationSections(session), {
+    title: tr(session, 'menu_section'),
     rows: [
-      { id: 'back', title: '← Back' },
+      { id: 'back', title: tr(session, 'back') },
     ],
   }];
 }
 
-function confirmationButtons() {
+function confirmationButtons(session) {
   return [
-    { id: 'confirm', title: 'Confirm ✓' },
-    { id: 'change',  title: 'Change' },
-    { id: 'cancel',  title: 'Cancel' },
+    { id: 'confirm', title: tr(session, 'confirm_btn') },
+    { id: 'change',  title: tr(session, 'change_btn') },
+    { id: 'cancel',  title: tr(session, 'cancel_btn') },
   ];
 }
 
-function changeOptionsSections() {
+function changeOptionsSections(session) {
   return [{
-    title: 'What would you like to change?',
+    title: tr(session, 'what_to_change'),
     rows: [
-      { id: 'edit_date', title: 'Change Date' },
-      { id: 'edit_time', title: 'Change Time' },
-      { id: 'edit_treatment', title: 'Change Treatment' },
-      { id: 'back',      title: '← Back' },
+      { id: 'edit_date', title: tr(session, 'change_date') },
+      { id: 'edit_time', title: tr(session, 'change_time') },
+      { id: 'edit_treatment', title: tr(session, 'change_treatment_q') },
+      { id: 'back',      title: tr(session, 'back') },
     ],
   }];
 }
 
-function buildProgressSummary(booking) {
+function buildProgressSummary(booking, lang) {
   const parts = [];
-  if (booking.date) parts.push(formatDateDisplay(booking.date));
+  if (booking.date) parts.push(formatDateDisplay(booking.date, lang));
   if (booking.time) parts.push(formatTime(booking.time));
   if (booking.treatment) parts.push(booking.treatment);
   return `📋 ${parts.join(' · ')}`;
@@ -2500,10 +2486,11 @@ function recommendTreatment(text) {
   return matches[0].treatment;
 }
 
-function formatDateDisplay(dateStr) {
+function formatDateDisplay(dateStr, lang) {
   if (!dateStr) return 'TBD';
   const d = new Date(dateStr);
-  return d.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const locale = lang === 'hi' ? 'hi-IN' : 'en-IN';
+  return d.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 // ───────────────────────────────────────────────
@@ -2511,18 +2498,18 @@ function formatDateDisplay(dateStr) {
 // ───────────────────────────────────────────────
 function handleHelp(session) {
   const hints = {
-    BOOKING_COLLECTION:   'You can tell me a date, time, or treatment name depending on what\'s needed.',
-    BOOKING_CONFIRMATION: 'Reply "confirm" to book, or "cancel" to start over.',
-    MAIN_MENU:            'Tap an option or type "book", "services", "location", or "timings".',
-    EMERGENCY:            'If this is an emergency, please call us immediately.',
-    HUMAN_ESCALATION:     'Our team will be with you shortly.',
-    CALLBACK_REQUESTED:   pick(PROMPT_VARIANTS.callbackPhone),
+    BOOKING_COLLECTION:   tr(session, 'state_hint_collecting'),
+    BOOKING_CONFIRMATION: tr(session, 'state_hint_confirming'),
+    MAIN_MENU:            tr(session, 'state_hint_options'),
+    EMERGENCY:            tr(session, 'state_hint_collecting'),
+    HUMAN_ESCALATION:     tr(session, 'state_hint_collecting'),
+    CALLBACK_REQUESTED:   tr(session, 'ask_phone'),
   };
 
-  const hint = hints[session.state] || tr(session, 'Type "0" for menu, or tell me what you need.', 'Menu ke liye "0" type karein, ya apni need batayein.');
+  const hint = hints[session.state] || tr(session, 'state_hint_default');
   return {
     session,
-    reply: tr(session, `I can help with booking, services, location, and timings. ${hint}`, `Main booking, services, location aur timings me help kar sakta hoon. ${hint}`),
+    reply: tr(session, 'help_intro', { hint }),
     replyType: 'text',
   };
 }
@@ -2537,10 +2524,7 @@ function escalateForFailure(session) {
   };
   return {
     session,
-    reply: tr(session,
-      `I may be getting this wrong. Let me connect you to our team at *${CLINIC.phone}*.`,
-      `Lagta hai main sahi samajh nahi pa raha. Main aapko team se connect karta hoon: *${CLINIC.phone}*.`
-    ),
+    reply: tr(session, 'escalation_failed', { phone: CLINIC.phone }),
     replyType: 'text',
   };
 }
@@ -2910,7 +2894,7 @@ async function handleDoctorMainMenu(session, intent) {
       reply: {
         body: 'Enter a date (DD-MM-YYYY) or select from the options below:',
         buttonLabel: 'Quick pick',
-        sections: getDateQuickPickSections(),
+        sections: getDateQuickPickSections(session),
       },
       replyType: 'list',
     };
@@ -3149,7 +3133,7 @@ async function handleDoctorViewDate(session, entities, intent) {
 
   return {
     session,
-    reply: { body: 'Please enter a valid date in DD-MM-YYYY format or select one below:', buttonLabel: 'Quick pick', sections: getDateQuickPickSections() },
+    reply: { body: 'Please enter a valid date in DD-MM-YYYY format or select one below:', buttonLabel: 'Quick pick', sections: getDateQuickPickSections(session) },
     replyType: 'list',
   };
 }
@@ -4104,7 +4088,7 @@ async function handleDoctorManageSchedule(session, intent, entities) {
   if (intent === 'doctor_block_date') {
     return {
       session: { ...session, state: 'DOCTOR_MANAGE_SCHEDULE', context: { ...session.context, doctorScheduleAction: 'blocking' } },
-      reply: { body: 'Enter the date you want to block (DD-MM-YYYY) or tap "Pick a date":', buttonLabel: 'Pick a date', sections: getDateMoreSections() },
+      reply: { body: 'Enter the date you want to block (DD-MM-YYYY) or tap "Pick a date":', buttonLabel: 'Pick a date', sections: getDateMoreSections(session) },
       replyType: 'list',
     };
   }

@@ -391,6 +391,47 @@ Bot: [keyword matching] → matches "pain", "sensitive", "cavity", "root", "nerv
 
 If no keywords match, the bot shows the full treatment list again.
 
+### Flow AI: Multi-Treatment Booking
+
+```
+User: "Book"                            → BOOKING_COLLECTION
+User: "Root Canal"                      → provide_treatment
+Bot: Root Canal — got it. 🦷
+     Tap "Add Another" to add more treatments or "Done" when finished.
+     [➕ Add Another] [✅ Done]
+
+User: "Add Another" / taps "➕ Add Another" → add_treatment
+Bot: [re-prompts treatment list — multiTreatmentActive flag set]
+     What problem are you facing? Pick the closest option.
+
+User: "Whitening"                       → provide_treatment
+Bot: Whitening — added! Currently: Root Canal, Whitening
+     Tap "Add Another" to add more or "Done" when finished.
+     [➕ Add Another] [✅ Done]
+
+User: "✅ Done" / taps "Done"            → treatment_done
+Bot: [multiTreatmentActive cleared]
+     Which date works for you?
+     ...
+
+User: "Tomorrow"                        → provide_date
+User: "2pm"                             → provide_time
+User: "Rahul"                           → patientName → BOOKING_CONFIRMATION
+Bot: 📋 Rahul, here's your booking:
+     📅 Tomorrow at 2:00 PM
+     🦷 Root Canal, Whitening
+     [Confirm] [Change] [Cancel]
+
+User: "Confirm"                         → confirm → BOOKED
+```
+
+**ℹ️ Multi-treatment flow (`add_treatment` / `treatment_done` intents):**
+- Activated automatically when the user picks a treatment and not in correction mode
+- `session.context.multiTreatmentActive: true` keeps the bot in the treatment loop
+- Each additional treatment is comma-appended to `booking.treatment`
+- `treatment_done` clears the flag and advances to date via `computePendingFields()`
+- The appointment stores treatments as a comma-separated string (e.g. `"Root Canal, Whitening"`)
+
 ---
 
 ## 4. Negative / Edge Case Flows
@@ -416,7 +457,7 @@ User: "Confirm"                         → confirm → BOOKED
 
 **⚠️ Key design:** `unknown` intents do **not** increment `failedAttempts`. The handler detects non-field intents and just re-prompts. This prevents users who type irrelevant words from being wrongly escalated.
 
-**Implementation location:** `handleBookingCollection()` in `handlers.js`, lines ~182-204:
+**Implementation location:** `handleBookingCollection()` in `handlers.js`, lines ~756-781:
 ```js
 if (!['provide_date', 'provide_time', 'provide_treatment', ...].includes(intent)) {
     // Just re-prompt without penalty
