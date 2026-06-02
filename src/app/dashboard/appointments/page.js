@@ -301,12 +301,14 @@ export default function AppointmentsPage() {
                               </div>
                               {/* Primary actions */}
                               <div className="flex gap-1 justify-end">
-                                <button
-                                  onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
-                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all hover:shadow-sm"
-                                >
-                                  ✓ Complete
-                                </button>
+                                {a.arrival_status !== 'called' && (
+                                  <button
+                                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all hover:shadow-sm"
+                                  >
+                                    ✓ Complete
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleStatusChange(a.id, 'no_show')}
                                   disabled={!!updating}

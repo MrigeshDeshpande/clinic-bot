@@ -20,7 +20,9 @@ export default function LoginPage() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, []);    async function handleSubmit(e) {
+  }, []);
+
+  async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError('');
