@@ -92,6 +92,7 @@ Meta's 24h messaging window: we can only proactively message patients who messag
 | Media attachment to appointments | ✅ |
 | Voice note transcription (Whisper → text → accept/edit) | ✅ |
 | Proactive notifications (new booking, cancellation, reschedule) | ✅ |
+| PDF prescription on visit completion (auto-generated → WhatsApp document) | ✅ |
 
 ### Receptionist-Facing (Bot)
 | Feature | Status |
@@ -157,7 +158,7 @@ Doctor Experience:
 | **Pre-reminders** | Text via 24h window | Template msg + SMS fallback | **Templates not done** |
 | **Check-in** | Manual "Mark Arrived" | Geo-fence / QR auto check-in | Manual step |
 | **Payment** | None | UPI link in reminder + auto-receipt | **Biggest gap** |
-| **Visit summary** | WhatsApp text | PDF prescription + invoice + receipt | PDF not done |
+| **Visit summary** | WhatsApp text + PDF | PDF prescription + invoice + receipt | Invoice auto-generation not done |
 | **Follow-up** | One-time next visit | Auto-recalls at 3/6/12mo per treatment | No recall engine |
 | **No-show** | Evening check-in (manual) | Auto-cancel + auto-rebook | No automation |
 | **Analytics** | Text stats | Dashboard: retention, peak hours, LTV, trends | No insights |
@@ -181,7 +182,7 @@ Doctor Experience:
 |---|---|---|---|---|---|
 | F1 | **Fix N6 slot rounding bug** | 🔵 Tiny | 🟡 Low | None | None |
 | F2 | **WhatsApp template messages** for reminders, feedback, summaries | 🟡 Medium | 🟢 High | Low | Meta business approval |
-| F3 | **PDF prescription generator** from visit data → WhatsApp document | 🟡 Medium | 🟢 High | Low | None |
+| F3 | **PDF prescription generator** from visit data → WhatsApp document | 🟡 Medium | 🟢 High | Low | None | ✅ Done |
 | F4 | **UPI payment link** in confirmation + reminders | 🟡 Medium | 🟢 High | Medium | UPI gateway |
 | F5 | **Auto-cancel no-shows** — cron marks un-arrived past-slot as no-show | 🔵 Small | 🟡 Medium | Low | None |
 | F6 | **Wait time estimates on bot** — queue position when patient asks | 🔵 Small | 🟡 Medium | Low | None |
@@ -198,7 +199,7 @@ Doctor Experience:
 
 ### Recommended Implementation Order
 1. **B1 (slot rounding bug)** — 10-min fix, broken text visible to users
-2. **F3 (PDF prescriptions)** — highest practical value for clinic + patients
+2. **F3 (PDF prescriptions)** — ✅ Done
 3. **F2 (WhatsApp templates)** — unblocks reliable proactive messaging
 4. **F5 (auto-cancel no-shows)** — cleans up queue automatically
 5. **F4 (UPI payment)** — revenue collection automation
@@ -238,6 +239,7 @@ Doctor Experience:
 | Session management | `src/lib/session.js` |
 | WhatsApp client | `src/lib/whatsapp.js` |
 | Media handling | `src/lib/media.js`, `src/lib/r2.js`, `src/lib/transcriber.js` |
+| Prescription | `src/lib/prescription.js` |
 | Repositories | `src/db/repositories/*.js` |
 | Cron jobs | `src/app/api/cron/*/route.js` |
 | Dashboard pages | `src/app/dashboard/*` |

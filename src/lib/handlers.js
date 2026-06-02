@@ -15,7 +15,7 @@ import { insertFeedback } from '@/db/repositories/feedbackRepository';
 import { processAndStoreMedia, downloadMediaFromMeta } from '@/lib/media';
 import { transcribeAudio } from '@/lib/transcriber';
 import { getR2SignedUrl, r2Configured } from '@/lib/r2';
-import { sendList, sendText } from '@/lib/whatsapp';
+import { sendList, sendText, sendDocument } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 import { evaluateOverwrite, applyFieldOverwrite, getTargetState } from '@/lib/overwrite-policy';
 import { accumulateEntities, computePendingFields } from '@/lib/entities';
@@ -1061,7 +1061,7 @@ async function getTimeListReply(session) {
   const dayType = isSunday ? 'sunday' : 'weekday';
   const slots = CLINIC.slots[dayType];
   const progress = session.context?.booking?.date ? buildProgressSummary(session.context.booking) : '';
-  const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}` : '';
+  const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}\nSlots: ${slots.join(', ')}` : '';
   const bookedTimes = dateStr ? await findBookedTimesForDate(dateStr) : [];
   const bookedSet = new Set(bookedTimes);
   const availableCount = slots ? slots.filter(s => !bookedSet.has(s)).length : 0;
@@ -2311,10 +2311,12 @@ function buildFieldAck(field, value) {
   if (field === 'date') {
     const d = new Date(value);
     const formatted = d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+    const isSunday = d.getDay() === 0;
+    const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}` : '';
     return pick([
-       `${formatted} works. 📅`,
-       `Great, ${formatted}.`,
-       `Okay, ${formatted}. 📅`,
+       `${formatted} works. 📅${sundayWarn}`,
+       `Great, ${formatted}.${sundayWarn}`,
+       `Okay, ${formatted}. 📅${sundayWarn}`,
     ]);
   }
   if (field === 'time') {
@@ -2370,7 +2372,7 @@ async function buildFieldPrompt(field, booking, ack, suggestion, session) {
     const isSunday = dateStr ? new Date(dateStr).getDay() === 0 : false;
     const dayType = isSunday ? 'sunday' : 'weekday';
     const slots = CLINIC.slots[dayType] || CLINIC.slots.weekday;
-    const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}` : '';
+    const sundayWarn = isSunday ? `\n⚠️ Sunday hours: ${CLINIC.hours.sunday.label}\nSlots: ${slots.join(', ')}` : '';
     let bookedSet;
     if (dateStr) {
       const bookedTimes = await findBookedTimesForDate(dateStr);
@@ -3689,6 +3691,7 @@ async function handleLogMedia(session, normalized, intent) {
   // Send patient summary
   if (result.wa_id) {
     sendPatientSummary(result.wa_id, result.patient_name, vl, result).catch(() => {});
+    sendPrescriptionToPatient(result.wa_id, result, vl).catch(() => {});
   }
 
   session = {
@@ -3727,6 +3730,20 @@ async function sendPatientSummary(waId, patientName, vl, appt) {
   }
 
   await sendText(waId, body);
+}
+
+async function sendPrescriptionToPatient(waId, appt, vl) {
+  try {
+    const patient = { name: appt.patient_name, phone: appt.patient_phone, age: null, sex: null };
+    const { generatePrescription } = await import('@/lib/prescription');
+    const result = await generatePrescription({ patient, visit: vl, appointment: appt });
+    if (result?.url) {
+      await sendDocument(waId, result.url, `Prescription - ${CLINIC.name}`, `prescription_${appt.id}.pdf`);
+      logger.info('PRESCRIPTION_SENT', { waId, apptId: appt.id });
+    }
+  } catch (error) {
+    logger.warn('PRESCRIPTION_SEND_FAILED', { waId, apptId: appt?.id, error: error.message });
+  }
 }
 
 // ───────────────────────────────────────────────

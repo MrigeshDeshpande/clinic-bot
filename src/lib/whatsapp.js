@@ -125,6 +125,19 @@ export async function sendList(to, bodyText, buttonLabel, sections) {
   });
 }
 
+export async function sendDocument(to, link, caption, filename) {
+  if (isReplayMode()) return mockMsgId();
+
+  return apiPost(to, {
+    type: 'document',
+    document: {
+      link,
+      caption: caption || '',
+      filename: filename || 'document.pdf',
+    },
+  });
+}
+
 export async function markAsRead(messageId) {
   if (isReplayMode()) return;
 

@@ -1,7 +1,7 @@
 # Current Enhancement Status — All Phases
 
 > **Last updated:** June 2, 2026
-> **Status:** Phase 1 ✅ · Phase 2 ✅ · Phase 3 🚧 In Progress · Phase 4 ⏳ Pending
+> **Status:** Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ⏳ Pending
 
 ## Completed
 
@@ -124,14 +124,24 @@ Full web dashboard for doctor: calendar, slot grid, queue board, stats, patient 
 - `src/app/api/dashboard/` — REST API endpoints for all dashboard features
 - Charts (Recharts), queue board with auto-refresh, notification panel, message history with SSE, family accounts, bulk operations, edit past visits
 
-#### 3.4 Language Toggle on Web ❌ NOT STARTED
+#### 3.4 PDF Prescription Generator ✅
+On visit completion, a formatted PDF is auto-generated and sent to the patient:
+```
+Patient receives:
+  📄 [Prescription document via WhatsApp Document API]
+  📝 (text summary receipt also sent as before)
+```
+- `src/lib/prescription.js` — pdfkit-based PDF generator with clinic header, patient info, treatment, fees breakdown, next visit, notes, doctor signature
+- `src/lib/whatsapp.js` — `sendDocument()` function for WhatsApp document API
+- `src/lib/handlers.js` — `sendPrescriptionToPatient()` called after visit logging in `handleLogMedia`
+- PDF uploaded to R2 → signed URL → sent as WhatsApp document
+- Falls back gracefully (text-only) if PDF generation or upload fails
+
+#### 3.5 Language Toggle on Web ❌ NOT STARTED
 Add English/Hinglish toggle for patient-facing content on the web dashboard.
 Deferred — bot already supports bilingual mode.
 
-## Next Up — Phase 3 Remaining & Phase 4
-
-### Phase 3 Remaining
-- **Language toggle on web** — add English/Hinglish toggle for web dashboard (deferred)
+## Next Up — Phase 4
 
 ### Phase 4: Nice-to-Have (Pending)
 
@@ -140,12 +150,7 @@ Deferred — bot already supports bilingual mode.
 - Exportable reports (CSV/PDF)
 - Enhanced dashboard charts
 
-#### 4.2 PDF Prescription Generator
-- Generate formatted PDF from visit log data
-- Clinic header, patient info, treatment, fees, next visit, doctor signature
-- Send to patient via WhatsApp as document
-
-#### 4.3 Inventory Tracking
+#### 4.2 Inventory Tracking
 - Track materials used per treatment
 - Low stock alerts
 - Monthly usage reports
@@ -165,20 +170,19 @@ Deferred — bot already supports bilingual mode.
 | Feature | Effort | Impact | Status |
 |---------|--------|--------|--------|
 | Smart Sunday warning | Tiny | Small | ✅ Done |
+| PDF prescriptions | Medium | Low | ✅ Done |
 | Language toggle (web) | Small | Small | ❌ Not started |
 | WhatsApp templates | Small | Medium | ❌ Not started |
-| PDF prescriptions | Medium | Low | ❌ Not started |
 | Full Hindi bot | Large | Medium | ❌ Not started |
 | Analytics | Large | Low | ❌ Not started |
 | Inventory | Large | Low | ❌ Not started |
 
 ## Recommended Order (Remaining)
 1. **WhatsApp template messages** — quick win for reliability
-2. **PDF prescriptions** — useful for patient communication
-3. **Language toggle on web** — small effort
-4. **Full Hindi bot** — comprehensive translation effort
-5. **Analytics** — depends on sufficient data volume
-6. **Inventory** — standalone feature
+2. **Language toggle on web** — small effort
+3. **Full Hindi bot** — comprehensive translation effort
+4. **Analytics** — depends on sufficient data volume
+5. **Inventory** — standalone feature
 
 ## Key Decisions
 - `engine.js` needs no changes — role routing is handled by `handle()` in `handlers.js`
@@ -198,3 +202,5 @@ Deferred — bot already supports bilingual mode.
 - `src/db/repositories/appointmentRepository.js` — queue queries + next available slots
 - `src/lib/handlers.js` — all handler logic (~5045 lines)
 - `src/lib/engine.js` — unchanged
+- `src/lib/prescription.js` — PDF prescription generator (NEW)
+- `src/lib/whatsapp.js` — `sendDocument()` for WhatsApp document API
