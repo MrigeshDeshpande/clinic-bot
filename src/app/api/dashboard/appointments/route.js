@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function POST(req) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
+  const sizeErr = checkBodySize(req);
+  if (sizeErr) return sizeErr;
   try {
     const sql = getSql();
     const body = await req.json();
@@ -50,14 +57,16 @@ export async function POST(req) {
     `;
 
     logger.info('QUICK_BOOK_DASHBOARD', { patientName, date, time, treatment });
-    return NextResponse.json({ appointment: rows[0] || null });
+    return NextResponse.json({ appointment: sanitizeResponse(rows[0] || null) });
   } catch (error) {
     logger.error('QUICK_BOOK_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }
 
 export async function GET(req) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
 
@@ -80,7 +89,7 @@ export async function GET(req) {
       if (!rows || rows.length === 0) {
         return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
       }
-      return NextResponse.json({ appointment: rows[0] });
+      return NextResponse.json({ appointment: sanitizeResponse(rows[0]) });
     }
 
     const targetDate = date || new Date().toISOString().slice(0, 10);
@@ -109,9 +118,9 @@ export async function GET(req) {
       `,
     ]);
 
-    return NextResponse.json({ appointments: appointments || [], totals: totalsRaw[0] || {} });
+    return NextResponse.json({ appointments: sanitizeResponse(appointments || []), totals: totalsRaw[0] || {} });
   } catch (error) {
     logger.error('DASHBOARD_APPOINTMENTS_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

@@ -348,6 +348,12 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS feedback_sent_at TIMESTAMPTZ;
     `;
 
+    // Callback contacted tracking
+    await db`
+      ALTER TABLE feedback
+        ADD COLUMN IF NOT EXISTS callback_contacted_at TIMESTAMPTZ;
+    `;
+
     // Ensure the valid_state constraint covers ALL states (patient + doctor)
     // Drop first to allow constraint redefinition across deploys
     await db`
@@ -364,7 +370,7 @@ export async function runMigrations() {
                   'DOCTOR_VIEW_QUEUE',
                   'REGISTER_NAME','REGISTER_AGE','REGISTER_SEX','REGISTER_PHONE','REGISTER_APPOINTMENT',
                   'LOG_TREATMENT','LOG_CONSULTATION_FEE','LOG_TREATMENT_CHARGES','LOG_MEDICINE_CHARGES',
-                  'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT','DOCTOR_PATIENT_VISITS',
+                  'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT','DOCTOR_PATIENT_VISITS','DOCTOR_VIEW_MESSAGES',
                   'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL')
       );
     `;

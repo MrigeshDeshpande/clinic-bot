@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { CLINIC } from '@/config/clinic';
+import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET(req) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const { searchParams } = new URL(req.url);
     const year = parseInt(searchParams.get('year'), 10);
@@ -92,7 +95,7 @@ export async function GET(req) {
     }
 
     return NextResponse.json({
-      dates,
+      dates: sanitizeResponse(dates),
       blockedDates: blockedRows.map(r => r.date),
       slotDefinitions: {
         weekday: CLINIC.slots.weekday,
@@ -101,6 +104,6 @@ export async function GET(req) {
     });
   } catch (error) {
     logger.error('CALENDAR_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

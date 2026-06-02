@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET(req, { params }) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
     const { id } = await params;
@@ -39,14 +42,20 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ patient, visits: visits || [] });
+    return NextResponse.json({ patient: sanitizeResponse(patient), visits: sanitizeResponse(visits || []) });
   } catch (error) {
     logger.error('PATIENT_DETAIL_ERROR', { params, error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }
 
 export async function PATCH(req, { params }) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
+  const sizeErr = checkBodySize(req);
+  if (sizeErr) return sizeErr;
   try {
     const sql = getSql();
     const { id } = await params;
@@ -98,6 +107,6 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ patient: rows[0] });
   } catch (error) {
     logger.error('PATIENT_UPDATE_ERROR', { params, error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

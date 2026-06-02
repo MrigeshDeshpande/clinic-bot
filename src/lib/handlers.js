@@ -2660,6 +2660,11 @@ async function handleDoctorDispatch(session, normalized, entities, intent) {
       return handleDoctorLogVisitName(session, normalized, intent, entities);
     case 'DOCTOR_FEEDBACK':
       return handleDoctorFeedback(session);
+    case 'DOCTOR_VIEW_MESSAGES': {
+      const pId = session.context?.selectedPatient;
+      if (!pId) return handleDoctorMainMenu(session);
+      return handleDoctorViewMessages(session, pId);
+    }
     case 'DOCTOR_EDIT_PATIENT':
       return handleDoctorEditPatient(session, normalized, intent, entities);
     default:
@@ -3863,7 +3868,8 @@ async function showPatientVisits(session, patient) {
     };
   });
 
-  // Add edit and back options
+  // Add message history, edit, and back options
+  rows.push({ id: 'view_messages', title: '💬 View Messages', description: 'WhatsApp conversation' });
   rows.push({ id: 'edit_patient', title: '✏️ Edit Patient Details', description: '' });
   rows.push({ id: 'back', title: '🔙 Back to Menu', description: '' });
 
@@ -3915,6 +3921,16 @@ async function handleDoctorPatientVisits(session, normalized, intent, entities) 
     };
   }
 
+  // View message history
+  if (intent === 'doctor_view_messages') {
+    const patientId = session.context?.selectedPatient;
+    if (!patientId) {
+      return { session, reply: '*No patient selected.*', replyType: 'text' };
+    }
+    session = { ...session, state: 'DOCTOR_VIEW_MESSAGES' };
+    return handleDoctorViewMessages(session, patientId);
+  }
+
   // Appointment detail tap — route to DOCTOR_APPOINTMENT_DETAIL
   if (intent === 'doctor_appt_detail' && entities?.appointmentId) {
     const apptId = entities.appointmentId;
@@ -3943,6 +3959,74 @@ async function handleDoctorPatientVisits(session, normalized, intent, entities) 
   }
 
   return { session, reply: 'Tap a visit to see details.', replyType: 'text' };
+}
+
+// ───────────────────────────────────────────────
+// Message history view on bot
+// ───────────────────────────────────────────────
+async function handleDoctorViewMessages(session, patientId) {
+  const sql = getSql();
+  if (!sql) {
+    return {
+      session: { ...session, state: 'DOCTOR_PATIENT_VISITS' },
+      reply: { body: '*Database not available.*', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const patientRows = await sql`
+    SELECT wa_id, phone, name FROM patients WHERE id = ${patientId} LIMIT 1
+  `;
+  if (!patientRows || patientRows.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_PATIENT_VISITS' },
+      reply: { body: '*Patient not found.*', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const patient = patientRows[0];
+  const searchIds = [patient.wa_id, patient.phone].filter(Boolean);
+  if (searchIds.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_PATIENT_VISITS' },
+      reply: { body: `*${patient.name}*\nNo WhatsApp messages found — no contact identifier on record.`, buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  const messages = await sql`
+    SELECT m.role, m.content, m.created_at, m.intent
+    FROM messages m
+    WHERE m.wa_id = ANY(${searchIds})
+    ORDER BY m.created_at DESC
+    LIMIT 30
+  `;
+
+  if (!messages || messages.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_PATIENT_VISITS' },
+      reply: { body: `*${patient.name}*\nNo messages found.`, buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back' }]) },
+      replyType: 'list',
+    };
+  }
+
+  let body = `*💬 ${patient.name} — Last ${Math.min(messages.length, 30)} Messages*\n\n`;
+  for (const msg of messages.reverse()) {
+    const sender = msg.role === 'user' ? '👤 Patient' : '🤖 Clinic';
+    const time = new Date(msg.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const text = (msg.content || '').slice(0, 200);
+    if (text) {
+      body += `${sender} (${time}):\n${text}\n\n`;
+    }
+  }
+  body += `_Showing last ${Math.min(messages.length, 30)} messages._`;
+
+  return {
+    session: { ...session, state: 'DOCTOR_PATIENT_VISITS' },
+    reply: { body, buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back to Patient' }]) },
+    replyType: 'list',
+  };
 }
 
 async function sendFeedbackRequest(waId, patientName) {
@@ -4273,7 +4357,7 @@ async function handleDoctorStats(session) {
   monthAgo.setMonth(monthAgo.getMonth() - 1);
   const monthStart = monthAgo.toISOString().slice(0, 10);
 
-  const [todayCount, weekCount, monthCount, todayRevenue, todayNewPatients, todayStatusBreakdown] = await Promise.all([
+  const [todayCount, weekCount, monthCount, todayRevenue, todayNewPatients, todayStatusBreakdown, todayArrivalBreakdown] = await Promise.all([
     countAppointmentsByDateRange(today, today),
     countAppointmentsByDateRange(weekStart, today),
     countAppointmentsByDateRange(monthStart, today),
@@ -4299,15 +4383,28 @@ async function handleDoctorStats(session) {
       r.forEach(row => { map[row.status] = parseInt(row.count, 10); });
       return map;
     }),
+    sql`
+      SELECT a.arrival_status, COUNT(*)::int AS count
+      FROM appointments a
+      WHERE a.date = ${today}
+        AND a.status = 'confirmed'
+      GROUP BY a.arrival_status
+    `.then(r => {
+      const map = { scheduled: 0, arrived: 0, called: 0 };
+      r.forEach(row => { map[row.arrival_status] = parseInt(row.count, 10); });
+      return map;
+    }),
   ]);
 
   let body = `*📊 Clinic Stats*\n\n`;
 
   body += `*📅 Today (${new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}):*\n`;
-  body += `Appointments: ${todayCount}\n`;
+  body += `Total: ${todayCount}\n`;
   body += `    ✅ Completed: ${todayStatusBreakdown.completed || 0}\n`;
   body += `    📌 Confirmed: ${todayStatusBreakdown.confirmed || 0}\n`;
   body += `    ❌ No Show: ${todayStatusBreakdown.no_show || 0}\n`;
+  body += `    🚶 Waiting: ${todayArrivalBreakdown.arrived || 0}\n`;
+  body += `    🏥 In Session: ${todayArrivalBreakdown.called || 0}\n`;
   body += `💰 Revenue: ₹${todayRevenue}\n`;
   body += `🆕 New Patients: ${todayNewPatients}\n\n`;
 

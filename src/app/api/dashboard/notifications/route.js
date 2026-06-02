@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET(req) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
     const now = new Date();
@@ -55,12 +58,12 @@ export async function GET(req) {
     return NextResponse.json({
       todayAppointments: todayAppts,
       newPatients,
-      pendingCallbacks: pendingCallbacks || [],
-      recentCancellations: recentCancellations || [],
-      upcomingAppointments: upcomingAppts || [],
+      pendingCallbacks: sanitizeResponse(pendingCallbacks || []),
+      recentCancellations: sanitizeResponse(recentCancellations || []),
+      upcomingAppointments: sanitizeResponse(upcomingAppts || []),
     });
   } catch (error) {
     logger.error('NOTIFICATIONS_FETCH_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

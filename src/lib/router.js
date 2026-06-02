@@ -89,6 +89,7 @@ const ID_TO_INTENT = {
   'save_patient_name': 'provide_name',
   'save_patient_age': 'provide_age',
   'save_patient_sex': 'provide_sex',
+  'view_messages': 'doctor_view_messages',
 };
 
 function resolveDateId(id) {

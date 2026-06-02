@@ -1,5 +1,7 @@
 export function parseDateOnly(dateStr) {
   if (!dateStr) return null;
+  if (dateStr instanceof Date) return dateStr;
+  if (typeof dateStr !== 'string') return null;
   const parts = dateStr.slice(0, 10).split('-');
   if (parts.length !== 3) return null;
   return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));

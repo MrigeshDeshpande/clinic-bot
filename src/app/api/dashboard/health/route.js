@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
+import { checkRateLimit } from '@/lib/apiAuth';
 
 export async function GET() {
   try {

@@ -9,7 +9,7 @@ export const STATES = [
   'LOG_TREATMENT','LOG_CONSULTATION_FEE','LOG_TREATMENT_CHARGES','LOG_MEDICINE_CHARGES',
   'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT',
   'DOCTOR_PATIENT_VISITS','DOCTOR_EDIT_PATIENT','DOCTOR_FEEDBACK',
-  'DOCTOR_LOG_VISIT_NAME',
+  'DOCTOR_LOG_VISIT_NAME','DOCTOR_VIEW_MESSAGES',
   'FAMILY_SELECTION',
   'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL','DOCTOR_VIEW_QUEUE',
 ];
@@ -57,6 +57,7 @@ export const TRANSITIONS = {
   DOCTOR_PATIENT_VISITS: ['doctor_appt_detail','doctor_edit_patient','back','emergency','escalate'],
   DOCTOR_EDIT_PATIENT: ['provide_name','provide_age','provide_sex','back','emergency','escalate'],
   DOCTOR_FEEDBACK: ['back','emergency','escalate'],
+  DOCTOR_VIEW_MESSAGES: ['back','emergency','escalate'],
   DOCTOR_LOG_VISIT_NAME: ['provide_search_query','select_patient','back','emergency','escalate'],
   RECEPTIONIST_MAIN_MENU: ['receptionist_view_queue','receptionist_register_walkin',
                             'receptionist_search','back','emergency','escalate','greeting'],

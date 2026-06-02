@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Star, Phone, ThumbsUp, Meh, Frown } from 'lucide-react';
+import { Star, Phone, ThumbsUp, Meh, Frown, CheckCircle } from 'lucide-react';
 
 export default function FeedbackPage() {
   const [feedback, setFeedback] = useState(null);
@@ -50,6 +50,7 @@ export default function FeedbackPage() {
   const satisfaction = total > 0 ? Math.round(((summary.great + summary.okay) / total) * 100) : 0;
   const entries = feedback?.entries || [];
   const callbacks = entries.filter(e => e.callback);
+  const pendingCallbacks = callbacks.filter(e => !e.callback_contacted_at);
   const hasComment = entries.filter(e => e.comment);
 
   return (
@@ -160,16 +161,36 @@ export default function FeedbackPage() {
                 <Phone className="w-4 h-4 text-red-500" />
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Callback Requests</h3>
               </div>
-              <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full">{callbacks.length}</span>
+              <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full">{pendingCallbacks.length}</span>
             </div>
-            {callbacks.length === 0 ? (
-              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">No callback requests</p>
+            {pendingCallbacks.length === 0 ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">No pending callback requests</p>
             ) : (
               <div className="space-y-2">
-                {callbacks.slice(0, 5).map((e, i) => (
+                {pendingCallbacks.map((e, i) => (
                   <div key={e.id || i} className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-100 dark:border-red-800">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{e.patient_name || 'Anonymous'}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(e.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{e.patient_name || 'Anonymous'}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(e.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const res = await fetch(`/api/dashboard/feedback/${e.id}/contact`, { method: 'PATCH' });
+                          if (res.ok) {
+                            setFeedback(prev => ({
+                              ...prev,
+                              entries: prev.entries.map(entry =>
+                                entry.id === e.id ? { ...entry, callback_contacted_at: new Date().toISOString() } : entry
+                              ),
+                            }));
+                          }
+                        }}
+                        className="shrink-0 text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 px-2.5 py-1.5 rounded-lg transition-colors font-medium flex items-center gap-1"
+                      >
+                        <CheckCircle className="w-3 h-3" /> Mark Contacted
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

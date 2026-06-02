@@ -1,8 +1,11 @@
 import { logger } from '@/lib/logger';
 import { getSql } from '@/db/pool';
 import { onNewMessage } from '@/lib/messageEvents';
+import { checkRateLimit } from '@/lib/apiAuth';
 
 export async function GET(req, { params }) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   const { id } = await params;
 
   const sql = getSql();

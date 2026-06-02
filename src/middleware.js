@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
+import { verify } from '@/lib/auth';
 
-const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
-
-export function middleware(req) {
+export async function middleware(req) {
   const { pathname } = req.nextUrl;
 
-  if (!DASHBOARD_PASSWORD) {
-    return new Response('DASHBOARD_PASSWORD environment variable is not set', { status: 500 });
+  if (!process.env.DASHBOARD_PASSWORD) {
+    return new NextResponse('DASHBOARD_PASSWORD environment variable is not set', { status: 500 });
   }
 
   if (pathname.startsWith('/dashboard')) {
@@ -15,8 +14,12 @@ export function middleware(req) {
     }
 
     const token = req.cookies.get('dashboard_token')?.value;
-    if (token !== DASHBOARD_PASSWORD) {
-      return NextResponse.redirect(new URL('/dashboard/login', req.url));
+    if (!token || !(await verify(token))) {
+      const loginUrl = new URL('/dashboard/login', req.url);
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      return NextResponse.redirect(loginUrl);
     }
   }
 

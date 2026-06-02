@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getR2SignedUrl, r2Configured } from '@/lib/r2';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, jsonError } from '@/lib/apiAuth';
 
 export async function GET(req) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const { searchParams } = new URL(req.url);
     const key = searchParams.get('key');
@@ -24,6 +27,6 @@ export async function GET(req) {
     return NextResponse.redirect(url);
   } catch (error) {
     logger.error('SIGNED_URL_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

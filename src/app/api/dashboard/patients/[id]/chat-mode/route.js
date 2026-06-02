@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { getOrCreate, save } from '@/lib/session';
+import { requireCsrf, checkRateLimit, jsonError } from '@/lib/apiAuth';
 
 export async function GET(req, { params }) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
     const { id } = await params;
@@ -28,11 +31,15 @@ export async function GET(req, { params }) {
     });
   } catch (error) {
     logger.error('CHAT_MODE_GET_ERROR', { params, error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }
 
 export async function PATCH(req, { params }) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
     const { id } = await params;
@@ -71,6 +78,6 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ success: true, manualMode });
   } catch (error) {
     logger.error('CHAT_MODE_PATCH_ERROR', { params, error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

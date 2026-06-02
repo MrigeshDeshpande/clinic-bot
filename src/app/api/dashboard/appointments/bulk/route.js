@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { requireCsrf, checkRateLimit, jsonError } from '@/lib/apiAuth';
 
 export async function POST(req) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get('date');
@@ -38,6 +43,6 @@ export async function POST(req) {
     });
   } catch (error) {
     logger.error('BULK_ACTION_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

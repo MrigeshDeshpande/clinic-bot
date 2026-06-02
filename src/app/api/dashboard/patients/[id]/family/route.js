@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET(req, { params }) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
     const { id } = await params;
@@ -24,9 +27,9 @@ export async function GET(req, { params }) {
       ORDER BY created_at ASC
     `;
 
-    return NextResponse.json({ family: family || [] });
+    return NextResponse.json({ family: sanitizeResponse(family || []) });
   } catch (error) {
     logger.error('PATIENT_FAMILY_ERROR', { params, error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

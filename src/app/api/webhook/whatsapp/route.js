@@ -1,8 +1,13 @@
 import { processEvent } from '@/lib/engine';
 import { runMigrations } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { WEBHOOK_LIMITER } from '@/lib/rateLimit';
 
 export async function GET(req) {
+  const rateCheck = WEBHOOK_LIMITER(req);
+  if (rateCheck.blocked) {
+    return new Response('Too many requests', { status: 429 });
+  }
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get('hub.mode');
     const token = searchParams.get('hub.verify_token');
@@ -15,6 +20,10 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
+    const rateCheck = WEBHOOK_LIMITER(req);
+    if (rateCheck.blocked) {
+      return Response.json({ error: 'Too many requests' }, { status: 429 });
+    }
     const rawBody = await req.text();
 
     // JSON.parse happens EXACTLY ONCE — right here — never again downstream

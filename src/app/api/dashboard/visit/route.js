@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { findPatientByPhone, createPatient } from '@/db/repositories/patientRepository';
+import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function POST(req) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
+  const sizeErr = checkBodySize(req);
+  if (sizeErr) return sizeErr;
   try {
     const sql = getSql();
     const body = await req.json();
@@ -71,7 +78,7 @@ export async function POST(req) {
                status, arrival_status, created_at, updated_at
         FROM appointments WHERE id = ${appointmentId}
       `;
-      return NextResponse.json({ appointment: updated[0] || null });
+      return NextResponse.json({ appointment: sanitizeResponse(updated[0] || null) });
     }
 
     // ── Standalone walk-in visit creation ──
@@ -117,9 +124,9 @@ export async function POST(req) {
       RETURNING *
     `;
 
-    return NextResponse.json({ appointment: rows[0], patient_name, treatment: treatment || 'Walk-in', fees: consFee + treatFee + medFee });
+    return NextResponse.json({ appointment: sanitizeResponse(rows[0]), patient_name, treatment: treatment || 'Walk-in', fees: consFee + treatFee + medFee });
   } catch (error) {
     logger.error('DASHBOARD_VISIT_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

@@ -5,8 +5,15 @@ import { sendText } from '@/lib/whatsapp';
 import { createMessage } from '@/db/repositories/messageRepository';
 import { notifyNewMessage } from '@/lib/messageEvents';
 import { getOrCreate, save } from '@/lib/session';
+import { requireCsrf, checkRateLimit, checkBodySize, jsonError } from '@/lib/apiAuth';
 
 export async function POST(req, { params }) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
+  const sizeErr = checkBodySize(req);
+  if (sizeErr) return sizeErr;
   try {
     const sql = getSql();
     const { id } = await params;
@@ -70,6 +77,6 @@ export async function POST(req, { params }) {
     return NextResponse.json({ success: true, msgId });
   } catch (error) {
     logger.error('DASHBOARD_SEND_MESSAGE_ERROR', { params, error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

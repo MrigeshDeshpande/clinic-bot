@@ -3,8 +3,13 @@ import { runMigrations } from '@/db/pool';
 import { sendText } from '@/lib/whatsapp';
 import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
+import { CRON_LIMITER } from '@/lib/rateLimit';
 
 export async function GET(req) {
+  const rateCheck = CRON_LIMITER(req);
+  if (rateCheck.blocked) {
+    return Response.json({ error: 'Too many requests' }, { status: 429 });
+  }
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     logger.error('CRON_SECRET_NOT_SET');

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET() {
   try {
@@ -10,14 +11,20 @@ export async function GET() {
       FROM blocked_dates
       ORDER BY date ASC
     `;
-    return NextResponse.json({ blockedDates: rows || [] });
+    return NextResponse.json({ blockedDates: sanitizeResponse(rows || []) });
   } catch (error) {
     logger.error('SCHEDULE_FETCH_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }
 
 export async function POST(req) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
+  const sizeErr = checkBodySize(req);
+  if (sizeErr) return sizeErr;
   try {
     const sql = getSql();
     const { date, reason } = await req.json();
@@ -36,11 +43,15 @@ export async function POST(req) {
     return NextResponse.json({ blocked: rows[0] || null });
   } catch (error) {
     logger.error('SCHEDULE_BLOCK_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }
 
 export async function DELETE(req) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
     const { searchParams } = new URL(req.url);
@@ -54,6 +65,6 @@ export async function DELETE(req) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     logger.error('SCHEDULE_UNBLOCK_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

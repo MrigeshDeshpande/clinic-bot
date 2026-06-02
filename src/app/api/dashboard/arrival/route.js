@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { requireCsrf, checkRateLimit, jsonError } from '@/lib/apiAuth';
 
 export async function PATCH(req) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
     const body = await req.json();
@@ -50,6 +55,6 @@ export async function PATCH(req) {
     return NextResponse.json({ appointment: updated[0] || null });
   } catch (error) {
     logger.error('ARRIVAL_UPDATE_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

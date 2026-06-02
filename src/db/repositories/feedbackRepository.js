@@ -54,6 +54,26 @@ export async function markFeedbackSent(appointmentId) {
   }
 }
 
+export async function markCallbackContacted(feedbackId) {
+  const sql = getSql();
+  if (!sql) return null;
+
+  try {
+    const rows = await sql`
+      UPDATE feedback
+      SET callback_contacted_at = NOW()
+      WHERE id = ${feedbackId}
+        AND callback = TRUE
+        AND callback_contacted_at IS NULL
+      RETURNING id, callback_contacted_at
+    `;
+    return rows[0] || null;
+  } catch (error) {
+    logger.error('MARK_CALLBACK_CONTACTED_ERROR', { feedbackId, error: error.message });
+    return null;
+  }
+}
+
 export async function getFeedbackSummary() {
   const sql = getSql();
   if (!sql) return null;

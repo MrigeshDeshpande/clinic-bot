@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET(req) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
 
@@ -12,7 +15,7 @@ export async function GET(req) {
 
     const recent = waId
       ? await sql`
-          SELECT f.id, f.rating, f.comment, f.callback, f.created_at,
+          SELECT f.id, f.rating, f.comment, f.callback, f.callback_contacted_at, f.created_at,
                  a.patient_name, a.date, a.treatment
           FROM feedback f
           LEFT JOIN appointments a ON f.appointment_id = a.id
@@ -21,7 +24,7 @@ export async function GET(req) {
           LIMIT ${limit}
         `
       : await sql`
-          SELECT f.id, f.rating, f.comment, f.callback, f.created_at,
+          SELECT f.id, f.rating, f.comment, f.callback, f.callback_contacted_at, f.created_at,
                  a.patient_name, a.date, a.treatment
           FROM feedback f
           LEFT JOIN appointments a ON f.appointment_id = a.id
@@ -46,12 +49,12 @@ export async function GET(req) {
       ? await sql`
           SELECT COUNT(*) AS count
           FROM feedback
-          WHERE callback = TRUE AND wa_id = ${waId}
+          WHERE callback = TRUE AND callback_contacted_at IS NULL AND wa_id = ${waId}
         `
       : await sql`
           SELECT COUNT(*) AS count
           FROM feedback
-          WHERE callback = TRUE
+          WHERE callback = TRUE AND callback_contacted_at IS NULL
         `;
 
     const summary = ratingBreakdown.reduce((acc, r) => {
@@ -65,7 +68,7 @@ export async function GET(req) {
       : 0;
 
     return NextResponse.json({
-      entries: recent || [],
+      entries: sanitizeResponse(recent || []),
       summary,
       satisfaction,
       totalFeedback: total,
@@ -73,6 +76,6 @@ export async function GET(req) {
     });
   } catch (error) {
     logger.error('FEEDBACK_FETCH_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { uploadToR2, r2Configured } from '@/lib/r2';
 import { logger } from '@/lib/logger';
+import { requireCsrf, checkRateLimit, jsonError } from '@/lib/apiAuth';
 
 export async function POST(req) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     if (!r2Configured()) {
       return NextResponse.json({ error: 'R2 storage not configured' }, { status: 500 });
@@ -51,6 +56,6 @@ export async function POST(req) {
     return NextResponse.json({ key, mediaType, appointmentId });
   } catch (error) {
     logger.error('DASHBOARD_MEDIA_UPLOAD_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }

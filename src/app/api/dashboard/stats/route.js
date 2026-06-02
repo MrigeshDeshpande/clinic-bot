@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
+import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET(req) {
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
   try {
     const sql = getSql();
 
@@ -86,7 +89,7 @@ export async function GET(req) {
       totalRevenue: Number(summaryRaw[0]?.total_revenue || 0),
       newPatientsThisMonth: Number(newPatientCount[0]?.count || 0),
       totalPatients: Number(patientStats[0]?.count || 0),
-      treatmentBreakdown: (treatmentStats || []).map(t => ({ treatment: t.treatment, count: Number(t.count) })),
+      treatmentBreakdown: sanitizeResponse((treatmentStats || []).map(t => ({ treatment: t.treatment, count: Number(t.count) }))),
       // Keep existing fields for backward compatibility
       daily: dailyStats || [],
       treatments: treatmentStats || [],
@@ -97,6 +100,6 @@ export async function GET(req) {
     });
   } catch (error) {
     logger.error('DASHBOARD_STATS_ERROR', { error: error.message });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error);
   }
 }
