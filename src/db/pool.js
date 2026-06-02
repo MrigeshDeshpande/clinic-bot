@@ -2,11 +2,44 @@ import { neon } from '@neondatabase/serverless';
 import { logger } from '@/lib/logger';
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const MAX_QUERY_RETRIES = 3;
+const MAX_QUERY_RETRIES = 4;
+const RETRY_BASE_DELAY_MS = 3000;
 
 let rawSql;
 let sql;
 let migrationsPromise;
+
+const circuitBreaker = {
+  failures: 0,
+  lastFailureTime: 0,
+  threshold: 3,
+  cooldownMs: 60_000,
+  open: false,
+};
+
+function isCircuitOpen() {
+  if (!circuitBreaker.open) return false;
+  const elapsed = Date.now() - circuitBreaker.lastFailureTime;
+  if (elapsed >= circuitBreaker.cooldownMs) {
+    circuitBreaker.open = false;
+    circuitBreaker.failures = 0;
+    return false;
+  }
+  return true;
+}
+
+function recordFailure() {
+  circuitBreaker.failures++;
+  circuitBreaker.lastFailureTime = Date.now();
+  if (circuitBreaker.failures >= circuitBreaker.threshold) {
+    circuitBreaker.open = true;
+  }
+}
+
+function recordSuccess() {
+  circuitBreaker.failures = 0;
+  circuitBreaker.open = false;
+}
 
 function isNetworkError(error) {
   return error?.sourceError || error?.message?.includes('fetch failed') || error?.message?.includes('Error connecting to database');
@@ -14,13 +47,21 @@ function isNetworkError(error) {
 
 function wrapWithRetry(fn) {
   const retryWrapper = async (...args) => {
+    if (isCircuitOpen()) {
+      throw new Error('Database circuit breaker open — connection unavailable');
+    }
     for (let attempt = 1; attempt <= MAX_QUERY_RETRIES; attempt++) {
       try {
-        return await fn(...args);
+        const result = await fn(...args);
+        recordSuccess();
+        return result;
       } catch (error) {
-        if (attempt === MAX_QUERY_RETRIES || !isNetworkError(error)) throw error;
+        if (attempt === MAX_QUERY_RETRIES || !isNetworkError(error)) {
+          recordFailure();
+          throw error;
+        }
         logger.warn('DB_QUERY_RETRY', { attempt, maxRetries: MAX_QUERY_RETRIES, error: error.message });
-        await sleep(1000 * attempt);
+        await sleep(RETRY_BASE_DELAY_MS * attempt);
       }
     }
   };

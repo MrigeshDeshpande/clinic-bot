@@ -8,18 +8,25 @@ export default function PatientsPage() {
   const [patients, setPatients] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const searchRef = useRef(null);
   const router = useRouter();
 
   const fetchPatients = useCallback(async (q) => {
     try {
       setLoading(true);
+      setError(null);
       const params = new URLSearchParams(q ? { q } : {});
       const res = await fetch(`/api/dashboard/patients?${params}`);
       const data = await res.json();
-      setPatients(data.patients ?? data ?? []);
+      if (!res.ok) {
+        throw new Error(data?.error || `API error ${res.status}`);
+      }
+      const list = data?.patients ?? data;
+      setPatients(Array.isArray(list) ? list : []);
     } catch (e) {
       console.error('Failed to fetch patients', e);
+      setError(e.message);
     } finally {
       setLoading(false);
     }
@@ -102,6 +109,20 @@ export default function PatientsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 mb-6">
+              <Activity className="w-10 h-10 text-red-400 dark:text-red-500" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Failed to load patients</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm mx-auto mb-4">{error}</p>
+            <button
+              onClick={() => fetchPatients(search)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              Retry
+            </button>
           </div>
         ) : patients.length === 0 ? (
           <div className="text-center py-20">

@@ -1,8 +1,20 @@
 # Web Dashboard vs WhatsApp Bot — Feature Gap Analysis
 
 > Generated: June 1, 2026  
-> Last Updated: June 1, 2026  
+> Last Updated: June 2, 2026  
 > Context: Analysis of features present in the web dashboard (`/dashboard`) that are missing from the WhatsApp bot, and vice versa, with recommendations for improving the overall flow.
+
+---
+
+## Overall Status
+
+| Area | Completion |
+|---|---|
+| **High Priority** (Items 1–4) | ✅ **4/4 Complete** — Patient messaging from dashboard, patient edit on bot, feedback view on bot, stats on bot |
+| **Medium Priority** (Items 5–8) | ✅ **4/4 Complete** — Mark arrived from queue, bulk ops on web, notification panel, send message from web |
+| **Nice to Have** (Items 9–12) | ❌ **0/4 Complete** — Symptom matching, family accounts, language toggle, editing past visits |
+| **Bot Features Not in Web** | ✅ **All mentioned features documented** — Booking flow, emergency detection, notifications, etc. |
+| **Architecture (Manual Chat)** | ✅ **Fully implemented** — Doctor sends message → session enters manual mode → bot stops auto-replying → SSE delivers replies |
 
 ---
 
