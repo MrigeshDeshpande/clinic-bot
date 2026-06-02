@@ -21,6 +21,15 @@ function getCredentials() {
   return { token, phoneNumberId };
 }
 
+function normalizePhone(num) {
+  if (!num) return num;
+  let s = num.trim();
+  if (s.startsWith('+')) return s;
+  s = s.replace(/^0+/, '');
+  if (!s) return num.trim();
+  return '+' + s;
+}
+
 async function apiPost(to, payload) {
   if (isReplayMode()) {
     return mockMsgId();
@@ -29,6 +38,7 @@ async function apiPost(to, payload) {
   const creds = getCredentials();
   if (!creds) return null;
 
+  to = normalizePhone(to);
   const url = `https://graph.facebook.com/${API_VERSION}/${creds.phoneNumberId}/messages`;
   const body = JSON.stringify({ messaging_product: 'whatsapp', to, ...payload });
 

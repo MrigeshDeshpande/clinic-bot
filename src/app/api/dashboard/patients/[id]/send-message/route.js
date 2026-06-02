@@ -40,7 +40,10 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Patient has no WhatsApp ID or phone number' }, { status: 400 });
     }
 
-    const recipient = waId || phone;
+    // Prefer phone (manually entered/confirmed) over wa_id — wa_id can be
+    // unreliable when patients are created via the dashboard without a
+    // proper WhatsApp interaction
+    const recipient = phone || waId;
 
     // Send the WhatsApp message
     const msgId = await sendText(recipient, message.trim());

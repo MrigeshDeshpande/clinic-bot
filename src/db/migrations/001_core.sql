@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_wa_id ON messages(wa_id);
 CREATE INDEX IF NOT EXISTS idx_messages_msg_id ON messages(msg_id);
 
+-- Allow NULL time for walk-in visits (no scheduled time slot)
+ALTER TABLE appointments ALTER COLUMN time DROP NOT NULL;
+
 -- Clinical documentation columns (added for patient detail view)
 ALTER TABLE appointments
   ADD COLUMN IF NOT EXISTS diagnosis TEXT DEFAULT '',

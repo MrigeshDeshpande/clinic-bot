@@ -170,7 +170,7 @@ export async function runMigrations() {
         wa_id               VARCHAR(20) NOT NULL,
         patient_name        VARCHAR(100),
         date                DATE NOT NULL,
-        time                TIME NOT NULL,
+        time                TIME,
         treatment           VARCHAR(100),
         status              VARCHAR(20) NOT NULL DEFAULT 'confirmed',
         reminder_sent_at    TIMESTAMPTZ,
