@@ -3,9 +3,10 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DollarSign, CalendarDays, Clock, XCircle, Plus } from 'lucide-react';
+import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users } from 'lucide-react';
 import Calendar from '@/components/Calendar';
 import { DateContext } from './layout';
+import { TREATMENT_NAMES } from '@/lib/treatments';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
@@ -48,11 +49,6 @@ const DEFAULT_SLOTS = {
   sunday:  ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30'],
 };
 
-const TREATMENTS = [
-  'General Checkup', 'Root Canal', 'Dental Filling', 'Teeth Cleaning',
-  'Extraction', 'Braces Adjustment', 'Crown', 'Veneers', 'Whitening', 'Scaling', 'Other',
-];
-
 function QuickBookForm({ date, time, onClose, onBooked }) {
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
@@ -62,6 +58,8 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [selectedFamilyMember, setSelectedFamilyMember] = useState(null);
   const nameInputRef = useRef(null);
 
   useEffect(() => {
@@ -89,6 +87,11 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
     setPatientName(p.name);
     setPatientPhone(p.phone || '');
     setSearchResults([]);
+    setSelectedFamilyMember(null);
+    fetch(`/api/dashboard/patients/${p.id}/family`)
+      .then(r => r.json())
+      .then(d => { setFamilyMembers(d.family || []); })
+      .catch(() => setFamilyMembers([]));
   }
 
   async function handleSubmit(e) {
@@ -184,6 +187,29 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         </div>
       </div>
 
+      {/* Family Member Selector */}
+      {familyMembers.length > 0 && selectedPatient && (
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5" /> Booking for
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button"
+              onClick={() => { setSelectedFamilyMember(null); setPatientName(selectedPatient.name); setPatientPhone(selectedPatient.phone || ''); }}
+              className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${!selectedFamilyMember ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+              {selectedPatient.name} (self)
+            </button>
+            {familyMembers.map(m => (
+              <button key={m.id} type="button"
+                onClick={() => { setSelectedFamilyMember(m); setPatientName(m.name); setPatientPhone(m.phone || ''); }}
+                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${selectedFamilyMember?.id === m.id ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                {m.name} {m.age ? `(${m.age}y)` : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Treatment Dropdown */}
       <div>
         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Treatment</label>
@@ -197,7 +223,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
             className="w-full pl-9 pr-8 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 appearance-none cursor-pointer transition-colors"
           >
             <option value="">Select treatment...</option>
-            {TREATMENTS.map(t => <option key={t} value={t}>{t}</option>)}
+            {TREATMENT_NAMES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
           <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 5-7-5" />

@@ -2,12 +2,8 @@
 
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X } from 'lucide-react';
-
-const TREATMENTS = [
-  'General Checkup', 'Root Canal', 'Dental Filling', 'Teeth Cleaning',
-  'Extraction', 'Braces Adjustment', 'Crown', 'Veneers', 'Whitening', 'Scaling', 'Other',
-];
+import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb } from 'lucide-react';
+import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 
 export default function VisitPage() {
   return (
@@ -28,6 +24,7 @@ function VisitPageInner() {
   const appointmentId = searchParams.get('appointmentId');
   const prefillName = searchParams.get('name') || '';
   const prefillTreatment = searchParams.get('treatment') || '';
+  const isEdit = searchParams.get('edit') === 'true';
 
   const [form, setForm] = useState({
     patientName: prefillName,
@@ -50,6 +47,9 @@ function VisitPageInner() {
   const [showSearch, setShowSearch] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaFiles, setMediaFiles] = useState([]);
+  const [symptomInput, setSymptomInput] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -60,6 +60,47 @@ function VisitPageInner() {
       treatment: prefillTreatment || f.treatment,
     }));
   }, [prefillName, prefillTreatment]);
+
+  // Load existing visit data when editing
+  useEffect(() => {
+    if (!appointmentId || !isEdit) return;
+    fetch(`/api/dashboard/appointments?id=${appointmentId}`)
+      .then(r => r.json())
+      .then(data => {
+        const a = data.appointment || data;
+        if (a) {
+          setForm({
+            patientName: a.patient_name || '',
+            patientPhone: a.patient_phone || '',
+            treatment: a.treatment || '',
+            consultationFee: a.consultation_fee?.toString() || '',
+            treatmentCharges: a.treatment_charges?.toString() || '',
+            medicineCharges: a.medicine_charges?.toString() || '',
+            diagnosis: a.diagnosis || '',
+            medicines: Array.isArray(a.medicines) ? a.medicines : [],
+            followUpDate: a.follow_up_date?.slice(0, 10) || '',
+            followUpInstructions: a.follow_up_instructions || '',
+            notes: a.notes || '',
+          });
+        }
+      })
+      .catch(() => {});
+  }, [appointmentId, isEdit]);
+
+  // Symptom auto-suggest
+  useEffect(() => {
+    if (symptomInput.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const results = suggestTreatment(symptomInput);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [symptomInput]);
 
   // Patient search for walk-in
   useEffect(() => {
@@ -195,6 +236,7 @@ function VisitPageInner() {
     setResult(null);
     setErrors({});
     setMediaFiles([]);
+    setSymptomInput('');
   }
 
   function getFilePreview(file) {
@@ -218,12 +260,16 @@ function VisitPageInner() {
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30 mb-6">
             <ClipboardCheck className="w-10 h-10 text-emerald-500 dark:text-emerald-400" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Visit Logged Successfully</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{isEdit ? 'Visit Updated Successfully' : 'Visit Logged Successfully'}</h2>
           <div className="text-gray-500 dark:text-gray-400 text-sm mb-6 space-y-1">
             <p><span className="font-medium text-gray-700 dark:text-gray-300">{result.patient_name}</span> — {result.treatment}</p>
           </div>
           <div className="flex gap-3 justify-center">
-            {appointmentId ? (
+              {isEdit ? (
+                <button onClick={() => router.push(`/dashboard/patients/${searchParams.get('patientId') || ''}`)} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
+                  Back to Patient
+                </button>
+              ) : appointmentId ? (
               <button onClick={() => router.push('/dashboard/appointments')} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
                 Back to Appointments
               </button>
@@ -255,9 +301,9 @@ function VisitPageInner() {
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Log Visit</h1>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{isEdit ? 'Edit Visit' : 'Log Visit'}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-              {appointmentId ? `Completing appointment for ${prefillName}` : 'Record a patient consultation'}
+              {isEdit ? `Editing visit for ${prefillName || 'patient'}` : appointmentId ? `Completing appointment for ${prefillName}` : 'Record a patient consultation'}
             </p>
           </div>
         </div>
@@ -370,9 +416,41 @@ function VisitPageInner() {
                 onChange={e => { setForm(f => ({ ...f, treatment: e.target.value })); setErrors(ev => { const n={...ev}; delete n.treatment; return n; }); }}
                 className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all appearance-none ${errors.treatment ? 'border-red-300 dark:border-red-700 focus:ring-red-200 dark:focus:ring-red-800' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500'} ${!form.treatment ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
                 <option value="">Select treatment...</option>
-                {TREATMENTS.map(t => <option key={t} value={t} className="text-gray-900 dark:text-gray-100">{t}</option>)}
+                {TREATMENT_NAMES.map(t => <option key={t} value={t} className="text-gray-900 dark:text-gray-100">{t}</option>)}
               </select>
               {errors.treatment && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.treatment}</p>}
+            </div>
+
+            {/* Symptom-based treatment suggestion */}
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Describe symptoms for treatment suggestion</label>
+              </div>
+              <div className="relative">
+                <input type="text" value={symptomInput}
+                  onChange={e => setSymptomInput(e.target.value)}
+                  placeholder="e.g. tooth pain when chewing, bleeding gums..."
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all placeholder-gray-400 dark:placeholder-gray-500" />
+                {showSuggestions && (
+                  <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
+                    {suggestions.map(s => (
+                      <button key={s.id} type="button"
+                        onClick={() => { setForm(f => ({ ...f, treatment: s.name })); setSymptomInput(''); setShowSuggestions(false); setErrors(ev => { const n={...ev}; delete n.treatment; return n; }); }}
+                        className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 border-b border-gray-50 dark:border-gray-700 last:border-0 transition-colors flex items-center gap-3">
+                        <span className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-xs font-semibold text-amber-700 dark:text-amber-300 shrink-0">
+                          <Lightbulb className="w-3.5 h-3.5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{s.name}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">{s.symptom}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Type symptoms and pick a suggested treatment, or select directly from the dropdown above</p>
             </div>
 
             {/* Fee breakdown */}
@@ -489,7 +567,7 @@ function VisitPageInner() {
             ) : (
               <span className="flex items-center justify-center gap-2">
                 <ClipboardCheck className="w-4 h-4" />
-                {appointmentId ? 'Complete & Save Visit' : 'Log Visit'}
+                {isEdit ? 'Save Changes' : appointmentId ? 'Complete & Save Visit' : 'Log Visit'}
               </span>
             )}
           </button>

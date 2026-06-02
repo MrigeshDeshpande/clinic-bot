@@ -62,7 +62,28 @@ export async function GET(req) {
     const sql = getSql();
 
     const { searchParams } = new URL(req.url);
-    const date = searchParams.get('date') || new Date().toISOString().slice(0, 10);
+    const id = searchParams.get('id');
+    const date = searchParams.get('date');
+
+    // Single appointment by ID
+    if (id) {
+      const rows = await sql`
+        SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+               a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
+               a.consultation_fee, a.treatment_charges, a.medicine_charges,
+               a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
+               a.chit_media, a.created_at, a.updated_at
+        FROM appointments a
+        WHERE a.id = ${id}
+        LIMIT 1
+      `;
+      if (!rows || rows.length === 0) {
+        return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
+      }
+      return NextResponse.json({ appointment: rows[0] });
+    }
+
+    const targetDate = date || new Date().toISOString().slice(0, 10);
 
     const [appointments, totalsRaw] = await Promise.all([
       sql`
@@ -71,7 +92,7 @@ export async function GET(req) {
                a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
                a.chit_media, a.created_at, a.updated_at
         FROM appointments a
-        WHERE a.date = ${date}
+        WHERE a.date = ${targetDate}
           AND a.status IN ('confirmed', 'completed', 'no_show')
         ORDER BY a.time ASC
       `,
@@ -83,7 +104,7 @@ export async function GET(req) {
           COUNT(*) FILTER (WHERE a.status = 'completed') AS completed,
           COUNT(*) FILTER (WHERE a.status = 'no_show') AS no_show
         FROM appointments a
-        WHERE a.date = ${date}
+        WHERE a.date = ${targetDate}
           AND a.status IN ('confirmed', 'completed', 'no_show')
       `,
     ]);

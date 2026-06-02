@@ -29,6 +29,7 @@ export default function PatientDetailPage() {
   const [manualMode, setManualMode] = useState(false);
   const [manualModeStartedAt, setManualModeStartedAt] = useState(null);
   const [endingChat, setEndingChat] = useState(false);
+  const [family, setFamily] = useState([]);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -64,6 +65,16 @@ export default function PatientDetailPage() {
             setManualModeStartedAt(cmData.manualModeStartedAt);
           }
         } catch (cmErr) {
+          // non-critical
+        }
+        // Fetch family members
+        try {
+          const famRes = await fetch(`/api/dashboard/patients/${id}/family`);
+          if (famRes.ok) {
+            const famData = await famRes.json();
+            setFamily(famData.family || []);
+          }
+        } catch (famErr) {
           // non-critical
         }
       } catch (e) {
@@ -400,6 +411,29 @@ export default function PatientDetailPage() {
             </div>
           </div>
 
+          {/* Family Members */}
+          {family.length > 0 && (
+            <div className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="w-4 h-4 text-violet-500" />
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Family Members</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">({family.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {family.map(m => (
+                  <button key={m.id} onClick={() => router.push(`/dashboard/patients/${m.id}`)}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-all text-sm">
+                    <span className="w-6 h-6 rounded-full bg-violet-300 dark:bg-violet-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
+                      {(m.name || '?')[0].toUpperCase()}
+                    </span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{m.name}</span>
+                    {m.age && <span className="text-xs text-gray-400 dark:text-gray-500">{m.age}y</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Stats Grid */}
           {completedVisits.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
@@ -498,6 +532,12 @@ export default function PatientDetailPage() {
                               {visit.status === 'no_show' ? 'No Show' : visit.status.charAt(0).toUpperCase() + visit.status.slice(1)}
                             </span>
                           </div>
+                          {visit.status === 'completed' && (
+                            <button onClick={() => router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`)}
+                              className="float-right inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95">
+                              <Edit3 className="w-3 h-3" /> Edit
+                            </button>
+                          )}
                           {(visit.treatment || visit.consultation_fee || visit.treatment_charges || visit.medicine_charges) && (
                             <div className="flex flex-wrap items-center gap-3 mb-3">
                               {visit.treatment && (

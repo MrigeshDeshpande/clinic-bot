@@ -12,7 +12,8 @@
 |---|---|
 | **High Priority** (Items 1–4) | ✅ **4/4 Complete** — Patient messaging from dashboard, patient edit on bot, feedback view on bot, stats on bot |
 | **Medium Priority** (Items 5–8) | ✅ **4/4 Complete** — Mark arrived from queue, bulk ops on web, notification panel, send message from web |
-| **Nice to Have** (Items 9–12) | ❌ **0/4 Complete** — Symptom matching, family accounts, language toggle, editing past visits |
+| **Nice to Have** (Items 9, 10, 12) | ✅ **3/3 Complete** — Symptom matching, family accounts, editing past visits |
+| **Deferred** (Item 11) | ❌ Language toggle — not started |
 | **Bot Features Not in Web** | ✅ **All mentioned features documented** — Booking flow, emergency detection, notifications, etc. |
 | **Architecture (Manual Chat)** | ✅ **Fully implemented** — Doctor sends message → session enters manual mode → bot stops auto-replying → SSE delivers replies |
 
@@ -204,13 +205,17 @@ Doctor sees reply in Messages tab (via SSE)
 
 ### 🟢 Nice to Have
 
-9. **Symptom matching on web** — Auto-suggest treatment based on text description in the visit log form.
+11. ❌ **Language toggle on web** — Add English/Hinglish toggle for patient-facing content. (Deferred)
 
-10. **Family account support on web** — Add family member selection to the Quick Book modal.
+---
 
-11. **Language toggle on web** — Add English/Hinglish toggle for patient-facing content.
+## Completed Since Last Update (June 2, 2026)
 
-12. **Editing past visits** — Allow doctors to edit past visit details (fees, diagnosis, medicines) through both bot and web.
+| Item | What Was Done | Key Files |
+|------|--------------|-----------|
+| **9. Symptom matching on web** | Created shared `src/lib/treatments.js` with `suggestTreatment()` function (alias keyword matching, same logic as bot). Replaced hardcoded treatment dropdowns in `visit/page.js` and `dashboard/page.js` with the shared treatment list. Added symptom description input with auto-suggest in the visit log form — staff types symptoms like "tooth pain when chewing" and sees matching treatment suggestions. | `src/lib/treatments.js` (new), `src/app/dashboard/visit/page.js`, `src/app/dashboard/page.js` |
+| **10. Family account support on web** | Added `GET /api/dashboard/patients/[id]/family` endpoint returning other patients sharing the same `wa_id`. Patient detail page shows family members as clickable chips in the header card. Quick Book modal shows a family member selector when a patient with family links is selected — staff can book for the patient or their family member. | `src/app/api/dashboard/patients/[id]/family/route.js` (new), `src/app/dashboard/patients/[id]/page.js`, `src/app/dashboard/page.js` |
+| **12. Editing past visits** | Added "Edit" button on each completed visit card in the patient detail page → navigates to `/dashboard/visit?appointmentId=X&edit=true`. Visit page loads existing data on mount when `edit=true` is present. Added `GET /api/dashboard/appointments?id=X` endpoint for single appointment fetch. Update submit (reuses existing `POST /api/dashboard/visit`) with "Save Changes" button and "Visit Updated" confirmation. | `src/app/dashboard/patients/[id]/page.js`, `src/app/dashboard/visit/page.js`, `src/app/api/dashboard/appointments/route.js` |
 
 ---
 
