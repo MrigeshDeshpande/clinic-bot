@@ -67,6 +67,7 @@ Meta's 24h messaging window: we can only proactively message patients who messag
 | Family/group accounts (multiple profiles per wa_id) | ✅ |
 | Multi-treatment booking (add multiple treatments) | ✅ |
 | Treatment help (symptom → treatment matching) | ✅ |
+| WhatsApp template messages (bypasses 24h window) | ✅ (code + setup guide) |
 | Feedback collection (great/okay/poor) | ✅ |
 | Callback request | ✅ |
 | Language switching (English/Hinglish) | ✅ |
@@ -155,7 +156,7 @@ Doctor Experience:
 | Capability | Current | Target | Gap |
 |---|---|---|---|
 | **Booking** | Full WhatsApp flow | + QR scan at door → auto-checkin | Minor |
-| **Pre-reminders** | Text via 24h window | Template msg + SMS fallback | **Templates not done** |
+| **Pre-reminders** | Template msg + text fallback | Template msg + SMS fallback | Templates done (needs Meta approval) |
 | **Check-in** | Manual "Mark Arrived" | Geo-fence / QR auto check-in | Manual step |
 | **Payment** | None | UPI link in reminder + auto-receipt | **Biggest gap** |
 | **Visit summary** | WhatsApp text + PDF | PDF prescription + invoice + receipt | Invoice auto-generation not done |
@@ -181,7 +182,7 @@ Doctor Experience:
 | # | Feature | Effort | Impact | Risk | Dependencies |
 |---|---|---|---|---|---|
 | F1 | **Fix N6 slot rounding bug** | 🔵 Tiny | 🟡 Low | None | None |
-| F2 | **WhatsApp template messages** for reminders, feedback, summaries | 🟡 Medium | 🟢 High | Low | Meta business approval |
+| F2 | **WhatsApp template messages** for reminders, feedback, summaries | 🟡 Medium | 🟢 High | Low | Meta business approval | ✅ Done (needs Meta approval) |
 | F3 | **PDF prescription generator** from visit data → WhatsApp document | 🟡 Medium | 🟢 High | Low | None | ✅ Done |
 | F4 | **UPI payment link** in confirmation + reminders | 🟡 Medium | 🟢 High | Medium | UPI gateway |
 | F5 | **Auto-cancel no-shows** — cron marks un-arrived past-slot as no-show | 🔵 Small | 🟡 Medium | Low | None |
@@ -200,7 +201,7 @@ Doctor Experience:
 ### Recommended Implementation Order
 1. **B1 (slot rounding bug)** — 10-min fix, broken text visible to users
 2. **F3 (PDF prescriptions)** — ✅ Done
-3. **F2 (WhatsApp templates)** — unblocks reliable proactive messaging
+3. **F2 (WhatsApp templates)** — ✅ Done (needs Meta approval: `docs/whatsapp-templates-setup.md`)
 4. **F5 (auto-cancel no-shows)** — cleans up queue automatically
 5. **F4 (UPI payment)** — revenue collection automation
 6. **F6 (wait time estimates)** — patient experience improvement
@@ -244,6 +245,7 @@ Doctor Experience:
 | Cron jobs | `src/app/api/cron/*/route.js` |
 | Dashboard pages | `src/app/dashboard/*` |
 | Dashboard API | `src/app/api/dashboard/*` |
+| Templates | `src/config/templates.js`, `src/lib/whatsapp.js` (`sendTemplate()`) |
 | Config | `src/config/clinic.js` |
 | Tests | `tests/` |
 | Docs | `docs/` |

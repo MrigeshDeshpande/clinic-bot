@@ -125,6 +125,25 @@ export async function sendList(to, bodyText, buttonLabel, sections) {
   });
 }
 
+export async function sendTemplate(to, templateName, bodyParams, language = 'en') {
+  const components = [];
+  if (bodyParams && bodyParams.length > 0) {
+    components.push({
+      type: 'body',
+      parameters: bodyParams.map(p => ({ type: 'text', text: String(p) })),
+    });
+  }
+
+  return apiPost(to, {
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: language },
+      ...(components.length > 0 ? { components } : {}),
+    },
+  });
+}
+
 export async function sendDocument(to, link, caption, filename) {
   if (isReplayMode()) return mockMsgId();
 

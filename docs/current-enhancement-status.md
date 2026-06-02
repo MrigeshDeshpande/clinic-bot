@@ -138,7 +138,16 @@ Patient receives:
 - R2 key persisted in `appointments.prescription_key` column — visible in dashboard patient detail, appointment list, and visit detail APIs
 - Falls back gracefully (text-only) if PDF generation or upload fails
 
-#### 3.5 Language Toggle on Web ❌ NOT STARTED
+#### 3.5 WhatsApp Template Messages ✅
+Templates bypass the 24-hour window for proactive messaging. Cron jobs use templates with automatic fallback to free-form text (works pre-approval):
+- `src/lib/whatsapp.js` — `sendTemplate()` builds template payload for Meta API
+- `src/config/templates.js` — template registry listing name, parameters, and categories
+- `src/app/api/cron/reminders/route.js` — sends `appointment_reminder` template first, falls back to text
+- `src/app/api/cron/feedback/route.js` — sends `feedback_request` template first, falls back to buttons
+- **Setup required:** Register templates in Meta Business Manager (guide: `docs/whatsapp-templates-setup.md`)
+- **Zero-downtime:** Deploy code anytime; crons keep working via fallback until templates are approved
+
+#### 3.6 Language Toggle on Web ❌ NOT STARTED
 Add English/Hinglish toggle for patient-facing content on the web dashboard.
 Deferred — bot already supports bilingual mode.
 
@@ -172,14 +181,14 @@ Deferred — bot already supports bilingual mode.
 |---------|--------|--------|--------|
 | Smart Sunday warning | Tiny | Small | ✅ Done |
 | PDF prescriptions | Medium | Low | ✅ Done |
+| WhatsApp templates | Small | Medium | ✅ Done (code) |
 | Language toggle (web) | Small | Small | ❌ Not started |
-| WhatsApp templates | Small | Medium | ❌ Not started |
 | Full Hindi bot | Large | Medium | ❌ Not started |
 | Analytics | Large | Low | ❌ Not started |
 | Inventory | Large | Low | ❌ Not started |
 
 ## Recommended Order (Remaining)
-1. **WhatsApp template messages** — quick win for reliability
+1. **WhatsApp template messages** — ✅ Done (needs Meta approval: `docs/whatsapp-templates-setup.md`)
 2. **Language toggle on web** — small effort
 3. **Full Hindi bot** — comprehensive translation effort
 4. **Analytics** — depends on sufficient data volume
@@ -204,5 +213,7 @@ Deferred — bot already supports bilingual mode.
 - `src/lib/handlers.js` — all handler logic (~5045 lines)
 - `src/lib/engine.js` — unchanged
 - `src/lib/prescription.js` — PDF prescription generator
-- `src/lib/whatsapp.js` — `sendDocument()` for WhatsApp document API
+- `src/lib/whatsapp.js` — `sendDocument()`, `sendTemplate()`
+- `src/config/templates.js` — template registry
 - `src/db/pool.js` — `prescription_key` column on appointments
+- `docs/whatsapp-templates-setup.md` — Meta approval setup guide
