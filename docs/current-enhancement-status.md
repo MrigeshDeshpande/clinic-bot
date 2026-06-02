@@ -1,25 +1,11 @@
-# Current Enhancement Session — Receptionist & Queue
+# Current Enhancement Status — All Phases
 
-> **Started:** May 31, 2026
-> **Status:** Phase 1 complete, moving to Phase 2 quick wins
-
-## Goal
-Build receptionist role + queue management (with priority flag) into the clinic bot.
-
-## Constraints & Preferences
-- Three roles: `patient` / `doctor` / `receptionist` — detected by `waId` match in `clinic.js`.
-- Receptionist handles patient registration and queue; doctor has fallback queue controls.
-- Walk-in patients get `wa_id` linked so `sendPatientSummary()` works for them.
-- Queue ordering: priority (⭐) → booked by time → walk-ins by arrival time.
-- Queue states: `scheduled → arrived → waiting → called → in_session → done`.
-- No SMS gateway or web dashboard in this phase.
+> **Last updated:** June 2, 2026
+> **Status:** Phase 1 ✅ · Phase 2 ✅ · Phase 3 🚧 In Progress · Phase 4 ⏳ Pending
 
 ## Completed
 
 ### Phase 1: Receptionist Role + Queue Management
-- `docs/enhancements-roadmap.md` — full Phase 1–4 breakdown
-- `docs/README.md` — updated to reference roadmap
-- `docs/user-flow-guide.md`, `docs/doctor-flow.md`, `docs/entity-extraction-design.md` — rewritten to match codebase
 - `src/config/clinic.js` — `receptionist.waId` (reads `RECEPTIONIST_WA_ID`)
 - `src/lib/session.js` — receptionist role detection in `getOrCreate()`
 - `src/config/states.js` — `RECEPTIONIST_MAIN_MENU`, `RECEPTIONIST_VIEW_QUEUE`, `RECEPTIONIST_QUEUE_DETAIL`, `DOCTOR_VIEW_QUEUE`
@@ -28,27 +14,178 @@ Build receptionist role + queue management (with priority flag) into the clinic 
 - `src/lib/router.js` — `ID_TO_INTENT` mappings + interactive ID patterns
 - `src/db/pool.js` — migration: `arrival_status`, `arrived_at`, `called_at`, `is_priority` columns
 - `src/db/repositories/appointmentRepository.js` — `fetchTodayQueue()`, `updateArrivalStatus()`, `countTodayByArrivalStatus()`, `toggleAppointmentPriority()`
-- `src/lib/handlers.js` — receptionist dispatch, greeting, main menu (queue summary), queue view (scheduled + arrived patients in two sections), patient detail (arrival_status-aware: Mark Arrived for scheduled, Call Now/Toggle Priority for arrived), walk-in registration with doctor notification, doctor queue view with priority badges
+- `src/lib/handlers.js` — receptionist dispatch, greeting, main menu (queue summary), queue view, patient detail with arrival_status actions, walk-in registration with doctor notification, doctor queue view with priority badges
 - **Doctor notification on walk-in** — `notifyDoctorNewBooking(appt)` called after walk-in creation
 
-### Files Modified
-- `src/lib/handlers.js` — receptionist + doctor queue handlers
-- `src/lib/router.js` — `queue_mark_arrived` mapping
-- `docs/enhancements-roadmap.md` — Phase 1 marked complete
+### Phase 2: High Impact Enhancements
 
-## Next Up (per roadmap recommended order)
-1. **Auto-suggest next slot** — when time is taken, suggest next 3 free slots
-2. **Walk-in visit shortcut** — "Log Visit" from doctor main menu
-3. Bulk actions, Block date warning, Smart Sunday warning
-4. Family accounts, Multi-treatment booking
-5. Voice transcription, Patient feedback
-6. Dashboard, Analytics, PDF, Inventory, Hindi, Templates
+#### 2.1 Auto-Suggest Next Available Slot ✅
+When a time slot is taken, the bot scans forward and suggests the next 3 free slots:
+```
+Bot: Sorry, 2:00 PM is already booked.
+     Next available:
+     • 2:30 PM
+     • 3:00 PM
+     • 3:30 PM
+```
+- `src/db/repositories/appointmentRepository.js` — `findNextAvailableSlots(date, afterTime, allSlots, count=3)`
+- `src/lib/handlers.js` — `handleBookingConfirmation` calls `findNextAvailableSlots` when slot is booked, returns suggestions to user
+
+#### 2.2 Walk-in Visit Shortcut (Log Visit) ✅
+Doctor can log a visit from the main menu without navigating through appointments:
+```
+Doctor Menu → [📝 Log Visit for Walk-in] → search patient → enter visit details
+```
+- `src/config/states.js` — `DOCTOR_LOG_VISIT_NAME` state
+- `src/lib/handlers.js` — `handleDoctorLogVisitName()`, `startLogVisitForPatient()`, registration-to-visit shortcut via `logVisitPending`
+- `src/lib/router.js` — `doctor_log_visit`, `log_visit_register_new` intent mappings
+- Creates walk-in appointment + marks arrived + jumps into LOG_TREATMENT state
+
+#### 2.3 Bulk Actions for Doctor ✅
+Doctor can mark all confirmed appointments as completed for today:
+```
+📋 Appointments list → [✅ Mark All Completed] → bulk status update
+```
+- `src/db/repositories/appointmentRepository.js` — `bulkCompleteAppointmentsForDate()`, `bulkCancelAppointmentsForDate()`
+- `src/lib/handlers.js` — `handleDoctorAppointmentList` handles `doctor_bulk_complete` intent
+- Appointment list shows "Mark All Completed" button for today's date
+
+#### 2.4 Block Date Warning ✅
+When the doctor blocks a date with confirmed appointments, the bot warns and offers choices:
+```
+Bot: ⚠️ You have 3 appointments on 15 June.
+     Blocking will cancel them.
+     [🚫 Block & Cancel All] [📲 Block & Notify to Reschedule] [🔙 Cancel]
+```
+- `src/lib/handlers.js` — `handleDoctorManageSchedule` checks for confirmed appointments before blocking, shows warning with `block_cancel_all` and `block_notify_reschedule` buttons
+- `block_notify_reschedule` sends cancellation messages to affected patients
+
+#### 2.5 Smart Sunday Warning ✅
+When a user selects a Sunday date, Sunday hours are shown upfront in the time prompt:
+```
+Bot: ⚠️ Sunday hours: 10:00 AM – 2:00 PM only.
+     Slots: 10:00, 10:30, 11:00, 11:30, 12:00, 12:30, 13:00, 13:30
+```
+- `src/lib/handlers.js` — `buildFieldPrompt()` and `getTimeListReply()` show `sundayWarn` with hours and available slots
+- Sunday filtering removes Sunday from date list options
+- Date acknowledgment (`buildFieldAck`) shows Sunday warning when date is Sunday
+
+#### 2.6 Family/Group Accounts ✅
+Patients sharing a WhatsApp number can select which family member to book for:
+```
+User: "book appointment"
+Bot: Who is this appointment for?
+     [Ramesh (Self)]
+     [Priya (Wife)]
+     [Aryan (Son)]
+     [New Person]
+```
+- `src/config/states.js` — `FAMILY_SELECTION` state
+- `src/lib/handlers.js` — `handleFamilySelection()`, family check in `appointment` intent handler
+- `src/lib/router.js` — `family_patient_<id>` interactive ID mapping
+- `src/db/repositories/patientRepository.js` — `findPatientsByWaId()` for lookup
+
+#### 2.7 Multi-Treatment Booking ✅
+Patients can select multiple treatments in a single appointment:
+```
+Bot: Tap "Add Another" to add more treatments or "Done" when finished.
+     [➕ Add Another] [✅ Done]
+```
+- `src/lib/handlers.js` — `handleBookingCollection` handles `add_treatment` and `treatment_done` intents
+- Treatments stored as comma-separated string in appointment row
+
+### Phase 3: Medium Impact Enhancements
+
+#### 3.1 Voice Note Transcription ✅
+Doctor sends audio during LOG_NOTES → transcribed via Whisper → accept/edit/re-record:
+```
+Doctor: [sends voice note]
+Bot: ✅ Transcribed: "Patient has sensitivity..."
+     [✅ Accept] [✏️ Edit] [🔁 Re-record]
+```
+- `src/lib/transcriber.js` — OpenAI Whisper integration
+- `src/lib/handlers.js` — `handleDoctorMediaMessage` transcribes audio in LOG_NOTES state, `applyTranscribedNotes()`, `pendingTranscription` flow
+- `src/lib/router.js` — `transcription_accept`, `transcription_edit`, `transcription_rerrecord` mappings
+
+#### 3.2 Patient Feedback After Visit ✅
+24h after visit, feedback request sent via cron; bot handles ratings + callback escalation:
+```
+Bot: How was your visit?
+     [😊 Great] [🙂 Okay] [😞 Poor]
+```
+- `src/app/api/cron/feedback/route.js` — hourly cron
+- `src/lib/handlers.js` — `handleFeedbackRating()`, `handleFeedbackCallback()`
+- `src/db/repositories/feedbackRepository.js` — feedback CRUD + summary queries
+- Dashboard feedback page with satisfaction %, rating distribution, callback requests
+
+#### 3.3 Doctor Dashboard (Web UI) ✅
+Full web dashboard for doctor: calendar, slot grid, queue board, stats, patient search, visit logging, feedback, schedule management:
+- `src/app/dashboard/` — all dashboard routes and pages
+- `src/app/api/dashboard/` — REST API endpoints for all dashboard features
+- Charts (Recharts), queue board with auto-refresh, notification panel, message history with SSE, family accounts, bulk operations, edit past visits
+
+#### 3.4 Language Toggle on Web ❌ NOT STARTED
+Add English/Hinglish toggle for patient-facing content on the web dashboard.
+Deferred — bot already supports bilingual mode.
+
+## Next Up — Phase 3 Remaining & Phase 4
+
+### Phase 3 Remaining
+- **Language toggle on web** — add English/Hinglish toggle for web dashboard (deferred)
+
+### Phase 4: Nice-to-Have (Pending)
+
+#### 4.1 Analytics
+- Peak hours, most booked treatments, patient retention rates, no-show rates
+- Exportable reports (CSV/PDF)
+- Enhanced dashboard charts
+
+#### 4.2 PDF Prescription Generator
+- Generate formatted PDF from visit log data
+- Clinic header, patient info, treatment, fees, next visit, doctor signature
+- Send to patient via WhatsApp as document
+
+#### 4.3 Inventory Tracking
+- Track materials used per treatment
+- Low stock alerts
+- Monthly usage reports
+
+#### 4.4 Full Hindi Bot
+- All prompts translated to Hindi
+- Language detection → full Hindi mode (not just Hinglish mixed)
+- Hindi numbers, date formats, treatment descriptions
+
+#### 4.5 WhatsApp Template Messages
+- Pre-approved templates for reminders, feedback, visit summary
+- Bypasses 24-hour messaging window
+- Higher reliability with rich media support
+
+## Implementation Priority Matrix (Remaining)
+
+| Feature | Effort | Impact | Status |
+|---------|--------|--------|--------|
+| Smart Sunday warning | Tiny | Small | ✅ Done |
+| Language toggle (web) | Small | Small | ❌ Not started |
+| WhatsApp templates | Small | Medium | ❌ Not started |
+| PDF prescriptions | Medium | Low | ❌ Not started |
+| Full Hindi bot | Large | Medium | ❌ Not started |
+| Analytics | Large | Low | ❌ Not started |
+| Inventory | Large | Low | ❌ Not started |
+
+## Recommended Order (Remaining)
+1. **WhatsApp template messages** — quick win for reliability
+2. **PDF prescriptions** — useful for patient communication
+3. **Language toggle on web** — small effort
+4. **Full Hindi bot** — comprehensive translation effort
+5. **Analytics** — depends on sufficient data volume
+6. **Inventory** — standalone feature
 
 ## Key Decisions
 - `engine.js` needs no changes — role routing is handled by `handle()` in `handlers.js`
 - Receptionist reuses existing `REGISTER_*` states for walk-in registration
-- Queue detail uses 3-button message instead of list
+- Queue detail uses button message instead of list
 - Priority flag uses simple `BOOLEAN` column, toggled inline
+- All Phase 2 items were implemented alongside Phase 1 and web dashboard work
 
 ## Relevant Files
 - `src/config/clinic.js` — `receptionist.waId`
@@ -58,6 +195,6 @@ Build receptionist role + queue management (with priority flag) into the clinic 
 - `src/config/intents.js` — intent definitions
 - `src/lib/router.js` — intent routing
 - `src/db/pool.js` — schema migration
-- `src/db/repositories/appointmentRepository.js` — queue queries
-- `src/lib/handlers.js` — all handler logic (~lines 3549–4077)
+- `src/db/repositories/appointmentRepository.js` — queue queries + next available slots
+- `src/lib/handlers.js` — all handler logic (~5045 lines)
 - `src/lib/engine.js` — unchanged
