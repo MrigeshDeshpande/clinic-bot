@@ -354,6 +354,31 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS prescription_key TEXT;
     `;
 
+    // post_visit_sent_at — tracks whether post-visit summary has been sent
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS post_visit_sent_at TIMESTAMPTZ;
+    `;
+
+    // Patient relationships table (explicit family links)
+    await db`
+      CREATE TABLE IF NOT EXISTS patient_relationships (
+        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id          UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        related_patient_id  UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        relationship_type   VARCHAR(20) NOT NULL DEFAULT 'other',
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT unique_relationship UNIQUE (patient_id, related_patient_id),
+        CONSTRAINT no_self_relationship CHECK (patient_id != related_patient_id)
+      );
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_patient_relationships_patient ON patient_relationships(patient_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_patient_relationships_related ON patient_relationships(related_patient_id);
+    `;
+
     // Callback contacted tracking
     await db`
       ALTER TABLE feedback
@@ -377,7 +402,8 @@ export async function runMigrations() {
                   'REGISTER_NAME','REGISTER_AGE','REGISTER_SEX','REGISTER_PHONE','REGISTER_APPOINTMENT',
                   'LOG_TREATMENT','LOG_CONSULTATION_FEE','LOG_TREATMENT_CHARGES','LOG_MEDICINE_CHARGES',
                   'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT','DOCTOR_PATIENT_VISITS','DOCTOR_VIEW_MESSAGES',
-                  'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL')
+                  'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL',
+                  'WALKIN_NAME','WALKIN_AGE','WALKIN_SEX','WALKIN_TREATMENT')
       );
     `;
 

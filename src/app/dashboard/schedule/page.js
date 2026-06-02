@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useContext } from 'react';
 import { ChevronLeft, ChevronRight, XCircle, Calendar as CalendarIcon } from 'lucide-react';
 import { formatDateLong, formatDateShort } from '@/lib/date';
+import { ToastContext } from '../layout';
 
 export default function SchedulePage() {
+  const { showToast } = useContext(ToastContext);
   const [viewDate, setViewDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -49,16 +51,22 @@ export default function SchedulePage() {
     if (!selectedDate) return;
     setSaving(true);
     try {
-      await fetch('/api/dashboard/schedule', {
+      const res = await fetch('/api/dashboard/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: selectedDate, reason: blockReason || null }),
       });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Failed to block date', 'error');
+        return;
+      }
       setBlockReason('');
       setSelectedDate(null);
       await fetchBlocked();
+      showToast(`Blocked ${formatDateShort(selectedDate)}`, 'success');
     } catch (err) {
-      console.error('Failed to block date', err);
+      showToast('Network error — could not block date', 'error');
     } finally {
       setSaving(false);
     }
@@ -66,16 +74,66 @@ export default function SchedulePage() {
 
   async function handleUnblock(date) {
     try {
-      await fetch(`/api/dashboard/schedule?date=${date}`, { method: 'DELETE' });
+      const res = await fetch(`/api/dashboard/schedule?date=${date}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Failed to unblock date', 'error');
+        return;
+      }
       setSelectedDate(null);
       await fetchBlocked();
+      showToast(`Unblocked ${formatDateShort(date)}`, 'success');
     } catch (err) {
-      console.error('Failed to unblock date', err);
+      showToast('Network error — could not unblock date', 'error');
     }
   }
 
+  // Escape key to deselect
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        setSelectedDate(null);
+        setBlockReason('');
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  if (loading) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="p-3 rounded-2xl bg-gray-200 dark:bg-gray-700 w-12 h-12 animate-pulse" />
+          <div>
+            <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-24 animate-pulse" />
+            <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-36 mt-2 animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4 animate-pulse">
+            <div className="flex items-center justify-between mb-4">
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-8" />
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24" />
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-8" />
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <div key={i} className="h-9 bg-gray-100 dark:bg-gray-800 rounded-lg" />
+              ))}
+            </div>
+          </div>
+          <div className="lg:col-span-2 space-y-4">
+            <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded-xl animate-pulse" />
+            <div className="h-48 bg-gray-200 dark:bg-gray-700 rounded-xl animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -97,9 +155,21 @@ export default function SchedulePage() {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{monthNames[m - 1]} {y}</h3>
-            <button onClick={() => goToMonth(1)} className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  const d = new Date();
+                  setViewDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                  setSelectedDate(d.toISOString().slice(0, 10));
+                }}
+                className="px-2 py-1 text-[10px] font-medium rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                Today
+              </button>
+              <button onClick={() => goToMonth(1)} className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-7 mb-2">
@@ -121,7 +191,7 @@ export default function SchedulePage() {
                 <button
                   key={day}
                   onClick={() => setSelectedDate(isSelected ? null : dateStr)}
-                  className={`h-9 flex flex-col items-center justify-center text-xs transition-all rounded-lg mx-0.5 ${
+                   className={`h-11 flex flex-col items-center justify-center text-xs transition-all rounded-lg mx-0.5 ${
                     isSelected
                       ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium'
                       : isBlocked
@@ -229,7 +299,7 @@ export default function SchedulePage() {
                     </div>
                     <button
                       onClick={() => handleUnblock(b.date)}
-                      className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                      className="px-3 py-1.5 text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0"
                     >
                       Unblock
                     </button>

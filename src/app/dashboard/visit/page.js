@@ -277,9 +277,14 @@ function VisitPageInner() {
                 Back to {returnTo === 'queue' ? 'Queue' : 'Appointments'}
               </button>
             ) : (
-              <button onClick={resetForm} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
-                Log Another Visit
-              </button>
+              <>
+                <button onClick={() => router.push('/dashboard')} className="px-6 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+                  Back to Dashboard
+                </button>
+                <button onClick={resetForm} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
+                  Log Another Visit
+                </button>
+              </>
             )}
             <button onClick={() => window.print()} className="px-6 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
               Print
@@ -411,7 +416,7 @@ function VisitPageInner() {
                 </div>
 
                 {/* Fee breakdown */}
-                <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   {[
                     { key: 'consultationFee', label: 'Consultation' },
                     { key: 'treatmentCharges', label: 'Treatment' },

@@ -46,7 +46,12 @@ export function getNextState(state, intent, entities) {
         // Receptionist back navigation
         case 'RECEPTIONIST_VIEW_QUEUE': return 'RECEPTIONIST_MAIN_MENU';
         case 'RECEPTIONIST_QUEUE_DETAIL': return 'RECEPTIONIST_VIEW_QUEUE';
-        default:                     return 'MAIN_MENU';
+        // Walk-in back navigation
+        case 'WALKIN_TREATMENT': return 'WALKIN_SEX';
+        case 'WALKIN_SEX':       return 'WALKIN_AGE';
+        case 'WALKIN_AGE':       return 'WALKIN_NAME';
+        case 'WALKIN_NAME':      return 'MAIN_MENU';
+        default:                 return 'MAIN_MENU';
       }
     case 'greeting':
       return null; // Handler decides whether to change state
@@ -109,6 +114,7 @@ export function getNextState(state, intent, entities) {
 
     // Registration transitions
     case 'provide_name':
+      if (state === 'WALKIN_NAME') return 'WALKIN_AGE';
       return 'REGISTER_AGE';
     case 'provide_age':
       return 'REGISTER_SEX';

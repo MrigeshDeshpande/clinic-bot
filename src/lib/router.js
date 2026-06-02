@@ -271,7 +271,7 @@ export function classifyIntent(normalized, session) {
   // Priority 3: Entity-derived intents (state-guarded)
   // Includes MAIN_MENU for "Back from booking" flows and HUMAN_ESCALATION
   // for recovery — user can still provide booking data to resume.
-  const entityStates = ['BOOKING_COLLECTION', 'BOOKING_CONFIRMATION', 'MAIN_MENU', 'HUMAN_ESCALATION'];
+  const entityStates = ['BOOKING_COLLECTION', 'BOOKING_CONFIRMATION', 'MAIN_MENU', 'HUMAN_ESCALATION', 'WALKIN_TREATMENT'];
   const entities = extractEntities(text);
   if (entities.date && entityStates.includes(session.state)) {
     return { intent: 'provide_date', confidence: 0.9, source: 'entity', entities };
@@ -287,7 +287,7 @@ export function classifyIntent(normalized, session) {
   }
 
   // Priority 4: For BOOKING_COLLECTION state, check if it's a number
-  if (state === 'BOOKING_COLLECTION') {
+  if (state === 'BOOKING_COLLECTION' || state === 'WALKIN_TREATMENT') {
     const num = text.trim().match(/^(\d+)$/);
     if (num) {
       const idx = parseInt(num[1], 10) - 1;

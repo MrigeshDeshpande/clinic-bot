@@ -2,7 +2,7 @@ import { isDuplicate } from '@/lib/deduplicate';
 import { getOrCreate, save } from '@/lib/session';
 import { classifyIntent } from '@/lib/router';
 import { extractEntities, accumulateEntities } from '@/lib/entities';
-import { handle } from '@/lib/handlers';
+import { handle, checkAndSendPostVisit } from '@/lib/handlers';
 import { getNextState } from '@/lib/transitions';
 import { detectCorrection } from '@/lib/correction-detector';
 import { evaluateOverwrite } from '@/lib/overwrite-policy';
@@ -309,6 +309,11 @@ export async function processEvent(payload) {
 
       // Step 2i: sendReply
       const sentMsgId = await sendReply(normalized.waId, handlerResult.reply, handlerResult.replyType);
+
+      // Step 2i-ii: Post-visit check (fire-and-forget — auto-sends summary if appointment time has passed)
+      if (!isReplay) {
+        checkAndSendPostVisit(normalized.waId).catch(() => {});
+      }
 
       // Track sent message IDs for future continuity checks
       if (sentMsgId && handlerResult.session.context) {

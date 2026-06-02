@@ -347,7 +347,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
                     }
                   }}
                 >
-                  <div className="px-2.5 py-2">
+                    <div className="px-2.5 py-2.5">
                     <div className="flex items-center justify-center gap-1">
                       <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
                       <span className={`text-xs font-semibold ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
@@ -401,7 +401,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
                     }
                   }}
                 >
-                  <div className="px-2.5 py-2">
+                    <div className="px-2.5 py-2.5">
                     <div className="flex items-center justify-center gap-1">
                       <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
                       <span className={`text-xs font-semibold ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
@@ -440,6 +440,7 @@ export default function DashboardPage() {
   const [datesData, setDatesData] = useState(null);
   const [slotDefinitions, setSlotDefinitions] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState(null);
   const [bookingModal, setBookingModal] = useState({ open: false, time: null });
   const [refreshKey, setRefreshKey] = useState(0);
   const [toast, setToast] = useState(null);
@@ -464,7 +465,7 @@ export default function DashboardPage() {
       })
       .catch(e => {
         console.error('Dashboard fetch error:', e);
-        if (!cancelled) setLoading(false);
+        if (!cancelled) { setLoading(false); setOverviewError('Failed to load dashboard data. Please try again.'); }
       });
 
     return () => { cancelled = true; };
@@ -484,6 +485,24 @@ export default function DashboardPage() {
   function handleBookingComplete() {
     setRefreshKey(k => k + 1);
     setToast('Appointment booked successfully');
+  }
+
+  if (overviewError) {
+    return (
+      <div className="animate-fade-in">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center max-w-lg mx-auto mt-12">
+          <XCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-1">Something went wrong</h3>
+          <p className="text-sm text-red-600 dark:text-red-400 mb-4">{overviewError}</p>
+          <button
+            onClick={() => { setOverviewError(null); setRefreshKey(k => k + 1); }}
+            className="px-5 py-2.5 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700 transition-all"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {
@@ -602,12 +621,12 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-1">
               {confirmed.slice(0, 5).map((a, i) => (
-                <div key={a.id} className="flex items-center justify-between py-3 px-3 -mx-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div key={a.id} className="flex items-start justify-between gap-2 py-3 px-3 -mx-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/50 flex items-center justify-center text-xs font-semibold text-blue-700 dark:text-blue-300">
                       {(a.patient_name || 'P')[0].toUpperCase()}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                         {a.is_priority ? '⭐ ' : ''}
                         {a.patient_id ? (

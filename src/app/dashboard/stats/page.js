@@ -108,7 +108,7 @@ export default function StatsPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={getCSV}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               <Download className="w-4 h-4" />
               Export CSV
@@ -118,7 +118,7 @@ export default function StatsPage() {
                 <button
                   key={p.value}
                   onClick={() => setPeriod(p.value)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                  className={`px-3 py-2.5 text-sm font-medium rounded-lg transition-all ${
                     period === p.value
                       ? 'bg-emerald-500 text-white shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'

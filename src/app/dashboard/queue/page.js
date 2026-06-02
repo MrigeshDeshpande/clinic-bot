@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Phone, UserCheck, UserX, ArrowRight, Star } from 'lucide-react';
-import { DateContext } from '../layout';
+import { DateContext, ToastContext } from '../layout';
 import { formatDateLong } from '@/lib/date';
 
 export default function QueuePage() {
   const { selectedDate, setSelectedDate } = useContext(DateContext);
+  const { showToast } = useContext(ToastContext);
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,11 +42,21 @@ export default function QueuePage() {
 
   async function handleArrival(appointmentId, status) {
     setActionLoading(appointmentId);
-    await fetch('/api/dashboard/arrival', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ appointmentId, arrivalStatus: status }),
-    });
+    try {
+      const res = await fetch('/api/dashboard/arrival', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId, arrivalStatus: status }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(status === 'arrived' ? 'Patient has arrived' : 'Patient called in', 'success');
+      } else {
+        showToast(data.error || 'Failed to update status', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    }
     setActionLoading(null);
     fetchQueue();
   }
@@ -75,17 +86,17 @@ export default function QueuePage() {
             {formatDateLong(selectedDate)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            className="px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+            className="px-3 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
           />
           <button
             onClick={() => fetchQueue(true)}
             disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
           <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -122,9 +133,9 @@ export default function QueuePage() {
                   <button
                     onClick={() => handleArrival(a.id, 'arrived')}
                     disabled={actionLoading === a.id}
-                    className="w-full py-1.5 text-xs font-medium rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                    className="w-full py-3 text-xs font-medium rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
                   >
-                    <UserCheck className="w-3 h-3" /> Mark Arrived
+                    <UserCheck className="w-4 h-4" /> Mark Arrived
                   </button>
                 </div>
               ))
@@ -156,12 +167,12 @@ export default function QueuePage() {
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
-                      onClick={() => handleArrival(a.id, 'called')}
-                      disabled={actionLoading === a.id}
-                      className="w-full py-1.5 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
-                    >
-                      <Phone className="w-3 h-3" /> Call Patient
-                    </button>
+                    onClick={() => handleArrival(a.id, 'called')}
+                    disabled={actionLoading === a.id}
+                    className="w-full py-3 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                  >
+                    <Phone className="w-4 h-4" /> Call Patient
+                  </button>
                   </div>
                 ))}
                 {inSession.map(a => (
@@ -172,10 +183,10 @@ export default function QueuePage() {
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
-                      onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=queue`)}
-                      className="w-full py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all flex items-center justify-center gap-1"
-                    >
-                      <ArrowRight className="w-3 h-3" /> Start Visit
+                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=queue`)}
+                    className="w-full py-3 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all flex items-center justify-center gap-1"
+                  >
+                    <ArrowRight className="w-4 h-4" /> Start Visit
                     </button>
                   </div>
                 ))}

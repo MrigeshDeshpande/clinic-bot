@@ -10,6 +10,8 @@ export const GLOBAL_INTENTS = {
   escalate:  ['agent','human','talk to','representative','speak to','person'],
   back:      ['back','previous','go back','return'],
   affirm:    ['ok','okay','sure','right','fine','good','yep','yeah','alright','that works','perfect','great','got it','cool','done with this','haan','han','thik hai','theek hai','kar do','हाँ','ठीक है','कर दो','हां'],
+  arrival:   ['arrived',"i'm here","i've arrived","i have arrived","i am here",'im here','reached','i reached','i have reached',
+               'pahunch gaya','pahunch gya','aa gaya','aa gya','pahunch gaye','pohoch gaya','aa gaye'],
   greeting:  ['hi','hello','hey','namaste','good morning','good afternoon','good evening','नमस्ते'],
   thanks:    ['thanks','thank you','thx','ty','appreciate'],
   help:      ['help','?','what can you do'],

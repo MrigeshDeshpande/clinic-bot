@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Activity, DollarSign, Calendar, Clock, Phone,
@@ -10,10 +10,12 @@ import {
 } from 'lucide-react';
 import MediaViewer from '@/components/MediaViewer';
 import { formatDate as fmtDate } from '@/lib/date';
+import { ToastContext } from '../../layout';
 
 export default function PatientDetailPage() {
   const { id } = useParams();
   const router = useRouter();
+  const { showToast } = useContext(ToastContext);
   const [patient, setPatient] = useState(null);
   const [visits, setVisits] = useState([]);
   const [feedback, setFeedback] = useState([]);
@@ -31,6 +33,13 @@ export default function PatientDetailPage() {
   const [manualModeStartedAt, setManualModeStartedAt] = useState(null);
   const [endingChat, setEndingChat] = useState(false);
   const [family, setFamily] = useState([]);
+  const [showLinkFamily, setShowLinkFamily] = useState(false);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkSearchResults, setLinkSearchResults] = useState([]);
+  const [linkSearching, setLinkSearching] = useState(false);
+  const [linkType, setLinkType] = useState('other');
+  const [linking, setLinking] = useState(false);
+  const [unlinking, setUnlinking] = useState(null);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -121,7 +130,77 @@ export default function PatientDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id]);
 
+  // Search patients for linking
+  useEffect(() => {
+    if (linkSearch.length < 2 || !showLinkFamily) {
+      setLinkSearchResults([]);
+      return;
+    }
+    setLinkSearching(true);
+    const timer = setTimeout(() => {
+      fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(linkSearch)}`)
+        .then(r => r.json())
+        .then(d => {
+          const filtered = (d.patients || []).filter(p => p.id !== id && !family.some(f => f.id === p.id));
+          setLinkSearchResults(filtered);
+        })
+        .catch(() => setLinkSearchResults([]))
+        .finally(() => setLinkSearching(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [linkSearch, showLinkFamily, id, family]);
+
+  async function handleLinkPatient(relatedPatientId) {
+    setLinking(true);
+    try {
+      const res = await fetch(`/api/dashboard/patients/${id}/family`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relatedPatientId, relationshipType: linkType }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const reload = await fetch(`/api/dashboard/patients/${id}/family`);
+        const reloadData = await reload.json();
+        setFamily(reloadData.family || []);
+        setShowLinkFamily(false);
+        setLinkSearch('');
+        setLinkSearchResults([]);
+        setLinkType('other');
+        showToast('Family member linked', 'success');
+      } else {
+        showToast(data.error || 'Failed to link', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  async function handleUnlinkPatient(relationshipId, memberName) {
+    if (!window.confirm(`Unlink ${memberName} from this patient?`)) return;
+    setUnlinking(relationshipId);
+    try {
+      const res = await fetch(`/api/dashboard/patients/${id}/family?relationshipId=${relationshipId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setFamily(prev => prev.filter(f => f.relationship_id !== relationshipId));
+        showToast('Family member unlinked', 'success');
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Failed to unlink', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setUnlinking(null);
+    }
+  }
+
   async function endChat() {
+    if (!window.confirm('Are you sure you want to end the chat? The patient will return to the main chatbot flow.')) return;
     setEndingChat(true);
     try {
       const res = await fetch(`/api/dashboard/patients/${id}/chat-mode`, {
@@ -159,10 +238,10 @@ export default function PatientDetailPage() {
         setPatient(prev => ({ ...prev, ...data.patient }));
         setEditing(false);
       } else {
-        alert(data.error || 'Failed to save');
+        showToast(data.error || 'Failed to save', 'error');
       }
     } catch (err) {
-      alert('Network error');
+      showToast('Network error', 'error');
     } finally {
       setSaving(false);
     }
@@ -288,35 +367,35 @@ export default function PatientDetailPage() {
         </button>
 
         {/* Patient Header Card */}
-        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm transition-colors duration-200">
-          <div className="flex items-start gap-5">
-            <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${getAvatarColor(patient.name)} flex items-center justify-center text-white font-bold text-xl shadow-lg shrink-0`}>
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm transition-colors duration-200">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
+            <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br ${getAvatarColor(patient.name)} flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-lg shrink-0`}>
               {getInitials(patient.name)}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-4">
-                <div>
+            <div className="flex-1 min-w-0 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+                <div className="min-w-0">
                   {editing ? (
                     <input
                       type="text"
                       value={editForm.name}
                       onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                      className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight bg-transparent border-b-2 border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none pb-0.5 w-full"
+                      className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight bg-transparent border-b-2 border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none pb-0.5 w-full"
                     />
                   ) : (
-                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                    <h1 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight truncate">
                       {patient.name === '?' ? 'Unknown Patient' : patient.name}
                     </h1>
                   )}
-                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                     <span className="flex items-center gap-1.5">
-                      <Phone className="w-4 h-4" />
+                      <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       {editing ? (
                         <input
                           type="text"
                           value={editForm.phone}
                           onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
-                          className="bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none w-32 text-gray-900 dark:text-gray-100"
+                          className="bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none w-28 sm:w-32 text-gray-900 dark:text-gray-100"
                         />
                       ) : (
                         patient.phone || 'N/A'
@@ -325,7 +404,7 @@ export default function PatientDetailPage() {
                     {!editing && (
                       <>
                         <span className="flex items-center gap-1.5">
-                          <Users className="w-4 h-4" />
+                          <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           {completedVisits.length} visit{completedVisits.length !== 1 ? 's' : ''}
                         </span>
                         {patient.age && (
@@ -335,7 +414,7 @@ export default function PatientDetailPage() {
                     )}
                   </div>
                   {editing && (
-                    <div className="flex items-center gap-4 mt-3">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-3">
                       <label className="text-xs text-gray-500 dark:text-gray-400">
                         Age
                         <input
@@ -361,7 +440,7 @@ export default function PatientDetailPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   {editing ? (
                     <>
                       <button
@@ -398,7 +477,7 @@ export default function PatientDetailPage() {
                       </button>
                       <button
                         onClick={() => window.print()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95 shadow-md"
+                        className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95 shadow-md"
                       >
                         <Printer className="w-4 h-4" />
                         Print
@@ -411,60 +490,80 @@ export default function PatientDetailPage() {
           </div>
 
           {/* Family Members */}
-          {family.length > 0 && (
-            <div className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-800">
-              <div className="flex items-center gap-2 mb-3">
+          <div className="mt-4 sm:mt-6 pt-4 sm:pt-5 border-t border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-violet-500" />
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Family Members</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">({family.length})</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Family</span>
+                {family.length > 0 && <span className="text-xs text-gray-400 dark:text-gray-500">({family.length})</span>}
               </div>
+              <button
+                onClick={() => setShowLinkFamily(true)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-all"
+              >
+                + Link Member
+              </button>
+            </div>
+            {family.length === 0 ? (
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">No family members linked.</p>
+            ) : (
               <div className="flex flex-wrap gap-2">
                 {family.map(m => (
-                  <button key={m.id} onClick={() => router.push(`/dashboard/patients/${m.id}`)}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-all text-sm">
-                    <span className="w-6 h-6 rounded-full bg-violet-300 dark:bg-violet-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
-                      {(m.name || '?')[0].toUpperCase()}
-                    </span>
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{m.name}</span>
-                    {m.age && <span className="text-xs text-gray-400 dark:text-gray-500">{m.age}y</span>}
-                  </button>
+                  <div key={m.id} className="group relative inline-flex items-center gap-2 px-2.5 sm:px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-all text-xs sm:text-sm">
+                    <button onClick={() => router.push(`/dashboard/patients/${m.id}`)} className="inline-flex items-center gap-2">
+                      <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-violet-300 dark:bg-violet-600 flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-white shrink-0">
+                        {(m.name || '?')[0].toUpperCase()}
+                      </span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[100px]">{m.name}</span>
+                      {m.age && <span className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500">{m.age}y</span>}
+                      <span className="text-[10px] text-violet-400 dark:text-violet-500 capitalize">({m.relationship_type})</span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleUnlinkPatient(m.relationship_id, m.name); }}
+                      disabled={unlinking === m.relationship_id}
+                      className="p-0.5 rounded text-violet-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all opacity-0 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                      title="Unlink"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Stats Grid */}
           {completedVisits.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20 rounded-2xl p-4 border border-blue-200/50 dark:border-blue-800">
-                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider mb-2">
-                  <Activity className="w-3.5 h-3.5" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-4 sm:mt-6">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20 rounded-2xl p-3 sm:p-4 border border-blue-200/50 dark:border-blue-800">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-blue-600 dark:text-blue-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                  <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   Visits
                 </div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{completedVisits.length}</div>
+                <div className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{completedVisits.length}</div>
               </div>
-              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-2xl p-4 border border-emerald-200/50 dark:border-emerald-800">
-                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-2">
-                  <DollarSign className="w-3.5 h-3.5" />
-                  Total Revenue
+              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-2xl p-3 sm:p-4 border border-emerald-200/50 dark:border-emerald-800">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-600 dark:text-emerald-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                  <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  Revenue
                 </div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalRevenue)}</div>
+                <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{formatCurrency(totalRevenue)}</div>
               </div>
-              <div className="bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-900/20 dark:to-violet-800/20 rounded-2xl p-4 border border-violet-200/50 dark:border-violet-800">
-                <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400 text-xs font-semibold uppercase tracking-wider mb-2">
-                  <Calendar className="w-3.5 h-3.5" />
+              <div className="bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-900/20 dark:to-violet-800/20 rounded-2xl p-3 sm:p-4 border border-violet-200/50 dark:border-violet-800">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-violet-600 dark:text-violet-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                  <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   Last Visit
                 </div>
-                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight">
+                <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">
                   {completedVisits[0] ? formatDate(completedVisits[0].date) : 'N/A'}
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/20 rounded-2xl p-4 border border-amber-200/50 dark:border-amber-800">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs font-semibold uppercase tracking-wider mb-2">
-                  <Clock className="w-3.5 h-3.5" />
+              <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/20 rounded-2xl p-3 sm:p-4 border border-amber-200/50 dark:border-amber-800">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-amber-600 dark:text-amber-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                  <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   Follow-up
                 </div>
-                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight">
+                <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">
                   {upcomingFollowUp ? formatDate(upcomingFollowUp.follow_up_date) : 'None'}
                 </div>
               </div>
@@ -478,11 +577,11 @@ export default function PatientDetailPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-medium transition-all ${
-                activeTab === tab.id
-                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-              }`}
+                className={`flex-1 py-2.5 px-2 md:px-4 rounded-xl text-xs md:text-sm font-medium transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
             >
               {tab.id === 'visits' && <ClipboardList className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />}
               {tab.id === 'feedback' && <Star className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />}
@@ -503,27 +602,27 @@ export default function PatientDetailPage() {
         {activeTab === 'visits' && (
           <>
             {visits.length > 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
                 <div className="relative">
-                  <div className="absolute left-[23px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 dark:from-blue-700 via-gray-200 dark:via-gray-700 to-gray-100 dark:to-gray-800" />
-                  <div className="space-y-6">
+                  <div className="absolute left-[18px] md:left-[23px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 dark:from-blue-700 via-gray-200 dark:via-gray-700 to-gray-100 dark:to-gray-800" />
+                  <div className="space-y-4 md:space-y-6">
                     {visits.map((visit, idx) => (
-                      <div key={visit.id || idx} className="relative pl-14 animate-in" style={{ animationDelay: `${idx * 80}ms` }}>
-                        <div className={`absolute left-[14px] top-1 w-5 h-5 rounded-full border-4 border-white dark:border-gray-900 shadow-md ${
+                      <div key={visit.id || idx} className="relative pl-10 md:pl-14 animate-in" style={{ animationDelay: `${idx * 80}ms` }}>
+                        <div className={`absolute left-[9px] md:left-[14px] top-1 w-4 h-4 md:w-5 md:h-5 rounded-full border-2 md:border-4 border-white dark:border-gray-900 shadow-md ${
                           visit.status === 'completed' ? 'bg-emerald-500'
                           : visit.status === 'cancelled' ? 'bg-red-400'
                           : 'bg-amber-400'
                         }`} />
-                        <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700 p-5 hover:shadow-md dark:hover:shadow-gray-900/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200">
-                          <div className="flex items-start justify-between gap-4 mb-3">
-                            <div className="flex items-center gap-3">
-                              <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                              <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(visit.date)}</span>
+                        <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700 p-4 md:p-5 hover:shadow-md dark:hover:shadow-gray-900/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 mb-3">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
+                              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-gray-500 shrink-0" />
+                              <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base">{formatDate(visit.date)}</span>
                               {visit.time && (
-                                <><span className="text-gray-300 dark:text-gray-600">•</span><Clock className="w-4 h-4 text-gray-400 dark:text-gray-500" /><span className="text-gray-600 dark:text-gray-400">{visit.time}</span></>
+                                <><span className="text-gray-300 dark:text-gray-600">•</span><Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-gray-500 shrink-0" /><span className="text-gray-600 dark:text-gray-400 text-sm">{visit.time}</span></>
                               )}
                             </div>
-                            <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            <span className={`self-start shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ${
                               visit.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
                               : visit.status === 'cancelled' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'
                               : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
@@ -532,22 +631,24 @@ export default function PatientDetailPage() {
                             </span>
                           </div>
                           {visit.status === 'completed' && (
-                            <button onClick={() => router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`)}
-                              className="float-right inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95">
-                              <Edit3 className="w-3 h-3" /> Edit
-                            </button>
+                            <div className="flex justify-end mb-3 -mt-2">
+                              <button onClick={() => router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`)}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95">
+                                <Edit3 className="w-3 h-3" /> Edit
+                              </button>
+                            </div>
                           )}
                           {(visit.treatment || visit.consultation_fee || visit.treatment_charges || visit.medicine_charges) && (
-                            <div className="flex flex-wrap items-center gap-3 mb-3">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
                               {visit.treatment && (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
-                                  <Stethoscope className="w-3.5 h-3.5 text-blue-500" />
+                                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+                                  <Stethoscope className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" />
                                   {visit.treatment}
                                 </span>
                               )}
                               {(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0)) > 0 && (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
-                                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+                                  <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500" />
                                   {formatCurrency(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0))}
                                 </span>
                               )}
@@ -615,23 +716,23 @@ export default function PatientDetailPage() {
 
         {/* Tab Content: Feedback */}
         {activeTab === 'feedback' && (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
               <Star className="w-5 h-5 text-amber-500" />
               Patient Feedback
             </h2>
             {feedback.filter(f => f.rating).length > 0 ? (
               <>
-                <div className="grid grid-cols-3 gap-3 mb-6">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
                   {['great', 'okay', 'poor'].map(rating => {
                     const entries = feedback.filter(f => f.rating === rating);
                     if (entries.length === 0) return null;
                     const r = ratingEmoji(rating);
                     return (
-                      <div key={rating} className={`rounded-xl p-4 text-center ${r.color} border border-current/20`}>
-                        <div className="text-2xl mb-1">{r.emoji}</div>
-                        <div className="text-lg font-bold">{entries.length}</div>
-                        <div className="text-xs font-medium opacity-70">{r.label}</div>
+                      <div key={rating} className={`rounded-xl p-3 sm:p-4 text-center ${r.color} border border-current/20`}>
+                        <div className="text-xl sm:text-2xl mb-1">{r.emoji}</div>
+                        <div className="text-base sm:text-lg font-bold">{entries.length}</div>
+                        <div className="text-[10px] sm:text-xs font-medium opacity-70">{r.label}</div>
                       </div>
                     );
                   })}
@@ -664,8 +765,8 @@ export default function PatientDetailPage() {
 
         {/* Tab Content: Messages */}
         {activeTab === 'messages' && (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2.5">
                 <MessageSquare className="w-5 h-5 text-blue-500 dark:text-blue-400" />
                 Message History
@@ -674,7 +775,7 @@ export default function PatientDetailPage() {
                 <button
                   onClick={endChat}
                   disabled={endingChat}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all active:scale-95 disabled:opacity-50"
                 >
                   {endingChat ? 'Ending...' : 'End Chat'}
                 </button>
@@ -744,25 +845,114 @@ export default function PatientDetailPage() {
         )}
       </div>
 
+        {/* Link Family Member Modal */}
+        {showLinkFamily && (
+          <>
+            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm" onClick={() => { setShowLinkFamily(false); setLinkSearch(''); setLinkSearchResults([]); }} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+                <div className="flex items-center justify-between px-4 sm:px-5 pt-4 pb-3 border-b border-gray-100 dark:border-gray-800">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Link Family Member</h3>
+                  <button
+                    onClick={() => { setShowLinkFamily(false); setLinkSearch(''); setLinkSearchResults([]); }}
+                    className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="p-4 sm:p-5 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Search Patient</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={linkSearch}
+                        onChange={e => setLinkSearch(e.target.value)}
+                        placeholder="Type patient name..."
+                        className="w-full pl-3 pr-8 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                        autoFocus
+                      />
+                      {linkSearching && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="w-3.5 h-3.5 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    {linkSearchResults.length > 0 && (
+                      <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+                        {linkSearchResults.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => handleLinkPatient(p.id)}
+                            disabled={linking}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-transparent hover:border-violet-200 dark:hover:border-violet-800 transition-all text-left"
+                          >
+                            <span className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-semibold text-gray-600 dark:text-gray-300 shrink-0">
+                              {(p.name || '?')[0].toUpperCase()}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500">{p.phone || 'No phone'} {p.age ? `· ${p.age}yrs` : ''}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {linkSearch.length >= 2 && !linkSearching && linkSearchResults.length === 0 && (
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">No matching patients found.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Relationship</label>
+                    <select
+                      value={linkType}
+                      onChange={e => setLinkType(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400 text-gray-900 dark:text-gray-100"
+                    >
+                      <option value="spouse">Spouse</option>
+                      <option value="child">Child</option>
+                      <option value="parent">Parent</option>
+                      <option value="sibling">Sibling</option>
+                      <option value="guardian">Guardian</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => { setShowLinkFamily(false); setLinkSearch(''); setLinkSearchResults([]); }}
+                      className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center flex-1">Select a patient and relationship above</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Send Message Modal */}
         {showMessageModal && (
           <>
             <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm" onClick={() => setShowMessageModal(false)} />
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
-                <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getAvatarColor(patient.name)} flex items-center justify-center text-white font-bold text-sm shadow-md`}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in mx-auto">
+                <div className="flex items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${getAvatarColor(patient.name)} flex items-center justify-center text-white font-bold text-sm shadow-md shrink-0`}>
                       {getInitials(patient.name)}
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Send Message to {patient.name === '?' ? 'Patient' : patient.name}</h3>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">Message will be sent via WhatsApp</p>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">Send Message to {patient.name === '?' ? 'Patient' : patient.name}</h3>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Via WhatsApp</p>
                     </div>
                   </div>
                   <button
                     onClick={() => { setShowMessageModal(false); setMessageText(''); }}
-                    className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
+                    className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all shrink-0"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -789,15 +979,15 @@ export default function PatientDetailPage() {
                           loadMessages();
                         }
                       } else {
-                        alert(data.error || 'Failed to send message');
+                        showToast(data.error || 'Failed to send message', 'error');
                       }
                     } catch (err) {
-                      alert('Network error — could not send message');
+                      showToast('Network error — could not send message', 'error');
                     } finally {
                       setSendingMessage(false);
                     }
                   }}
-                  className="p-6"
+                  className="p-4 sm:p-6"
                 >
                   <div className="relative">
                     <textarea
@@ -817,7 +1007,7 @@ export default function PatientDetailPage() {
                       {patient.phone ? `Via WhatsApp — ${patient.phone}` : 'No phone number on file'}
                     </p>
                   </div>
-                  <div className="flex items-center justify-end gap-3 mt-4">
+                  <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 mt-4">
                     <button
                       type="button"
                       onClick={() => { setShowMessageModal(false); setMessageText(''); }}
@@ -828,7 +1018,7 @@ export default function PatientDetailPage() {
                     <button
                       type="submit"
                       disabled={!messageText.trim() || sendingMessage}
-                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 active:scale-95 shadow-md"
+                      className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 active:scale-95 shadow-md"
                     >
                       <MessageSquare className="w-4 h-4" />
                       {sendingMessage ? 'Sending…' : 'Send Message'}

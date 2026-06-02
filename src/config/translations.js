@@ -368,6 +368,84 @@ export const T = {
   more_dates_btn: { en: 'More dates\u2026', hi: 'Aur dates\u2026' },
   type_date_btn: { en: 'Type a different date', hi: 'Koi aur date type karein' },
   type_time_btn: { en: 'Type a different time', hi: 'Koi aur time type karein' },
+  // ── Walk-in Registration ──
+  walkin_resume: {
+    en: 'I\'m still here! Let\'s continue with your registration.',
+    hi: 'Main abhi bhi yahan hoon! Chaliye registration jaari rakhte hain.',
+  },
+  walkin_ask_name: {
+    en: '👋 *Welcome!* It looks like you don\'t have an appointment. No problem! I can add you as a walk-in.\n\nWhat\'s your name?',
+    hi: '👋 *Aapka swagat hai!* Aapka koi appointment nahi hai. Koi baat nahi! Main aapko walk-in add kar sakta hoon.\n\nAapka naam kya hai?',
+  },
+  walkin_ask_name_again: {
+    en: 'Please share your name so I can add you to the queue.',
+    hi: 'Kripya apna naam batayein taaki main aapko queue me add kar sakun.',
+  },
+  walkin_ask_age: {
+    en: 'Thanks, {name}! How old are you?',
+    hi: 'Shukriya, {name}! Aapki umar kya hai?',
+  },
+  walkin_ask_age_again: {
+    en: 'Please share your age in years (e.g. 25).',
+    hi: 'Kripya apni umar saalo me batayein (jaise: 25).',
+  },
+  walkin_ask_sex: {
+    en: 'Got it! And your gender? (Male / Female / Other)',
+    hi: 'Theek hai! Aur aapka ling? (Male / Female / Other)',
+  },
+  walkin_ask_sex_again: {
+    en: 'Please reply Male, Female, or Other.',
+    hi: 'Kripya Male, Female, ya Other reply karein.',
+  },
+  walkin_ask_treatment: {
+    en: 'Thanks! What problem are you facing, {name}? Pick the closest option.',
+    hi: 'Shukriya! Aapko kya problem hai, {name}? Sabse milta-julta option chunein.',
+  },
+  walkin_ask_treatment_again: {
+    en: "I didn't catch that. Please pick from the list or describe your symptoms:",
+    hi: 'Samajh nahi aaya. Kripya list me se chunein ya apni symptoms batayein:',
+  },
+  walkin_done: {
+    en: '✅ *You\'re all set, {name}!*\n\nYou\'ve been added to the queue. Please take a seat. Dr. {doctor} will see you shortly.\n\n🦷 *Treatment:* {treatment}\n👤 Age: {age}  |  Sex: {sex}',
+    hi: '✅ *Sab set hai, {name}!*\n\nAapko queue me add kar diya gaya hai. Kripya baith jayein. Dr. {doctor} aapko jald milenge.\n\n🦷 *Treatment:* {treatment}\n👤 Umar: {age}  |  Ling: {sex}',
+  },
+  walkin_failed: {
+    en: 'Sorry, couldn\'t add you to the queue right now. Please call {phone} or speak to the receptionist.',
+    hi: 'Sorry, aapko abhi queue me add nahi kar paya. Kripya {phone} par call karein ya receptionist se baat karein.',
+  },
+
+  // ── Arrival / Welcome at Clinic ──
+  arrival_welcome: {
+    en: '👋 *Welcome to {clinic}, {name}!*\n\nYou have been marked as arrived. Please take a seat in the waiting area. Dr. {doctor} will see you shortly.\n\nIf you need anything, just type here.',
+    hi: '👋 *{clinic} me aapka swagat hai, {name}!*\n\nAapko arrived mark kar diya gaya hai. Kripya waiting area me baith jayein. Dr. {doctor} aapko jald milenge.\n\nAgar kuch chahiye to yahan type karein.',
+  },
+  arrival_no_appointment: {
+    en: '👋 *Welcome to {clinic}!*\n\nIt looks like you don\'t have an appointment today. Would you like to book one? Type "Book" to get started.',
+    hi: '👋 *{clinic} me aapka swagat hai!*\n\nAapka aaj ke liye koi appointment nahi hai. Kya aap book karna chahenge? "Book" type karein shuru karne ke liye.',
+  },
+
+  // ── Post-Visit Summary ──
+  post_visit: {
+    en: '🌟 *Hope your visit went well, {name}!*\n\n{visitDetails}\n\n{nextVisit}{instructions}\n\nIf you have any questions, just message us. We\'re here to help! \u{1F60A}',
+    hi: '🌟 *Aapka visit achha raha hoga, {name}!*\n\n{visitDetails}\n\n{nextVisit}{instructions}\n\nAgar koi sawaal hai to hume message karein. Hum help ke liye yahan hain! \u{1F60A}',
+  },
+  post_visit_next: {
+    en: '\uD83D\uDDD3 *Next visit:* {date}',
+    hi: '\uD83D\uDDD3 *Agli visit:* {date}',
+  },
+  post_visit_instructions: {
+    en: '\uD83D\uDCDD *Instructions:* {text}',
+    hi: '\uD83D\uDCDD *Instructions:* {text}',
+  },
+  post_visit_treatment: {
+    en: '\u{1F9B7} Treatment: {treatment}',
+    hi: '\u{1F9B7} Treatment: {treatment}',
+  },
+  post_visit_visit_done: {
+    en: '\u{1F9B7} Visit completed at {time}',
+    hi: '\u{1F9B7} {time} par visit complete hua',
+  },
+
   thanks_reply: { en: "You're welcome! Let me know if you need anything else.", hi: 'Aapka swagat hai! Agar aur kuch chahiye to batayein.' },
   treatment_help_prompt: {
     en: "No problem! Tell me a bit about what you're experiencing:\n\n\u2022 Tooth pain or sensitivity?\n\u2022 Need a routine checkup?\n\u2022 Looking for cosmetic treatment (whitening, braces)?\n\u2022 Something else?\n\nJust describe your symptoms and I'll recommend the right treatment.",

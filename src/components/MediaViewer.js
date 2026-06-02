@@ -95,7 +95,7 @@ export default function MediaViewer({ mediaKeys, getSignedUrl }) {
         >
           <button
             onClick={() => setOpenIndex(null)}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
+            className="absolute top-4 right-4 w-11 h-11 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
           >
             <X className="w-5 h-5" />
           </button>
@@ -113,7 +113,7 @@ export default function MediaViewer({ mediaKeys, getSignedUrl }) {
                   const prev = photoIndices[(currentPhotoPos - 1 + photoIndices.length) % photoIndices.length];
                   setOpenIndex(prev);
                 }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -128,7 +128,7 @@ export default function MediaViewer({ mediaKeys, getSignedUrl }) {
                   const next = photoIndices[(currentPhotoPos + 1) % photoIndices.length];
                   setOpenIndex(next);
                 }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>

@@ -2,7 +2,7 @@ import { getSql } from '@/db/pool';
 import { CLINIC } from '@/config/clinic';
 import { validateDate, validateTime, validateTreatment, validatePhone } from '@/lib/validators';
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
-import { createAppointment, findUpcomingByWaId, supersedeAppointment, cancelAppointment,
+import { createAppointment, findAppointmentsByWaId, findUpcomingByWaId, supersedeAppointment, cancelAppointment,
          fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange,
           countAppointmentsBySlot, findBookedTimesForDate, findNextAvailableSlots, fetchLatestCompletedByWaId, fetchTodayQueue, updateArrivalStatus,
          countTodayByArrivalStatus, toggleAppointmentPriority,
@@ -177,6 +177,12 @@ export async function handle(state, { session, normalized, entities, intent }) {
   session.context.messageSequence = (session.context.messageSequence || 0) + 1;
 
   // Global intent handling (before state-specific routing)
+  if (intent === 'arrival') {
+    // Doctor/receptionist scanning QR should go to their own menu, not patient walk-in
+    if (session.context?.role === 'doctor') return handleDoctorGreeting(session);
+    if (session.context?.role === 'receptionist') return handleReceptionistGreeting(session);
+    return handleArrival(session);
+  }
   if (intent === 'emergency') return handleEmergency(session);
   if (intent === 'language_en') {
     session.context = { ...session.context, language: 'en' };
@@ -463,6 +469,18 @@ async function handleDoctorMediaPatientLookup(session, query) {
     case 'BOOKED':
       return handleBooked(session, intent);
 
+    case 'WALKIN_NAME':
+      return handleWalkinName(session, normalized, entities, intent);
+
+    case 'WALKIN_AGE':
+      return handleWalkinAge(session, normalized, entities, intent);
+
+    case 'WALKIN_SEX':
+      return handleWalkinSex(session, normalized, entities, intent);
+
+    case 'WALKIN_TREATMENT':
+      return handleWalkinTreatment(session, entities, normalized, intent);
+
     case 'CANCEL_CONFIRM':
       return handleCancelConfirm(session, intent);
 
@@ -631,6 +649,334 @@ async function getChitMediaRows(media, apptId) {
     });
   }
   return rows;
+}
+
+// ───────────────────────────────────────────────
+// ARRIVAL — patient checks in at clinic (via QR scan or keyword)
+// ───────────────────────────────────────────────
+async function handleArrival(session) {
+  // If already in walk-in registration, don't restart — just continue
+  const walkinStates = ['WALKIN_NAME', 'WALKIN_AGE', 'WALKIN_SEX', 'WALKIN_TREATMENT'];
+  if (walkinStates.includes(session.state)) {
+    const prompts = {
+      WALKIN_NAME: 'walkin_ask_name_again',
+      WALKIN_AGE: 'walkin_ask_age_again',
+      WALKIN_SEX: 'walkin_ask_sex_again',
+      WALKIN_TREATMENT: 'walkin_ask_treatment_again',
+    };
+    return {
+      session,
+      reply: tr(session, 'walkin_resume') + '\n\n' + tr(session, prompts[session.state]),
+      replyType: 'text',
+    };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  try {
+    // Find today's confirmed appointments for this patient
+    const appointments = await findAppointmentsByWaId(session.waId);
+    const todaysAppts = appointments.filter(a =>
+      a.date && a.date.slice(0, 10) === today &&
+      a.status === 'confirmed' &&
+      a.status !== 'cancelled'
+    );
+
+    if (todaysAppts.length > 0) {
+      // Pick the earliest appointment for today
+      todaysAppts.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+      const appt = todaysAppts[0];
+
+      // Mark as arrived
+      await updateArrivalStatus(appt.id, 'arrived');
+
+      const name = appt.patient_name || session.profileName || '';
+      const firstName = name.split(' ')[0];
+
+      session = { ...session, state: session.state === 'IDLE' ? 'MAIN_MENU' : session.state };
+
+      return {
+        session,
+        reply: tr(session, 'arrival_welcome', {
+          clinic: CLINIC.name,
+          name: firstName || 'Patient',
+          doctor: CLINIC.doctor?.name || 'the doctor',
+        }),
+        replyType: 'text',
+      };
+    }
+
+    // No appointment found — start walk-in registration
+    session = {
+      ...session,
+      state: 'WALKIN_NAME',
+      previousState: session.state,
+      context: {
+        ...session.context,
+        walkin: { name: null, age: null, sex: null, treatment: null },
+      },
+      metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+    };
+    return {
+      session,
+      reply: tr(session, 'walkin_ask_name'),
+      replyType: 'text',
+    };
+  } catch (error) {
+    logger.error('ARRIVAL_HANDLER_ERROR', { waId: session.waId, error: error.message });
+    return {
+      session,
+      reply: tr(session, 'walkin_failed', { phone: CLINIC.phone }),
+      replyType: 'text',
+    };
+  }
+}
+
+// ───────────────────────────────────────────────
+// Walk-in registration handlers
+// ───────────────────────────────────────────────
+async function handleWalkinName(session, normalized, entities, intent) {
+  // 'back' is handled by the handle() function via global intent before reaching here
+  const text = (normalized?.textTrimmed || '').trim();
+  if (!text || text.length < 1) {
+    session.metrics = { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 };
+    return { session, reply: tr(session, 'walkin_ask_name_again'), replyType: 'text' };
+  }
+  const name = text;
+  session = {
+    ...session,
+    state: 'WALKIN_AGE',
+    context: { ...session.context, walkin: { ...session.context.walkin, name } },
+    metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+  };
+  return { session, reply: tr(session, 'walkin_ask_age', { name }), replyType: 'text' };
+}
+
+async function handleWalkinAge(session, normalized, entities, intent) {
+  const text = (normalized?.textTrimmed || '').trim();
+  const ageMatch = text.match(/(\d+)/);
+  const age = ageMatch ? parseInt(ageMatch[1], 10) : null;
+  if (!age || age < 1 || age > 150) {
+    session.metrics = { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 };
+    return { session, reply: tr(session, 'walkin_ask_age_again'), replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'WALKIN_SEX',
+    context: { ...session.context, walkin: { ...session.context.walkin, age } },
+    metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+  };
+  return { session, reply: tr(session, 'walkin_ask_sex', { name: session.context.walkin.name }), replyType: 'text' };
+}
+
+async function handleWalkinSex(session, normalized, entities, intent) {
+  const text = (normalized?.textLower || '').trim();
+  let sex = null;
+  if (/^m(ale)?$/i.test(text)) sex = 'Male';
+  else if (/^f(emale)?$/i.test(text)) sex = 'Female';
+  else sex = text; // Allow any input as custom response
+
+  if (!sex) {
+    session.metrics = { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 };
+    return { session, reply: tr(session, 'walkin_ask_sex_again'), replyType: 'text' };
+  }
+  session = {
+    ...session,
+    state: 'WALKIN_TREATMENT',
+    context: { ...session.context, walkin: { ...session.context.walkin, sex } },
+    metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+  };
+  return {
+    session,
+    reply: {
+      body: tr(session, 'walkin_ask_treatment', { name: session.context.walkin.name }),
+      buttonLabel: tr(session, 'select_option'),
+      sections: symptomSections(session),
+    },
+    replyType: 'list',
+  };
+}
+
+async function handleWalkinTreatment(session, entities, normalized, intent) {
+  let treatment = entities?.treatment || null;
+
+  if (!treatment && normalized) {
+    const num = normalized.textTrimmed.match(/^(\d+)$/);
+    if (num) {
+      const idx = parseInt(num[1], 10) - 1;
+      if (CLINIC.treatments[idx]) {
+        treatment = CLINIC.treatments[idx].name;
+      }
+    }
+  }
+
+  if (!treatment && normalized?.textTrimmed) {
+    const suggestion = recommendTreatment(normalized.textLower);
+    if (suggestion) treatment = suggestion;
+  }
+
+  if (!treatment) {
+    return {
+      session,
+      reply: {
+        body: tr(session, 'walkin_ask_treatment_again'),
+        buttonLabel: tr(session, 'select_option'),
+        sections: symptomSections(session),
+      },
+      replyType: 'list',
+    };
+  }
+
+  // All walk-in info collected — create appointment + patient record
+  const walkin = session.context.walkin;
+  const today = new Date().toISOString().slice(0, 10);
+
+  try {
+    let patientId = null;
+    const existingPatients = await findPatientsByWaId(session.waId);
+
+    if (existingPatients.length > 0) {
+      const patient = existingPatients[0];
+      patientId = patient.id;
+      // Update existing patient with walk-in info
+      await updatePatient(patientId, { name: walkin.name, age: walkin.age, sex: walkin.sex });
+    } else {
+      const newPatient = await createPatient({
+        name: walkin.name,
+        waId: session.waId,
+        phone: session.waId,
+      });
+      if (newPatient) {
+        patientId = newPatient.id;
+        await updatePatient(patientId, { age: walkin.age, sex: walkin.sex });
+      }
+    }
+
+    const appointment = await createAppointment({
+      sessionId: session.id,
+      waId: session.waId,
+      patientName: walkin.name,
+      patientId,
+      patientPhone: session.waId,
+      date: today,
+      time: null,
+      treatment,
+    });
+
+    if (appointment) {
+      await updateArrivalStatus(appointment.id, 'arrived');
+
+      logger.info('WALKIN_CREATED', {
+        waId: session.waId,
+        appointmentId: appointment.id,
+        patientName: walkin.name,
+        age: walkin.age,
+        sex: walkin.sex,
+        treatment,
+      });
+
+      session = {
+        ...session,
+        state: 'MAIN_MENU',
+        context: { ...session.context, walkin: undefined, appointmentId: appointment.id, logicalId: appointment.logical_id },
+        metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+      };
+
+      return {
+        session,
+        reply: tr(session, 'walkin_done', {
+          name: walkin.name,
+          treatment,
+          age: String(walkin.age),
+          sex: walkin.sex,
+          doctor: CLINIC.doctor?.name || 'the doctor',
+        }),
+        replyType: 'text',
+      };
+    }
+  } catch (error) {
+    logger.error('WALKIN_CREATE_ERROR', { waId: session.waId, error: error.message });
+  }
+
+  return {
+    session,
+    reply: tr(session, 'walkin_failed', { phone: CLINIC.phone }),
+    replyType: 'text',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Post-visit summary check — fire-and-forget from engine.js
+// Sends a post-visit message if the patient's appointment time + 40 min has passed.
+// ───────────────────────────────────────────────
+export async function checkAndSendPostVisit(waId) {
+  try {
+    const sql = getSql();
+    if (!sql) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // Find today's confirmed appointments for this patient
+    // that haven't received a post-visit message yet
+    const rows = await sql`
+      SELECT * FROM appointments
+      WHERE wa_id = ${waId}
+        AND date = ${today}
+        AND status = 'confirmed'
+        AND post_visit_sent_at IS NULL
+    `;
+
+    for (const appt of rows) {
+      if (!appt.time) continue;
+
+      const [h, m] = appt.time.split(':').map(Number);
+      const apptEndMinutes = h * 60 + m + 40; // 40-min buffer for visit duration
+
+      if (nowMinutes < apptEndMinutes) continue;
+
+      // Time has passed — send post-visit summary
+      const name = appt.patient_name || 'Patient';
+      const firstName = name.split(' ')[0];
+
+      const timeFormatted = new Date(`2000-01-01T${appt.time}`).toLocaleTimeString('en-IN', {
+        hour: '2-digit', minute: '2-digit', hour12: true,
+      });
+
+      const lang = 'en';
+      let visitDetails = appt.treatment
+        ? `🦷 Treatment: ${appt.treatment}`
+        : `🦷 Visit completed at ${timeFormatted}`;
+
+      let nextVisit = '';
+      if (appt.follow_up_date) {
+        const d = new Date(appt.follow_up_date);
+        const dateStr = d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+        nextVisit = `\n🗓 *Next visit:* ${dateStr}`;
+      }
+
+      let instructions = '';
+      if (appt.follow_up_instructions) {
+        instructions = `\n📝 *Instructions:* ${appt.follow_up_instructions}`;
+      } else if (appt.notes) {
+        instructions = `\n📝 *Note:* ${appt.notes}`;
+      }
+
+      const message =
+        `🌟 *Hope your visit went well, ${firstName}!*\n\n` +
+        `${visitDetails}` +
+        `${nextVisit}${instructions}\n\n` +
+        `If you have any questions, just message us. We're here to help! \u{1F60A}`;
+
+      await sendText(waId, message);
+      await sql`UPDATE appointments SET post_visit_sent_at = NOW() WHERE id = ${appt.id}`;
+
+      logger.info('POST_VISIT_SENT', { waId, appointmentId: appt.id });
+    }
+  } catch (error) {
+    logger.warn('POST_VISIT_CHECK_ERROR', { waId, error: error.message });
+  }
 }
 
 // ───────────────────────────────────────────────

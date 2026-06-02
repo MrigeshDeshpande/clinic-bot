@@ -9,6 +9,7 @@ export const STATES = [
   'LOG_TREATMENT','LOG_CONSULTATION_FEE','LOG_TREATMENT_CHARGES','LOG_MEDICINE_CHARGES',
   'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT',
   'DOCTOR_PATIENT_VISITS','DOCTOR_EDIT_PATIENT','DOCTOR_FEEDBACK',
+  'WALKIN_NAME','WALKIN_AGE','WALKIN_SEX','WALKIN_TREATMENT',
   'DOCTOR_LOG_VISIT_NAME','DOCTOR_VIEW_MESSAGES',
   'FAMILY_SELECTION',
   'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL','DOCTOR_VIEW_QUEUE',
@@ -65,4 +66,10 @@ export const TRANSITIONS = {
   RECEPTIONIST_QUEUE_DETAIL: ['queue_mark_called','queue_toggle_priority','back','emergency','escalate'],
   DOCTOR_VIEW_QUEUE: ['doctor_call_next','doctor_call_patient','back','emergency','escalate'],
   FAMILY_SELECTION: ['select_family_patient','back','emergency','escalate'],
+
+  // Walk-in registration states
+  WALKIN_NAME:        ['back','emergency','escalate'],
+  WALKIN_AGE:         ['back','emergency','escalate'],
+  WALKIN_SEX:         ['back','emergency','escalate'],
+  WALKIN_TREATMENT:   ['provide_treatment','treatment_help','back','emergency','escalate'],
 };
