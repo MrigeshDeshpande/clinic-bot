@@ -135,6 +135,7 @@ Patient receives:
 - `src/lib/whatsapp.js` — `sendDocument()` function for WhatsApp document API
 - `src/lib/handlers.js` — `sendPrescriptionToPatient()` called after visit logging in `handleLogMedia`
 - PDF uploaded to R2 → signed URL → sent as WhatsApp document
+- R2 key persisted in `appointments.prescription_key` column — visible in dashboard patient detail, appointment list, and visit detail APIs
 - Falls back gracefully (text-only) if PDF generation or upload fails
 
 #### 3.5 Language Toggle on Web ❌ NOT STARTED
@@ -202,5 +203,6 @@ Deferred — bot already supports bilingual mode.
 - `src/db/repositories/appointmentRepository.js` — queue queries + next available slots
 - `src/lib/handlers.js` — all handler logic (~5045 lines)
 - `src/lib/engine.js` — unchanged
-- `src/lib/prescription.js` — PDF prescription generator (NEW)
+- `src/lib/prescription.js` — PDF prescription generator
 - `src/lib/whatsapp.js` — `sendDocument()` for WhatsApp document API
+- `src/db/pool.js` — `prescription_key` column on appointments

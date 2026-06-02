@@ -74,7 +74,7 @@ export async function POST(req) {
       const updated = await sql`
         SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,
                diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
-               notes, follow_up_date, follow_up_instructions,
+               notes, follow_up_date, follow_up_instructions, prescription_key,
                status, arrival_status, created_at, updated_at
         FROM appointments WHERE id = ${appointmentId}
       `;

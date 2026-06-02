@@ -239,7 +239,7 @@ Doctor Experience:
 | Session management | `src/lib/session.js` |
 | WhatsApp client | `src/lib/whatsapp.js` |
 | Media handling | `src/lib/media.js`, `src/lib/r2.js`, `src/lib/transcriber.js` |
-| Prescription | `src/lib/prescription.js` |
+| Prescription | `src/lib/prescription.js`, `appointments.prescription_key` in DB |
 | Repositories | `src/db/repositories/*.js` |
 | Cron jobs | `src/app/api/cron/*/route.js` |
 | Dashboard pages | `src/app/dashboard/*` |

@@ -348,6 +348,12 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS feedback_sent_at TIMESTAMPTZ;
     `;
 
+    // prescription_key on appointments — R2 object key for generated PDF
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS prescription_key TEXT;
+    `;
+
     // Callback contacted tracking
     await db`
       ALTER TABLE feedback

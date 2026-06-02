@@ -81,7 +81,7 @@ export async function GET(req) {
                a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
                a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
-               a.chit_media, a.created_at, a.updated_at
+               a.chit_media, a.prescription_key, a.created_at, a.updated_at
         FROM appointments a
         WHERE a.id = ${id}
         LIMIT 1
@@ -99,7 +99,7 @@ export async function GET(req) {
         SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
                a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
-               a.chit_media, a.created_at, a.updated_at
+               a.chit_media, a.prescription_key, a.created_at, a.updated_at
         FROM appointments a
         WHERE a.date = ${targetDate}
           AND a.status IN ('confirmed', 'completed', 'no_show')

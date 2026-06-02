@@ -3740,6 +3740,13 @@ async function sendPrescriptionToPatient(waId, appt, vl) {
     if (result?.url) {
       await sendDocument(waId, result.url, `Prescription - ${CLINIC.name}`, `prescription_${appt.id}.pdf`);
       logger.info('PRESCRIPTION_SENT', { waId, apptId: appt.id });
+      // Persist the R2 key so it shows in chat history / dashboard
+      if (result?.key) {
+        const sql = getSql();
+        if (sql) {
+          await sql`UPDATE appointments SET prescription_key = ${result.key}, updated_at = NOW() WHERE id = ${appt.id}`;
+        }
+      }
     }
   } catch (error) {
     logger.warn('PRESCRIPTION_SEND_FAILED', { waId, apptId: appt?.id, error: error.message });
