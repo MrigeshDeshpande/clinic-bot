@@ -15,8 +15,8 @@ export async function GET(req) {
 
     const recent = waId
       ? await sql`
-          SELECT f.id, f.rating, f.comment, f.callback, f.callback_contacted_at, f.created_at,
-                 a.patient_name, a.date, a.treatment
+          SELECT f.id, f.wa_id, f.rating, f.comment, f.callback, f.callback_contacted_at, f.created_at,
+                 a.id AS appointment_id, a.patient_name, a.date, a.treatment
           FROM feedback f
           LEFT JOIN appointments a ON f.appointment_id = a.id
           WHERE f.wa_id = ${waId}
@@ -24,8 +24,8 @@ export async function GET(req) {
           LIMIT ${limit}
         `
       : await sql`
-          SELECT f.id, f.rating, f.comment, f.callback, f.callback_contacted_at, f.created_at,
-                 a.patient_name, a.date, a.treatment
+          SELECT f.id, f.wa_id, f.rating, f.comment, f.callback, f.callback_contacted_at, f.created_at,
+                 a.id AS appointment_id, a.patient_name, a.date, a.treatment
           FROM feedback f
           LEFT JOIN appointments a ON f.appointment_id = a.id
           ORDER BY f.created_at DESC

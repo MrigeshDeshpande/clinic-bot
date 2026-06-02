@@ -292,7 +292,7 @@ export default function AppointmentsPage() {
                                 )}
                                 {a.arrival_status === 'called' && (
                                   <button
-                                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
+                                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=appointments`)}
                                     className="px-2 py-1 text-[10px] font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all"
                                   >
                                     ✓ Start Visit
@@ -303,7 +303,7 @@ export default function AppointmentsPage() {
                               <div className="flex gap-1 justify-end">
                                 {a.arrival_status !== 'called' && (
                                   <button
-                                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
+                                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=appointments`)}
                                     className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all hover:shadow-sm"
                                   >
                                     ✓ Complete

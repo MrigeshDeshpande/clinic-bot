@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, Phone, UserCheck, UserX, ArrowRight, Star } from 'lucide-react';
+import { DateContext } from '../layout';
+import { formatDateLong } from '@/lib/date';
 
 export default function QueuePage() {
+  const { selectedDate, setSelectedDate } = useContext(DateContext);
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -14,7 +17,7 @@ export default function QueuePage() {
   const fetchQueue = useCallback(async (isManual) => {
     if (isManual) setRefreshing(true);
     try {
-      const res = await fetch('/api/dashboard/appointments?date=' + new Date().toISOString().slice(0, 10));
+      const res = await fetch('/api/dashboard/appointments?date=' + selectedDate);
       const data = await res.json();
       setQueue(data.appointments || []);
     } catch (e) {
@@ -23,7 +26,7 @@ export default function QueuePage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
 
@@ -69,20 +72,28 @@ export default function QueuePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Queue Board</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {formatDateLong(selectedDate)}
           </p>
         </div>
-        <button
-          onClick={() => fetchQueue(true)}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-        >
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+          />
+          <button
+            onClick={() => fetchQueue(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+          >
           <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           {refreshing ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
+    </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Waiting Column */}
@@ -161,7 +172,7 @@ export default function QueuePage() {
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
-                      onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}`)}
+                      onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=queue`)}
                       className="w-full py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all flex items-center justify-center gap-1"
                     >
                       <ArrowRight className="w-3 h-3" /> Start Visit

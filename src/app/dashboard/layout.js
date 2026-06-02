@@ -10,6 +10,7 @@ const NotificationPanel = dynamic(() => import('@/components/NotificationPanel')
 
 export const DateContext = createContext();
 export const ThemeContext = createContext();
+export const ToastContext = createContext();
 
 const NAV = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -192,10 +193,32 @@ function SidebarContent({ pathname, onNavClick }) {
   );
 }
 
+function Toasts({ toasts, removeToast }) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
+      {toasts.map(t => (
+        <div
+          key={t.id}
+          className={`px-4 py-3 rounded-xl shadow-lg text-sm font-medium animate-slide-up flex items-center gap-2 ${
+            t.type === 'error' ? 'bg-red-600 text-white' :
+            t.type === 'success' ? 'bg-emerald-600 text-white' :
+            'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+          }`}
+        >
+          <span className="flex-1">{t.message}</span>
+          <button onClick={() => removeToast(t.id)} className="opacity-70 hover:opacity-100">&times;</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [toasts, setToasts] = useState([]);
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dashboard-dark-mode');
@@ -226,6 +249,16 @@ export default function DashboardLayout({ children }) {
     setSidebarOpen(false);
   }, [pathname]);
 
+  function showToast(message, type = 'info') {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }
+
+  function removeToast(id) {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }
+
   // Prevent body scroll when sidebar is open on mobile
   useEffect(() => {
     if (sidebarOpen) {
@@ -243,6 +276,7 @@ export default function DashboardLayout({ children }) {
   return (
     <ThemeContext.Provider value={{ darkMode, setDarkMode }}>
       <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
+        <ToastContext.Provider value={{ showToast }}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
           {/* Mobile Header Bar */}
           <div className="md:hidden fixed top-0 left-0 right-0 z-20 flex items-center justify-between px-4 h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -299,6 +333,8 @@ export default function DashboardLayout({ children }) {
             </div>
           </main>
         </div>
+        <Toasts toasts={toasts} removeToast={removeToast} />
+      </ToastContext.Provider>
       </DateContext.Provider>
     </ThemeContext.Provider>
   );

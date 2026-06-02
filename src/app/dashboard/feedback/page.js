@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Star, Phone, ThumbsUp, Meh, Frown, CheckCircle } from 'lucide-react';
 
 export default function FeedbackPage() {
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     fetch('/api/dashboard/feedback?limit=50')
@@ -123,7 +125,7 @@ export default function FeedbackPage() {
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
               {entries.map((e, i) => (
-                <div key={e.id || i} className="px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                <div key={e.id || i} className="px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/patients?q=${encodeURIComponent(e.patient_name || '')}`)}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ratingBadge(e.rating)}`}>

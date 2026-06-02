@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Users, ChevronRight, Phone, Calendar, Activity } from 'lucide-react';
 import { formatDate } from '@/lib/date';
 
 export default function PatientsPage() {
+  const searchParams = useSearchParams();
   const [patients, setPatients] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const searchRef = useRef(null);

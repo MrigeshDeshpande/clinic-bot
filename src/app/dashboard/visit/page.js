@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense, useRef, useContext } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { ToastContext } from '../layout';
 import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 
@@ -18,6 +19,7 @@ export default function VisitPage() {
 }
 
 function VisitPageInner() {
+  const { showToast } = useContext(ToastContext);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -25,6 +27,7 @@ function VisitPageInner() {
   const prefillName = searchParams.get('name') || '';
   const prefillTreatment = searchParams.get('treatment') || '';
   const isEdit = searchParams.get('edit') === 'true';
+  const returnTo = searchParams.get('returnTo') || 'appointments';
 
   const [form, setForm] = useState({
     patientName: prefillName,
@@ -139,7 +142,7 @@ function VisitPageInner() {
     try {
       setMediaFiles(prev => [...prev, ...files]);
     } catch (err) {
-      alert('Failed to add media');
+      showToast('Failed to add media', 'error');
     } finally {
       setUploadingMedia(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -222,10 +225,10 @@ function VisitPageInner() {
         }
         setResult({ patient_name: form.patientName, treatment: form.treatment });
       } else {
-        alert(data.error || 'Failed to log visit');
+        showToast(data.error || 'Failed to log visit', 'error');
       }
     } catch {
-      alert('Network error');
+      showToast('Network error — could not save visit', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -270,8 +273,8 @@ function VisitPageInner() {
                   Back to Patient
                 </button>
               ) : appointmentId ? (
-              <button onClick={() => router.push('/dashboard/appointments')} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
-                Back to Appointments
+              <button onClick={() => router.push(returnTo === 'queue' ? '/dashboard/queue' : '/dashboard/appointments')} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
+                Back to {returnTo === 'queue' ? 'Queue' : 'Appointments'}
               </button>
             ) : (
               <button onClick={resetForm} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
@@ -293,7 +296,7 @@ function VisitPageInner() {
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           {appointmentId && (
-            <button onClick={() => router.push('/dashboard/appointments')} className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <button onClick={() => router.push(returnTo === 'queue' ? '/dashboard/queue' : '/dashboard/appointments')} className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <ArrowLeft className="w-4 h-4 text-gray-500 dark:text-gray-400" />
             </button>
           )}

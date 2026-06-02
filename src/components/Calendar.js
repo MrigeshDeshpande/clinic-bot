@@ -138,15 +138,14 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
               ) : (
                 <span className="leading-none">{day}</span>
               )}
-              {/* Status indicator dot */}
+              {/* Status indicator dot + count */}
               {dotColor && (
-                <span className={`absolute top-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${dotColor} ${
-                  isSelected || isToday(day) ? 'opacity-60' : ''
+                <span className={`absolute top-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${dotColor} ${
+                  isSelected || isToday(day) ? 'opacity-70' : ''
                 }`} />
               )}
-              {/* Booked count badge */}
-              {hasBookings && !isSelected && !isToday(day) && !isBlocked && (
-                <span className="text-[9px] font-medium text-blue-400 dark:text-blue-300 leading-none mt-0.5">
+              {hasBookings && !isBlocked && (
+                <span className="text-[10px] font-semibold text-blue-500 dark:text-blue-300 leading-none mt-0.5">
                   {dateInfo.count}
                 </span>
               )}
