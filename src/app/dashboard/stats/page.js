@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   TrendingUp, DollarSign, Calendar, Activity, Stethoscope,
-  Pill, Clock, Users, XCircle, Download, ArrowUp, ArrowDown, Male, Female,
+  Pill, Clock, Users, XCircle, Download, ArrowUp, ArrowDown, Mars, Venus,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -42,7 +42,7 @@ export default function StatsPage() {
 
   function formatDate(dateStr) {
     if (!dateStr) return '';
-    const [y, m, d] = dateStr.split('-').map(Number);
+    const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
     const dt = new Date(y, m - 1, d);
     return dt.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
   }
@@ -376,8 +376,8 @@ export default function StatsPage() {
                     <div key={d.sex} className="flex items-center gap-4">
                       <div className={`p-2.5 rounded-xl ${isMale ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-rose-50 dark:bg-rose-900/30'}`}>
                         {isMale
-                          ? <Male className={`w-5 h-5 ${isMale ? 'text-blue-500' : 'text-rose-500'}`} />
-                          : <Female className={`w-5 h-5 ${isMale ? 'text-blue-500' : 'text-rose-500'}`} />
+                          ? <Mars className={`w-5 h-5 ${isMale ? 'text-blue-500' : 'text-rose-500'}`} />
+                          : <Venus className={`w-5 h-5 ${isMale ? 'text-blue-500' : 'text-rose-500'}`} />
                         }
                       </div>
                       <div className="flex-1">

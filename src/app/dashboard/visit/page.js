@@ -289,7 +289,7 @@ function VisitPageInner() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900">
-      <div className="max-w-2xl mx-auto p-4 md:p-6 lg:p-8">
+      <div className="p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           {appointmentId && (
@@ -309,7 +309,7 @@ function VisitPageInner() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Patient Info — hidden when pre-filled from appointment */}
+          {/* Patient Info — hidden when pre-filled from appointment, full-width */}
           {!appointmentId && (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm relative">
               <div className="flex items-center gap-2.5 mb-5">
@@ -324,7 +324,6 @@ function VisitPageInner() {
                     className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 transition-all ${errors.patientName ? 'border-red-300 dark:border-red-700 focus:ring-red-200 dark:focus:ring-red-800' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500'}`}
                     placeholder="e.g. Rajesh Kumar" />
                   {errors.patientName && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.patientName}</p>}
-                  {/* Search suggestions */}
                   {showSearch && searchResults.length > 0 && (
                     <div ref={searchRef} className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
                       {searchResults.map(p => (
@@ -356,139 +355,178 @@ function VisitPageInner() {
             </div>
           )}
 
-          {/* Media Upload Section */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30"><Upload className="w-4 h-4 text-purple-500 dark:text-purple-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100">Attachments</h2>
-                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
-                onChange={handleMediaUpload}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingMedia}
-                className="w-full py-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400"
-              >
-                <Upload className="w-6 h-6" />
-                <span className="text-sm font-medium">
-                  {uploadingMedia ? 'Uploading...' : 'Click to upload photos or files'}
-                </span>
-                <span className="text-xs">Photos, documents, audio recordings</span>
-              </button>
-              {mediaFiles.length > 0 && (
-                <div className="mt-3 space-y-1.5">
-                  {mediaFiles.map((file, idx) => (
-                    <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 text-sm">
-                      {getFilePreview(file) ? (
-                        <img src={getFilePreview(file)} alt="" className="w-8 h-8 rounded-lg object-cover" />
-                      ) : (
-                        <span className="text-base">{getFileIcon(file)}</span>
-                      )}
-                      <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{file.name}</span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
-                      <button type="button" onClick={() => removeMediaFile(idx)}
-                        className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+          {/* Bento Grid: Left (Consultation) + Right (Attachments, Follow-up, Notes) */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* Left Column — Consultation Details (span 3) */}
+            <div className="lg:col-span-3">
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm h-full">
+                <div className="flex items-center gap-2.5 mb-5">
+                  <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30"><Stethoscope className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /></div>
+                  <h2 className="font-semibold text-gray-900 dark:text-gray-100">Consultation Details</h2>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Treatment *</label>
+                  <select value={form.treatment}
+                    onChange={e => { setForm(f => ({ ...f, treatment: e.target.value })); setErrors(ev => { const n={...ev}; delete n.treatment; return n; }); }}
+                    className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all appearance-none ${errors.treatment ? 'border-red-300 dark:border-red-700 focus:ring-red-200 dark:focus:ring-red-800' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500'} ${!form.treatment ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
+                    <option value="">Select treatment...</option>
+                    {TREATMENT_NAMES.map(t => <option key={t} value={t} className="text-gray-900 dark:text-gray-100">{t}</option>)}
+                  </select>
+                  {errors.treatment && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.treatment}</p>}
+                </div>
+
+                {/* Symptom-based treatment suggestion */}
+                <div className="mb-4">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Describe symptoms for treatment suggestion</label>
+                  </div>
+                  <div className="relative">
+                    <input type="text" value={symptomInput}
+                      onChange={e => setSymptomInput(e.target.value)}
+                      placeholder="e.g. tooth pain when chewing, bleeding gums..."
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all placeholder-gray-400 dark:placeholder-gray-500" />
+                    {showSuggestions && (
+                      <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
+                        {suggestions.map(s => (
+                          <button key={s.id} type="button"
+                            onClick={() => { setForm(f => ({ ...f, treatment: s.name })); setSymptomInput(''); setShowSuggestions(false); setErrors(ev => { const n={...ev}; delete n.treatment; return n; }); }}
+                            className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 border-b border-gray-50 dark:border-gray-700 last:border-0 transition-colors flex items-center gap-3">
+                            <span className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-xs font-semibold text-amber-700 dark:text-amber-300 shrink-0">
+                              <Lightbulb className="w-3.5 h-3.5" />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{s.name}</p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500">{s.symptom}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Type symptoms and pick a suggested treatment, or select directly from the dropdown above</p>
+                </div>
+
+                {/* Fee breakdown */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {[
+                    { key: 'consultationFee', label: 'Consultation' },
+                    { key: 'treatmentCharges', label: 'Treatment' },
+                    { key: 'medicineCharges', label: 'Medicines' },
+                  ].map(({ key, label }) => (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{label} (₹)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm">₹</span>
+                        <input type="number" min="0" step="1" value={form[key]}
+                          onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                          className="w-full pl-7 pr-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
+                          placeholder="0" />
+                      </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-
-          {/* Consultation Details */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30"><Stethoscope className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /></div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Consultation Details</h2>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Treatment *</label>
-              <select value={form.treatment}
-                onChange={e => { setForm(f => ({ ...f, treatment: e.target.value })); setErrors(ev => { const n={...ev}; delete n.treatment; return n; }); }}
-                className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all appearance-none ${errors.treatment ? 'border-red-300 dark:border-red-700 focus:ring-red-200 dark:focus:ring-red-800' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500'} ${!form.treatment ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
-                <option value="">Select treatment...</option>
-                {TREATMENT_NAMES.map(t => <option key={t} value={t} className="text-gray-900 dark:text-gray-100">{t}</option>)}
-              </select>
-              {errors.treatment && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.treatment}</p>}
-            </div>
-
-            {/* Symptom-based treatment suggestion */}
-            <div className="mb-4">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Describe symptoms for treatment suggestion</label>
-              </div>
-              <div className="relative">
-                <input type="text" value={symptomInput}
-                  onChange={e => setSymptomInput(e.target.value)}
-                  placeholder="e.g. tooth pain when chewing, bleeding gums..."
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all placeholder-gray-400 dark:placeholder-gray-500" />
-                {showSuggestions && (
-                  <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
-                    {suggestions.map(s => (
-                      <button key={s.id} type="button"
-                        onClick={() => { setForm(f => ({ ...f, treatment: s.name })); setSymptomInput(''); setShowSuggestions(false); setErrors(ev => { const n={...ev}; delete n.treatment; return n; }); }}
-                        className="w-full text-left px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 border-b border-gray-50 dark:border-gray-700 last:border-0 transition-colors flex items-center gap-3">
-                        <span className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-xs font-semibold text-amber-700 dark:text-amber-300 shrink-0">
-                          <Lightbulb className="w-3.5 h-3.5" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{s.name}</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">{s.symptom}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                {(Number(form.consultationFee) + Number(form.treatmentCharges) + Number(form.medicineCharges)) > 0 && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-right mb-4">
+                    Total: <span className="font-semibold text-gray-900 dark:text-gray-100">₹{(Number(form.consultationFee) + Number(form.treatmentCharges) + Number(form.medicineCharges)).toLocaleString('en-IN')}</span>
+                  </p>
                 )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" /> Diagnosis / Observations
+                  </label>
+                  <textarea value={form.diagnosis} onChange={e => setForm(f => ({ ...f, diagnosis: e.target.value }))}
+                    rows={4} className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
+                    placeholder="Describe the diagnosis, observations, and any clinical notes..." />
+                </div>
               </div>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Type symptoms and pick a suggested treatment, or select directly from the dropdown above</p>
             </div>
 
-            {/* Fee breakdown */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              {[
-                { key: 'consultationFee', label: 'Consultation' },
-                { key: 'treatmentCharges', label: 'Treatment' },
-                { key: 'medicineCharges', label: 'Medicines' },
-              ].map(({ key, label }) => (
-                <div key={key}>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{label} (₹)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm">₹</span>
-                    <input type="number" min="0" step="1" value={form[key]}
-                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                      className="w-full pl-7 pr-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
-                      placeholder="0" />
+            {/* Right Column — Attachments, Follow-up, Notes (span 2) */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Attachments */}
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30"><Upload className="w-4 h-4 text-purple-500 dark:text-purple-400" /></div>
+                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">Attachments</h2>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
+                    onChange={handleMediaUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingMedia}
+                    className="w-full py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400"
+                  >
+                    <Upload className="w-5 h-5" />
+                    <span className="text-sm font-medium">
+                      {uploadingMedia ? 'Uploading...' : 'Click to upload'}
+                    </span>
+                    <span className="text-xs">Photos, documents, audio</span>
+                  </button>
+                  {mediaFiles.length > 0 && (
+                    <div className="mt-3 space-y-1.5">
+                      {mediaFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 text-sm">
+                          {getFilePreview(file) ? (
+                            <img src={getFilePreview(file)} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                          ) : (
+                            <span className="text-base">{getFileIcon(file)}</span>
+                          )}
+                          <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{file.name}</span>
+                          <button type="button" onClick={() => removeMediaFile(idx)}
+                            className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              {/* Follow-up */}
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+                <div className="flex items-center gap-2.5 mb-5">
+                  <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><Calendar className="w-4 h-4 text-amber-500 dark:text-amber-400" /></div>
+                  <h2 className="font-semibold text-gray-900 dark:text-gray-100">Follow-up</h2>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Follow-up Date</label>
+                    <input type="date" value={form.followUpDate} onChange={e => setForm(f => ({ ...f, followUpDate: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Instructions</label>
+                    <input type="text" value={form.followUpInstructions} onChange={e => setForm(f => ({ ...f, followUpInstructions: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
+                      placeholder="e.g. Return in 2 weeks" />
                   </div>
                 </div>
-              ))}
-            </div>
-            {(Number(form.consultationFee) + Number(form.treatmentCharges) + Number(form.medicineCharges)) > 0 && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-right">
-                Total: <span className="font-semibold text-gray-900 dark:text-gray-100">₹{(Number(form.consultationFee) + Number(form.treatmentCharges) + Number(form.medicineCharges)).toLocaleString('en-IN')}</span>
-              </p>
-            )}
+              </div>
 
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" /> Diagnosis / Observations
-              </label>
-              <textarea value={form.diagnosis} onChange={e => setForm(f => ({ ...f, diagnosis: e.target.value }))}
-                rows={3} className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
-                placeholder="Describe the diagnosis, observations, and any clinical notes..." />
+              {/* Notes */}
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+                <div className="flex items-center gap-2.5 mb-5">
+                  <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800"><FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" /></div>
+                  <h2 className="font-semibold text-gray-900 dark:text-gray-100">Additional Notes</h2>
+                </div>
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={3} className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
+                  placeholder="Any additional notes or instructions..." />
+              </div>
             </div>
           </div>
 
-          {/* Medicines */}
+          {/* Medicines — full width */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
@@ -523,38 +561,6 @@ function VisitPageInner() {
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Follow-up */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><Calendar className="w-4 h-4 text-amber-500 dark:text-amber-400" /></div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Follow-up</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Follow-up Date</label>
-                <input type="date" value={form.followUpDate} onChange={e => setForm(f => ({ ...f, followUpDate: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Instructions</label>
-                <input type="text" value={form.followUpInstructions} onChange={e => setForm(f => ({ ...f, followUpInstructions: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
-                  placeholder="e.g. Return in 2 weeks" />
-              </div>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-            <div className="flex items-center gap-2.5 mb-5">
-              <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800"><FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" /></div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100">Additional Notes</h2>
-            </div>
-            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              rows={2} className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
-              placeholder="Any additional notes or instructions..." />
           </div>
 
           <button type="submit" disabled={submitting}
