@@ -86,7 +86,7 @@ Meta's 24h messaging window: we can only proactively message patients who messag
 | Priority toggle | ✅ |
 | Patient search & visit history | ✅ |
 | Patient detail edit (name/age/sex) | ✅ |
-| Stats (today's count, revenue, weekly/monthly trends) | ✅ |
+| Stats (today's count, revenue, weekly/monthly trends, week-over-week, no-show rate, top treatment) | ✅ |
 | Schedule management (block/unblock dates with conflict warning) | ✅ |
 | Feedback summary (satisfaction %, callbacks) | ✅ |
 | Message history (last 30 WhatsApp messages per patient) | ✅ |
@@ -111,7 +111,7 @@ Meta's 24h messaging window: we can only proactively message patients who messag
 | Calendar with color-coded dots | ✅ |
 | Slot grid (booked vs open) | ✅ |
 | Quick book modal | ✅ |
-| Stats cards + charts (Recharts) | ✅ |
+| Analytics dashboard — daily trend chart, peak hours, day-of-week, no-show rate, retention, treatment breakdown, demographics (sex/age), period selector (7/30/90d), CSV export | ✅ |
 | Appointment table with KPIs | ✅ |
 | Queue board (Kanban-style, auto-refresh) | ✅ |
 | Visit logging form (single page, fee breakdown + medicines + media) | ✅ |
@@ -162,7 +162,7 @@ Doctor Experience:
 | **Visit summary** | WhatsApp text + PDF | PDF prescription + invoice + receipt | Invoice auto-generation not done |
 | **Follow-up** | One-time next visit | Auto-recalls at 3/6/12mo per treatment | No recall engine |
 | **No-show** | Evening check-in (manual) | Auto-cancel + auto-rebook | No automation |
-| **Analytics** | Text stats | Dashboard: retention, peak hours, LTV, trends | No insights |
+| **Analytics** | Bot stats + dashboard charts + export | Dashboard: LTV, trend forecasting | Gap closed — bot + dashboard + CSV export done |
 | **Inventory** | None | Auto reorder at threshold | Entirely missing |
 | **Multi-channel** | WhatsApp only | WhatsApp + SMS + Web + IVR | Single channel |
 | **Language** | Hinglish mixed | Full Hindi + English modes | Half-baked |
@@ -191,7 +191,7 @@ Doctor Experience:
 | F8 | **Slot grid / calendar on bot** — send visual weekday image | 🟡 Medium | 🟡 Medium | Low | Image generation |
 | F9 | **Recurring appointments** — weekly/monthly series booking | 🟡 Medium | 🟡 Medium | Medium | Schema change |
 | F10 | **Recall engine** — auto-reminder at 3/6/12mo per treatment type | 🟡 Medium | 🟡 Medium | Low | New cron + schema |
-| F11 | **Analytics dashboard** — peak hours, retention, LTV, no-show rates | 🔴 Large | 🟡 Medium | Low | Data volume |
+| F11 | **Analytics dashboard** — peak hours, retention, LTV, no-show rates | 🔴 Large | 🟡 Medium | Low | Data volume | ✅ Done |
 | F12 | **Full Hindi bot** — all 60+ prompts translated, Hindi date/numbers | 🔴 Large | 🟡 Medium | Low | Translation |
 | F13 | **Language toggle on web** — Hinglish switch for dashboard | 🔵 Small | 🔵 Small | Low | None |
 | F14 | **handlers.js refactor** — split 5045-line file into domain modules | 🔴 Large | 🔵 High (maint) | Medium | None |
@@ -199,16 +199,19 @@ Doctor Experience:
 | F16 | **Inventory tracking** — materials per treatment, low stock alerts | 🔴 Large | 🔵 Small | Medium | None |
 
 ### Recommended Implementation Order
-1. **B1 (slot rounding bug)** — 10-min fix, broken text visible to users
+1. **B1 (slot rounding bug)** — ✅ Fixed
 2. **F3 (PDF prescriptions)** — ✅ Done
-3. **F2 (WhatsApp templates)** — ✅ Done (needs Meta approval: `docs/whatsapp-templates-setup.md`)
-4. **F5 (auto-cancel no-shows)** — cleans up queue automatically
-5. **F4 (UPI payment)** — revenue collection automation
-6. **F6 (wait time estimates)** — patient experience improvement
-7. **F10 (recall engine)** — patient retention
-8. **F11 (analytics)** — data-driven decisions
-9. **F12 (full Hindi)** — accessibility
-10. **F14 (refactor)** — maintainability
+3. **F2 (WhatsApp templates)** — ✅ Done (needs Meta approval)
+4. **F11 (analytics)** — ✅ Done
+5. **F13 (language toggle on web)** — small effort
+6. **F5 (auto-cancel no-shows)** — cleans up queue automatically
+7. **F4 (UPI payment)** — revenue collection automation
+8. **F6 (wait time estimates)** — patient experience improvement
+9. **F10 (recall engine)** — patient retention
+10. **F12 (full Hindi)** — accessibility
+11. **F14 (refactor)** — maintainability
+12. **F15 (SMS fallback)** — backup channel
+13. **F16 (inventory tracking)** — standalone feature
 
 ---
 
@@ -243,8 +246,8 @@ Doctor Experience:
 | Prescription | `src/lib/prescription.js`, `appointments.prescription_key` in DB |
 | Repositories | `src/db/repositories/*.js` |
 | Cron jobs | `src/app/api/cron/*/route.js` |
-| Dashboard pages | `src/app/dashboard/*` |
-| Dashboard API | `src/app/api/dashboard/*` |
+| Dashboard pages | `src/app/dashboard/*` (stats: Recharts, period selector, CSV export, demographics) |
+| Dashboard API | `src/app/api/dashboard/*` (stats: peak hours, retention, no-show %, day-of-week, demographics.bySex, demographics.byAgeGroup) |
 | Templates | `src/config/templates.js`, `src/lib/whatsapp.js` (`sendTemplate()`) |
 | Config | `src/config/clinic.js` |
 | Tests | `tests/` |

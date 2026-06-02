@@ -1,36 +1,91 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { TrendingUp, DollarSign, Calendar, Activity, Stethoscope, Pill } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  TrendingUp, DollarSign, Calendar, Activity, Stethoscope,
+  Pill, Clock, Users, XCircle, Download, ArrowUp, ArrowDown, Male, Female,
+} from 'lucide-react';
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
+} from 'recharts';
+
+const PERIODS = [
+  { value: 'week', label: '7 Days' },
+  { value: 'month', label: '30 Days' },
+  { value: 'quarter', label: '90 Days' },
+];
 
 export default function StatsPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('week');
 
-  useEffect(() => {
-    fetch('/api/dashboard/stats')
-      .then(r => r.json())
-      .then(d => setStats(d))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  const fetchStats = useCallback(async (p) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/dashboard/stats?period=${p}`);
+      const d = await res.json();
+      setStats(d);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { fetchStats(period); }, [period, fetchStats]);
 
   function formatCurrency(amount) {
     return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
   }
 
-  const treatments = stats?.treatmentBreakdown || [];
-  const maxTreatmentCount = Math.max(...treatments.map(t => t.count), 1);
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
 
-  if (loading) {
+  function getCSV() {
+    if (!stats) return;
+    const rows = [['Date', 'Completed', 'Total', 'Revenue']];
+    for (const day of (stats.daily || [])) {
+      rows.push([day.date, day.completed, day.total, day.revenue]);
+    }
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clinic-stats-${period}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const treatments = stats?.treatmentBreakdown || [];
+  const peakHours = stats?.peakHours || [];
+  const dayOfWeek = stats?.dayOfWeek || [];
+  const daily = stats?.daily || [];
+  const bySex = stats?.demographics?.bySex || [];
+  const byAgeGroup = stats?.demographics?.byAgeGroup || [];
+  const totalDemographic = bySex.reduce((s, d) => s + d.count, 0);
+
+  const periodLabel = PERIODS.find(p => p.value === period)?.label || '';
+
+  if (loading && !stats) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900 p-4 md:p-6 lg:p-8">
-        <div className="max-w-6xl mx-auto space-y-6 animate-pulse">
+        <div className="max-w-7xl mx-auto space-y-6 animate-pulse">
           <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-40" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[1, 2, 3].map(i => <div key={i} className="h-32 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800" />)}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800" />)}
           </div>
-          <div className="h-64 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800" />
+          <div className="h-72 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-64 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800" />
+            <div className="h-64 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800" />
+          </div>
         </div>
       </div>
     );
@@ -38,59 +93,186 @@ export default function StatsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900">
-      <div className="max-w-6xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50">
-            <TrendingUp className="w-6 h-6 text-white" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50">
+              <TrendingUp className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Analytics</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Practice overview and performance insights</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Statistics</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Practice overview and treatment insights</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={getCSV}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+            <div className="flex bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-1">
+              {PERIODS.map(p => (
+                <button
+                  key={p.value}
+                  onClick={() => setPeriod(p.value)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                    period === p.value
+                      ? 'bg-emerald-500 text-white shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm hover:shadow-md dark:hover:shadow-gray-900/50 transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30">
-                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full">
-                {stats?.totalAppointments || 0} total
-              </span>
-            </div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{stats?.todayAppointments || 0}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">Appointments Today</div>
-          </div>
+        {/* KPI Cards Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Appointments Today */}
+          <KpiCard
+            icon={<Calendar className="w-5 h-5" />}
+            iconBg="from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30"
+            iconColor="text-blue-600 dark:text-blue-400"
+            value={stats?.todayAppointments || 0}
+            label="Appointments Today"
+            badge={`${stats?.totalAppointments || 0} in ${periodLabel}`}
+            badgeColor="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30"
+            trend={stats?.visitsChange}
+          />
 
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm hover:shadow-md dark:hover:shadow-gray-900/50 transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30">
-                <DollarSign className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
+          {/* Revenue */}
+          <KpiCard
+            icon={<DollarSign className="w-5 h-5" />}
+            iconBg="from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30"
+            iconColor="text-emerald-600 dark:text-emerald-400"
+            value={formatCurrency(stats?.totalRevenue || 0)}
+            label={`Revenue (${periodLabel})`}
+            sub={`Avg ₹${stats?.avgRevenuePerVisit || 0}/visit`}
+            trend={stats?.revenueChange}
+            trendLabel="vs prev period"
+          />
+
+          {/* No-Show Rate */}
+          <KpiCard
+            icon={<XCircle className="w-5 h-5" />}
+            iconBg="from-rose-50 to-rose-100 dark:from-rose-900/30 dark:to-rose-800/30"
+            iconColor="text-rose-600 dark:text-rose-400"
+            value={`${stats?.noShowPct || 0}%`}
+            label="No-Show Rate"
+            sub={`${stats?.totalNoShows || 0} no-shows`}
+          />
+
+          {/* Retention Rate */}
+          <KpiCard
+            icon={<Users className="w-5 h-5" />}
+            iconBg="from-violet-50 to-violet-100 dark:from-violet-900/30 dark:to-violet-800/30"
+            iconColor="text-violet-600 dark:text-violet-400"
+            value={`${stats?.retentionRate || 0}%`}
+            label="Returning Patients"
+            sub={`${stats?.returningPatients || 0} of ${stats?.totalPatients || 0}`}
+          />
+        </div>
+
+        {/* Daily Trend Chart */}
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+          <div className="flex items-center gap-2.5 mb-6">
+            <TrendingUp className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Daily Trend</h2>
+          </div>
+          {daily.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data for this period</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={daily}>
+                <defs>
+                  <linearGradient id="completedGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 12 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
+                <Tooltip
+                  labelFormatter={formatDate}
+                  contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb' }}
+                />
+                <Legend />
+                <Area
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="completed"
+                  stroke="#10b981"
+                  fill="url(#completedGrad)"
+                  name="Completed"
+                  strokeWidth={2}
+                />
+                <Area
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#6366f1"
+                  fill="url(#revenueGrad)"
+                  name="Revenue"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Peak Hours */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-6">
+              <Clock className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Peak Hours</h2>
             </div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{formatCurrency(stats?.todayRevenue || 0)}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">Today&apos;s Revenue</div>
-            {stats?.totalRevenue > 0 && (
-              <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                Total: {formatCurrency(stats.totalRevenue)}
-              </div>
+            {peakHours.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={peakHours}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="time" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb' }} />
+                  <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Appointments" />
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </div>
 
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm hover:shadow-md dark:hover:shadow-gray-900/50 transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-900/30 dark:to-violet-800/30">
-                <Activity className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-              </div>
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 rounded-full">
-                {stats?.totalPatients || 0} total
-              </span>
+          {/* Day of Week */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-6">
+              <Calendar className="w-5 h-5 text-blue-500 dark:text-blue-400" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">By Day of Week</h2>
             </div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{stats?.newPatientsThisMonth || 0}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">New Patients This Month</div>
+            {dayOfWeek.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={dayOfWeek}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb' }} />
+                  <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Appointments" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -100,7 +282,6 @@ export default function StatsPage() {
             <Stethoscope className="w-5 h-5 text-blue-500 dark:text-blue-400" />
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Treatment Breakdown</h2>
           </div>
-
           {treatments.length === 0 ? (
             <div className="text-center py-12">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gray-50 dark:bg-gray-800 mb-4">
@@ -109,39 +290,166 @@ export default function StatsPage() {
               <p className="text-gray-500 dark:text-gray-400 text-sm">No treatments recorded yet</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {treatments.map((t, i) => {
-                const percentage = (t.count / maxTreatmentCount) * 100;
-                const gradients = [
-                  'from-blue-500 to-blue-600',
-                  'from-emerald-500 to-teal-500',
-                  'from-violet-500 to-purple-600',
-                  'from-rose-500 to-pink-600',
-                  'from-amber-500 to-orange-500',
-                  'from-cyan-500 to-sky-500',
-                  'from-indigo-500 to-indigo-600',
-                ];
-                return (
-                  <div key={t.treatment || i} className="group">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
-                        {t.treatment}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{t.count} visit{t.count !== 1 ? 's' : ''}</span>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-3">
+                {treatments.map((t, i) => {
+                  const maxCount = Math.max(...treatments.map(x => x.count), 1);
+                  const pct = (t.count / maxCount) * 100;
+                  const gradients = [
+                    'from-blue-500 to-blue-600',
+                    'from-emerald-500 to-teal-500',
+                    'from-violet-500 to-purple-600',
+                    'from-rose-500 to-pink-600',
+                    'from-amber-500 to-orange-500',
+                    'from-cyan-500 to-sky-500',
+                    'from-indigo-500 to-indigo-600',
+                  ];
+                  return (
+                    <div key={t.treatment || i} className="group">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.treatment}</span>
+                        <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{t.count} visit{t.count !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${gradients[i % gradients.length]} transition-all duration-700 ease-out`}
+                          style={{ width: `${Math.max(pct, 4)}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full bg-gradient-to-r ${gradients[i % gradients.length]} transition-all duration-700 ease-out`}
-                        style={{ width: `${Math.max(percentage, 4)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={treatments} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis type="number" tick={{ fontSize: 12 }} />
+                    <YAxis dataKey="treatment" type="category" tick={{ fontSize: 11 }} width={100} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb' }} />
+                    <Bar dataKey="count" fill="#10b981" radius={[0, 4, 4, 0]} name="Visits" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           )}
         </div>
+
+        {/* New Patients */}
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+          <div className="flex items-center gap-2.5 mb-6">
+            <Users className="w-5 h-5 text-violet-500 dark:text-violet-400" />
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Patient Growth</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div>
+              <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">{stats?.newPatientsThisMonth || 0}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">New Patients This Month</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">{stats?.totalPatients || 0}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Total Patients</div>
+            </div>
+            <div>
+              <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">{stats?.returningPatients || 0}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Returning Patients ({periodLabel})</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Demographics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Sex Distribution */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-6">
+              <Users className="w-5 h-5 text-rose-500 dark:text-rose-400" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Patients by Sex</h2>
+            </div>
+            {bySex.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
+            ) : (
+              <div className="space-y-4">
+                {bySex.map(d => {
+                  const pct = totalDemographic > 0 ? Math.round((d.count / totalDemographic) * 100) : 0;
+                  const isMale = d.sex?.toLowerCase() === 'm' || d.sex?.toLowerCase() === 'male';
+                  return (
+                    <div key={d.sex} className="flex items-center gap-4">
+                      <div className={`p-2.5 rounded-xl ${isMale ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-rose-50 dark:bg-rose-900/30'}`}>
+                        {isMale
+                          ? <Male className={`w-5 h-5 ${isMale ? 'text-blue-500' : 'text-rose-500'}`} />
+                          : <Female className={`w-5 h-5 ${isMale ? 'text-blue-500' : 'text-rose-500'}`} />
+                        }
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{d.sex}</span>
+                          <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{d.count} ({pct}%)</span>
+                        </div>
+                        <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${isMale ? 'bg-blue-500' : 'bg-rose-500'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Age Group Distribution */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-6">
+              <Activity className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Patients by Age Group</h2>
+            </div>
+            {byAgeGroup.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={byAgeGroup}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="ageGroup" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb' }} />
+                  <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Patients" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function KpiCard({ icon, iconBg, iconColor, value, label, badge, badgeColor, sub, trend, trendLabel }) {
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm hover:shadow-md dark:hover:shadow-gray-900/50 transition-shadow duration-200">
+      <div className="flex items-center justify-between mb-4">
+        <div className={`p-2.5 rounded-xl bg-gradient-to-br ${iconBg}`}>
+          <span className={iconColor}>{icon}</span>
+        </div>
+        {badge && (
+          <span className={`inline-flex items-center gap-1 text-xs font-medium ${badgeColor} px-2 py-0.5 rounded-full`}>
+            {badge}
+          </span>
+        )}
+      </div>
+      <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{value}</div>
+      <div className="text-sm text-gray-500 dark:text-gray-400">{label}</div>
+      {sub && <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">{sub}</div>}
+      {trend !== undefined && (
+        <div className={`mt-2 flex items-center gap-1 text-xs font-medium ${
+          trend > 0 ? 'text-emerald-600 dark:text-emerald-400' : trend < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-400'
+        }`}>
+          {trend > 0 ? <ArrowUp className="w-3 h-3" /> : trend < 0 ? <ArrowDown className="w-3 h-3" /> : null}
+          {trend > 0 ? '+' : ''}{trend}%
+          {trendLabel && <span className="text-gray-400 dark:text-gray-500 font-normal ml-1">{trendLabel}</span>}
+        </div>
+      )}
     </div>
   );
 }

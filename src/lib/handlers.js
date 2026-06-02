@@ -4381,7 +4381,12 @@ async function handleDoctorStats(session) {
   monthAgo.setMonth(monthAgo.getMonth() - 1);
   const monthStart = monthAgo.toISOString().slice(0, 10);
 
-  const [todayCount, weekCount, monthCount, todayRevenue, todayNewPatients, todayStatusBreakdown, todayArrivalBreakdown] = await Promise.all([
+  const prevWeekStart = new Date(weekAgo);
+  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+  const prevWeekEnd = new Date(weekAgo);
+  prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
+
+  const [todayCount, weekCount, monthCount, todayRevenue, todayNewPatients, todayStatusBreakdown, todayArrivalBreakdown, weekRevenue, topTreatment, noShowRate, prevWeekCount, sexBreakdown, topAgeGroup] = await Promise.all([
     countAppointmentsByDateRange(today, today),
     countAppointmentsByDateRange(weekStart, today),
     countAppointmentsByDateRange(monthStart, today),
@@ -4418,7 +4423,72 @@ async function handleDoctorStats(session) {
       r.forEach(row => { map[row.arrival_status] = parseInt(row.count, 10); });
       return map;
     }),
+    // Week revenue
+    sql`
+      SELECT COALESCE(SUM(a.consultation_fee + a.treatment_charges + a.medicine_charges), 0)::int AS revenue
+      FROM appointments a
+      WHERE a.date >= ${weekStart} AND a.date <= ${today}
+        AND a.status = 'completed'
+    `.then(r => r[0]?.revenue || 0),
+    // Top treatment this month
+    sql`
+      SELECT a.treatment, COUNT(*)::int AS count
+      FROM appointments a
+      WHERE a.date >= ${monthStart} AND a.date <= ${today}
+        AND a.status = 'completed' AND a.treatment IS NOT NULL
+      GROUP BY a.treatment
+      ORDER BY count DESC
+      LIMIT 1
+    `.then(r => r[0] || null),
+    // No-show rate this week
+    sql`
+      SELECT
+        COUNT(*) FILTER (WHERE a.status = 'no_show') AS no_shows,
+        COUNT(*) FILTER (WHERE a.status IN ('completed', 'no_show')) AS total
+      FROM appointments a
+      WHERE a.date >= ${weekStart} AND a.date <= ${today}
+    `.then(r => {
+      const row = r[0] || { no_shows: 0, total: 0 };
+      return row.total > 0 ? Math.round((Number(row.no_shows) / Number(row.total)) * 100) : 0;
+    }),
+    // Previous week comparison
+    countAppointmentsByDateRange(prevWeekStart.toISOString().slice(0, 10), prevWeekEnd.toISOString().slice(0, 10)),
+    // Demographics — sex ratio for month
+    sql`
+      SELECT p.sex, COUNT(*)::int AS count
+      FROM appointments a
+      JOIN patients p ON a.patient_id = p.id
+      WHERE a.date >= ${monthStart} AND a.date <= ${today}
+        AND a.status = 'completed' AND p.sex IS NOT NULL
+      GROUP BY p.sex
+    `.then(r => {
+      const map = {};
+      r.forEach(row => { map[row.sex?.toLowerCase() === 'm' ? 'Male' : 'Female'] = parseInt(row.count, 10); });
+      return map;
+    }),
+    // Demographics — top age group for month
+    sql`
+      SELECT
+        CASE
+          WHEN p.age < 18 THEN '0-17'
+          WHEN p.age BETWEEN 18 AND 35 THEN '18-35'
+          WHEN p.age BETWEEN 36 AND 50 THEN '36-50'
+          WHEN p.age BETWEEN 51 AND 65 THEN '51-65'
+          ELSE '65+'
+        END AS age_group,
+        COUNT(*)::int AS count
+      FROM appointments a
+      JOIN patients p ON a.patient_id = p.id
+      WHERE a.date >= ${monthStart} AND a.date <= ${today}
+        AND a.status = 'completed' AND p.age IS NOT NULL
+      GROUP BY age_group
+      ORDER BY count DESC
+      LIMIT 1
+    `.then(r => r[0] || null),
   ]);
+
+  const weekTrend = prevWeekCount > 0 ? Math.round(((weekCount - prevWeekCount) / prevWeekCount) * 100) : 0;
+  const weekTrendEmoji = weekTrend > 0 ? '📈' : weekTrend < 0 ? '📉' : '➡️';
 
   let body = `*📊 Clinic Stats*\n\n`;
 
@@ -4432,9 +4502,26 @@ async function handleDoctorStats(session) {
   body += `💰 Revenue: ₹${todayRevenue}\n`;
   body += `🆕 New Patients: ${todayNewPatients}\n\n`;
 
-  body += `*📈 Trends:*\n`;
-  body += `This Week: ${weekCount} appointments\n`;
-  body += `This Month: ${monthCount} appointments\n`;
+  body += `*📈 This Week vs Last:*\n`;
+  body += `${weekTrendEmoji} ${weekCount} appts (${weekTrend > 0 ? '+' : ''}${weekTrend}%)\n`;
+  body += `💰 Week Revenue: ₹${weekRevenue}\n`;
+  body += `❌ No-Show Rate: ${noShowRate}%\n\n`;
+
+  body += `*📆 This Month:*\n`;
+  body += `${monthCount} appointments\n`;
+  if (topTreatment) {
+    body += `🏆 Top: ${topTreatment.treatment} (${topTreatment.count}x)\n`;
+  }
+
+  const maleCount = sexBreakdown?.Male || 0;
+  const femaleCount = sexBreakdown?.Female || 0;
+  const demoTotal = maleCount + femaleCount;
+  if (demoTotal > 0) {
+    body += `👥 M: ${maleCount}  F: ${femaleCount}\n`;
+  }
+  if (topAgeGroup) {
+    body += `🧑 Top age: ${topAgeGroup.age_group} (${topAgeGroup.count})\n`;
+  }
 
   return {
     session: { ...session, state: 'DOCTOR_MAIN_MENU' },

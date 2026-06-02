@@ -147,52 +147,74 @@ Templates bypass the 24-hour window for proactive messaging. Cron jobs use templ
 - **Setup required:** Register templates in Meta Business Manager (guide: `docs/whatsapp-templates-setup.md`)
 - **Zero-downtime:** Deploy code anytime; crons keep working via fallback until templates are approved
 
-#### 3.6 Language Toggle on Web ❌ NOT STARTED
+#### 3.6 Analytics — Bot & Dashboard ✅
+Comprehensive analytics across both bot and web dashboard:
+
+**Bot (`handleDoctorStats`):**
+- Today's breakdown: confirmed, completed, no-show, waiting, in-session
+- Week-over-week trend with 📈/📉 emoji and % change
+- Week revenue, no-show rate %
+- Month total + most popular treatment
+- 👥 Sex ratio (M/F) for the month
+- 🧑 Top age group for the month
+
+**Dashboard (`/dashboard/stats`):**
+- Period selector: 7d / 30d / 90d
+- KPI cards: appointments today, revenue (period), no-show rate %, returning patient %
+- AreaChart: daily completed + revenue (Recharts)
+- BarChart: peak hours by time slot
+- BarChart: day-of-week distribution
+- Treatment breakdown: horizontal bars + vertical bar chart
+- **Demographics**: sex distribution (M/F with icons + bars) + age group bar chart
+- Patient growth: new this month, total, returning
+- CSV export
+
+**API (`/api/dashboard/stats`):**
+- `period` param: `week`, `month`, `quarter`
+- Peak hours, retention rate, no-show %, cancellation count
+- Revenue trend, visit trend with prev-period comparison
+- Day-of-week distribution, avg revenue per visit
+- **`demographics.bySex`** — visits grouped by patient sex
+- **`demographics.byAgeGroup`** — visits grouped by age brackets (0-17, 18-35, 36-50, 51-65, 65+)
+
+#### 3.7 Language Toggle on Web ❌ NOT STARTED
 Add English/Hinglish toggle for patient-facing content on the web dashboard.
 Deferred — bot already supports bilingual mode.
 
-## Next Up — Phase 4
+## Next Up — Remaining Features
 
-### Phase 4: Nice-to-Have (Pending)
+### Pending
 
-#### 4.1 Analytics
-- Peak hours, most booked treatments, patient retention rates, no-show rates
-- Exportable reports (CSV/PDF)
-- Enhanced dashboard charts
+#### Language Toggle on Web
+- Add English/Hinglish toggle for patient-facing content on the web dashboard
+- Small effort, low impact — deferred as bot already supports bilingual mode
 
-#### 4.2 Inventory Tracking
+#### Full Hindi Bot
+- All 60+ prompts translated to Hindi
+- Language detection → full Hindi mode (not just Hinglish mixed)
+- Hindi numbers, date formats, treatment descriptions
+
+#### Inventory Tracking
 - Track materials used per treatment
 - Low stock alerts
 - Monthly usage reports
 
-#### 4.4 Full Hindi Bot
-- All prompts translated to Hindi
-- Language detection → full Hindi mode (not just Hinglish mixed)
-- Hindi numbers, date formats, treatment descriptions
-
-#### 4.5 WhatsApp Template Messages
-- Pre-approved templates for reminders, feedback, visit summary
-- Bypasses 24-hour messaging window
-- Higher reliability with rich media support
-
-## Implementation Priority Matrix (Remaining)
+## Implementation Priority Matrix
 
 | Feature | Effort | Impact | Status |
 |---------|--------|--------|--------|
 | Smart Sunday warning | Tiny | Small | ✅ Done |
 | PDF prescriptions | Medium | Low | ✅ Done |
-| WhatsApp templates | Small | Medium | ✅ Done (code) |
-| Language toggle (web) | Small | Small | ❌ Not started |
-| Full Hindi bot | Large | Medium | ❌ Not started |
-| Analytics | Large | Low | ❌ Not started |
-| Inventory | Large | Low | ❌ Not started |
+| WhatsApp templates | Small | Medium | ✅ Done (needs Meta approval) |
+| Analytics | Large | Low | ✅ Done |
+| Language toggle (web) | Small | Small | ❌ |
+| Full Hindi bot | Large | Medium | ❌ |
+| Inventory | Large | Low | ❌ |
 
-## Recommended Order (Remaining)
-1. **WhatsApp template messages** — ✅ Done (needs Meta approval: `docs/whatsapp-templates-setup.md`)
-2. **Language toggle on web** — small effort
-3. **Full Hindi bot** — comprehensive translation effort
-4. **Analytics** — depends on sufficient data volume
-5. **Inventory** — standalone feature
+## Recommended Order
+1. **Language toggle on web** — small effort
+2. **Full Hindi bot** — comprehensive translation effort
+3. **Inventory** — standalone feature
 
 ## Key Decisions
 - `engine.js` needs no changes — role routing is handled by `handle()` in `handlers.js`
