@@ -84,7 +84,7 @@ function VisitPageInner() {
           });
         }
       })
-      .catch(() => {});
+      .catch(e => console.error('Failed to load appointment for edit:', e));
   }, [appointmentId, isEdit]);
 
   // Symptom auto-suggest

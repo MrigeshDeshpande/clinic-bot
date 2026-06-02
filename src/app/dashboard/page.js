@@ -7,6 +7,7 @@ import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users } from 'lucide-re
 import Calendar from '@/components/Calendar';
 import { DateContext } from './layout';
 import { TREATMENT_NAMES } from '@/lib/treatments';
+import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
@@ -76,7 +77,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
       fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(patientName)}`)
         .then(r => r.json())
         .then(d => setSearchResults(d.patients || []))
-        .catch(() => {})
+        .catch(e => console.error('Quick book search error:', e))
         .finally(() => setSearching(false));
     }, 250);
     return () => clearTimeout(timer);
@@ -261,7 +262,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
   const dateInfo = datesData?.[selectedDate];
   const bookedAppointments = appointments.filter(a => a.status === 'confirmed' || a.status === 'completed');
 
-  const d = new Date(selectedDate + 'T12:00:00');
+  const d = parseDateOnly(selectedDate) || new Date();
   const isSunday = d.getDay() === 0;
   const slots = slotDefinitions?.[isSunday ? 'sunday' : 'weekday'] ||
                 DEFAULT_SLOTS[isSunday ? 'sunday' : 'weekday'];
@@ -441,11 +442,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [bookingModal, setBookingModal] = useState({ open: false, time: null });
   const [refreshKey, setRefreshKey] = useState(0);
+  const [toast, setToast] = useState(null);
   const bookSlotRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    const d = new Date(selectedDate + 'T12:00:00');
+  const d = parseDateOnly(selectedDate) || new Date();
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
 
@@ -473,8 +475,15 @@ export default function DashboardPage() {
     bookSlotRef.current = (time) => setBookingModal({ open: true, time });
   });
 
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   function handleBookingComplete() {
     setRefreshKey(k => k + 1);
+    setToast('Appointment booked successfully');
   }
 
   if (loading) {
@@ -513,7 +522,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {formatDateLong(selectedDate)}
           </p>
         </div>
       </div>
@@ -533,7 +542,7 @@ export default function DashboardPage() {
                   setDatesData(json.dates || {});
                   if (json.slotDefinitions) setSlotDefinitions(json.slotDefinitions);
                 })
-                .catch(() => {});
+                .catch(e => console.error('Calendar month change error:', e));
             }}
           />
         </div>
@@ -655,6 +664,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[9999] animate-scale-in">
+          <div className="flex items-center gap-2.5 px-5 py-3 bg-emerald-600 text-white rounded-2xl shadow-2xl border border-emerald-500/50 text-sm font-medium">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            {toast}
+          </div>
+        </div>
+      )}
+
       {/* Quick Booking Modal — Enhanced */}
       {bookingModal.open && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
@@ -673,7 +692,7 @@ export default function DashboardPage() {
               <div>
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100">Quick Booking</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  {formatDateShort(selectedDate)}
                   {bookingModal.time ? ` at ${bookingModal.time}` : ''}
                 </p>
               </div>

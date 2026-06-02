@@ -2812,9 +2812,10 @@ function formatDatePretty(dateStr) {
 
 function formatDayName(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr + 'T12:00:00');
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  const date = new Date(y, m - 1, d);
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return days[d.getDay()];
+  return days[date.getDay()];
 }
 
 async function buildDoctorMainMenuBody(session, includeGreeting = false) {

@@ -17,8 +17,17 @@ export async function POST(req) {
       return NextResponse.json({ error: 'file and appointmentId required' }, { status: 400 });
     }
 
+    const mimeType = file.type || '';
+    const ALLOWED_MIME_TYPES = ['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif','audio/mpeg','audio/ogg','audio/wav','audio/webm','video/mp4','video/webm','application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+      return NextResponse.json({ error: `File type ${mimeType} not allowed` }, { status: 400 });
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
-    const mimeType = file.type || 'application/octet-stream';
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (buffer.length > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'File exceeds 10MB limit' }, { status: 400 });
+    }
     const ext = mimeType.split('/')[1] || 'bin';
     const mediaType = mimeType.startsWith('image/') ? 'photo' : mimeType.startsWith('audio/') ? 'audio' : 'file';
     const timestamp = Date.now();

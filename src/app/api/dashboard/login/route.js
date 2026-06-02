@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'admin123';
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
 
 export async function POST(req) {
   try {

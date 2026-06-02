@@ -55,8 +55,10 @@ export async function GET(req) {
 
     // Enrich each day of the month with slot/blocked info
     const dates = {};
-    const cursor = new Date(`${startDate}T12:00:00`);
-    const endCursor = new Date(`${endDate}T12:00:00`);
+    const [sy, sm, sd] = startDate.split('-').map(Number);
+    const [ey, em, ed] = endDate.split('-').map(Number);
+    const cursor = new Date(sy, sm - 1, sd);
+    const endCursor = new Date(ey, em - 1, ed);
 
     while (cursor < endCursor) {
       const dateStr = cursor.toISOString().slice(0, 10);

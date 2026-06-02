@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FileImage, Phone as PhoneIcon } from 'lucide-react';
+import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
 import Calendar from '@/components/Calendar';
 import { DateContext } from '../layout';
 
@@ -36,7 +37,7 @@ export default function AppointmentsPage() {
   const router = useRouter();
 
   const fetchCalendarDots = useCallback(async (date) => {
-    const d = new Date(date + 'T12:00:00');
+    const d = parseDateOnly(date) || new Date();
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     try { const res = await fetch(`/api/dashboard/calendar?year=${year}&month=${month}`); const json = await res.json(); setDotDates(Object.keys(json.dates || {})); } catch {}
@@ -101,7 +102,7 @@ export default function AppointmentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Appointments</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {formatDateLong(selectedDate)}
           </p>
         </div>
         <div className="relative" ref={calRef}>
@@ -112,7 +113,7 @@ export default function AppointmentsPage() {
             <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            {formatDateShort(selectedDate)}
           </button>
           {showCalendar && (
             <>

@@ -24,10 +24,13 @@ export default function QueuePage() {
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
 
-  // Auto-refresh every 15 seconds
+  // Auto-refresh every 15 seconds (paused when tab is backgrounded)
   useEffect(() => {
-    const interval = setInterval(fetchQueue, 15000);
-    return () => clearInterval(interval);
+    let visible = !document.hidden;
+    const handler = () => { visible = !document.hidden; };
+    document.addEventListener('visibilitychange', handler);
+    const interval = setInterval(() => { if (visible) fetchQueue(); }, 15000);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', handler); };
   }, [fetchQueue]);
 
   async function handleArrival(appointmentId, status) {

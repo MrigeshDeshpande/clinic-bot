@@ -9,6 +9,7 @@ import {
   ClipboardList, Edit3, Save, X, MessageSquare
 } from 'lucide-react';
 import MediaViewer from '@/components/MediaViewer';
+import { formatDate as fmtDate } from '@/lib/date';
 
 export default function PatientDetailPage() {
   const { id } = useParams();
@@ -176,9 +177,7 @@ export default function PatientDetailPage() {
   function formatDate(d) {
     if (!d) return 'N/A';
     const dateStr = typeof d === 'string' ? d.slice(0, 10) : String(d).slice(0, 10);
-    return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-IN', {
-      weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
-    });
+    return fmtDate(dateStr, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   }
 
   function formatCurrency(amount) {

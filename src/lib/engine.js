@@ -188,7 +188,7 @@ export async function processEvent(payload) {
   for (const msg of event.messages) {
     try {
       // Step 2a: deduplicate
-      if (isDuplicate(msg.id)) {
+      if (await isDuplicate(msg.id)) {
         logger.debug('DUPLICATE_SKIPPED', { msgId: msg.id });
         continue;
       }

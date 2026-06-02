@@ -1,5 +1,4 @@
 import { fetchAppointmentsForReminder, markReminderSent } from '@/db/repositories/appointmentRepository';
-import { runMigrations } from '@/db/pool';
 import { sendText } from '@/lib/whatsapp';
 import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
@@ -18,13 +17,14 @@ export async function GET(req) {
   }
 
   try {
-    await runMigrations();
     const appointments = await fetchAppointmentsForReminder();
 
     let sent = 0;
     for (const appt of appointments) {
       const name = appt.patient_name ? `Hi ${appt.patient_name.split(' ')[0]}! 👋` : 'Hi! 👋';
-      const date = new Date(appt.date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+      const [y, m, d] = appt.date.slice(0, 10).split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      const date = dateObj.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
       const time = new Date(`2000-01-01T${appt.time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
       const doctor = CLINIC.doctor?.name ? ` with Dr. ${CLINIC.doctor.name}` : '';
 

@@ -27,10 +27,10 @@ export async function GET(req, { params }) {
         }
       });
 
-      // Keepalive every 30s
+      // Keepalive every 15s
       const keepalive = setInterval(() => {
         controller.enqueue(': keepalive\n\n');
-      }, 30000);
+      }, 15000);
 
       req.signal.addEventListener('abort', () => {
         unsub();

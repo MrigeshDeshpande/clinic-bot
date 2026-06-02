@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, XCircle, Calendar as CalendarIcon } from 'lucide-react';
+import { formatDateLong, formatDateShort } from '@/lib/date';
 
 export default function SchedulePage() {
   const [viewDate, setViewDate] = useState(() => {
@@ -147,7 +148,7 @@ export default function SchedulePage() {
           {selectedDate ? (
             <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-5">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                {formatDateLong(selectedDate)}
               </h3>
 
               {blockedSet.has(selectedDate) ? (
@@ -222,7 +223,7 @@ export default function SchedulePage() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
                       <span className="text-sm text-gray-700 dark:text-gray-300">
-                        {new Date(b.date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                        {formatDateShort(b.date)}
                       </span>
                       {b.reason && <span className="text-xs text-gray-400 dark:text-gray-500">— {b.reason}</span>}
                     </div>

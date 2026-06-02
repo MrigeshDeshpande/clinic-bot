@@ -226,6 +226,15 @@ export async function runMigrations() {
     await db`
       ALTER TABLE appointments ADD CONSTRAINT unique_appointment_version UNIQUE (logical_id, version);
     `;
+    // Prevent double-booking: only one confirmed appointment per time slot
+    await db`
+      DROP INDEX IF EXISTS idx_appointments_unique_slot;
+    `;
+    await db`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_unique_slot
+      ON appointments (date, time) WHERE status = 'confirmed';
+    `;
+
     // Ensure appointments CREATE TABLE includes new columns for fresh installations
     // (table is created with IF NOT EXISTS, so new installs get the base columns first)
     // The ALTER TABLE above adds them for existing installations.

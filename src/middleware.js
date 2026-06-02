@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 
-const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'admin123';
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD;
 
 export function middleware(req) {
   const { pathname } = req.nextUrl;
+
+  if (!DASHBOARD_PASSWORD) {
+    return new Response('DASHBOARD_PASSWORD environment variable is not set', { status: 500 });
+  }
 
   if (pathname.startsWith('/dashboard')) {
     if (pathname === '/dashboard/login') {
