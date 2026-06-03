@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext } from '../layout';
 import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
+import MediaViewer from '@/components/MediaViewer';
 
 const PRESET_FEES = [
   { label: 'General Checkup', fee: 300, icon: '🏥' },
@@ -282,10 +283,13 @@ function VisitPageInner() {
   async function handleMediaUpload(e) {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+    console.log('[MEDIA] Files selected:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
     setUploadingMedia(true);
     try {
       setMediaFiles(prev => [...prev, ...files]);
+      console.log('[MEDIA] Added to local state, total files:', mediaFiles.length + files.length);
     } catch (err) {
+      console.error('[MEDIA] Error adding files:', err);
       showToast('Failed to add media', 'error');
     } finally {
       setUploadingMedia(false);
@@ -312,7 +316,9 @@ function VisitPageInner() {
     if (!form.patientName.trim()) e.patientName = 'Patient name is required';
     if (selectedTreatments.length === 0) e.treatment = 'Please select at least one treatment';
     setErrors(e);
-    return Object.keys(e).length === 0;
+    const valid = Object.keys(e).length === 0;
+    if (!valid) showToast('Please fill in all required fields (name + treatment)', 'error');
+    return valid;
   }
 
   async function handleSubmit(e) {
@@ -362,22 +368,34 @@ function VisitPageInner() {
       const data = await res.json();
       if (res.ok) {
         const appointmentIdForMedia = data.appointment?.id || appointmentId;
+        console.log('[MEDIA] Visit saved, uploading', mediaFiles.length, 'file(s) for appointment', appointmentIdForMedia);
         if (appointmentIdForMedia && mediaFiles.length > 0) {
           for (const file of mediaFiles) {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('appointmentId', appointmentIdForMedia);
-            await fetch('/api/dashboard/media', {
+            console.log('[MEDIA] Uploading:', file.name, file.type, file.size);
+            const mediaRes = await fetch('/api/dashboard/media', {
               method: 'POST',
               body: formData,
             });
+            const mediaData = await mediaRes.json();
+            if (mediaRes.ok) {
+              console.log('[MEDIA] Upload success:', mediaData);
+            } else {
+              console.error('[MEDIA] Upload failed:', mediaData);
+              showToast(`Upload failed for ${file.name}: ${mediaData.error}`, 'error');
+            }
           }
+        } else {
+          console.log('[MEDIA] No files to upload or missing appointment ID');
         }
         setResult({ patient_name: form.patientName, treatment: primaryTreatment });
       } else {
         showToast(data.error || 'Failed to log visit', 'error');
       }
-    } catch {
+    } catch (err) {
+      console.error('[VISIT] Submit error:', err);
       showToast('Network error — could not save visit', 'error');
     } finally {
       setSubmitting(false);
@@ -412,6 +430,10 @@ function VisitPageInner() {
     if (file.type?.startsWith('audio/')) return '🎵';
     if (file.type?.startsWith('video/')) return '🎬';
     return '📎';
+  }
+
+  function getSignedUrl(key) {
+    return `/api/dashboard/media/signed?key=${encodeURIComponent(key)}`;
   }
 
   if (result) {
@@ -531,9 +553,9 @@ function VisitPageInner() {
                   </div>
                 )}
                 {appointmentMeta?.chit_media?.length > 0 && (
-                  <div>
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Media Shared</span>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta.chit_media.length} file{appointmentMeta.chit_media.length > 1 ? 's' : ''}</p>
+                  <div className="col-span-full">
+                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">Media Shared ({appointmentMeta.chit_media.length})</span>
+                    <MediaViewer mediaKeys={appointmentMeta.chit_media} getSignedUrl={getSignedUrl} />
                   </div>
                 )}
                 {appointmentMeta?.prescription_key && (

@@ -45,10 +45,10 @@ export default function MediaViewer({ mediaKeys, getSignedUrl }) {
           </div>
           <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
             {photos.map((key, idx) => (
-              <button
+              <button type="button"
                 key={key}
-                onClick={() => setOpenIndex(mediaKeys.indexOf(key))}
-                className="aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 hover:border-blue-300 hover:shadow-md transition-all group relative"
+                onClick={(e) => { e.stopPropagation(); console.log('[MEDIA_VIEWER] Click photo, index:', mediaKeys.indexOf(key)); setOpenIndex(mediaKeys.indexOf(key)); }}
+                className="aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 hover:border-blue-300 hover:shadow-md transition-all group relative cursor-pointer"
               >
                 <img
                   src={getSignedUrl(key)}
@@ -87,60 +87,57 @@ export default function MediaViewer({ mediaKeys, getSignedUrl }) {
         </div>
       )}
 
-      {/* Fullscreen photo modal */}
+      {/* Photo expand — big but no fullscreen overlay */}
       {openIndex !== null && mediaKeys[openIndex] && getMediaType(mediaKeys[openIndex]) === 'photo' && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setOpenIndex(null)}
-        >
-          <button
-            onClick={() => setOpenIndex(null)}
-            className="absolute top-4 right-4 w-11 h-11 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
-          >
-            <X className="w-5 h-5" />
-          </button>
-
-          {mediaKeys.filter(k => getMediaType(k) === 'photo').length > 1 && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const photoIndices = mediaKeys
-                    .map((k, i) => ({ key: k, idx: i }))
-                    .filter(x => getMediaType(x.key) === 'photo')
-                    .map(x => x.idx);
-                  const currentPhotoPos = photoIndices.indexOf(openIndex);
-                  const prev = photoIndices[(currentPhotoPos - 1 + photoIndices.length) % photoIndices.length];
-                  setOpenIndex(prev);
-                }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const photoIndices = mediaKeys
-                    .map((k, i) => ({ key: k, idx: i }))
-                    .filter(x => getMediaType(x.key) === 'photo')
-                    .map(x => x.idx);
-                  const currentPhotoPos = photoIndices.indexOf(openIndex);
-                  const next = photoIndices[(currentPhotoPos + 1) % photoIndices.length];
-                  setOpenIndex(next);
-                }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all z-10"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </>
-          )}
-
-          <img
-            src={getSignedUrl(mediaKeys[openIndex])}
-            alt={getMediaLabel(mediaKeys[openIndex])}
-            className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+        <div className="relative mt-2">
+          <div className="relative inline-block max-w-full">
+            <img
+              src={getSignedUrl(mediaKeys[openIndex])}
+              alt={getMediaLabel(mediaKeys[openIndex])}
+              className="max-w-full max-h-[80vh] object-contain rounded-xl border border-gray-200 shadow-lg"
+              onClick={() => setOpenIndex(null)}
+            />
+            <button type="button"
+              onClick={() => setOpenIndex(null)}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+            {mediaKeys.filter(k => getMediaType(k) === 'photo').length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+                <button type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const photoIndices = mediaKeys
+                      .map((k, i) => ({ key: k, idx: i }))
+                      .filter(x => getMediaType(x.key) === 'photo')
+                      .map(x => x.idx);
+                    const currentPhotoPos = photoIndices.indexOf(openIndex);
+                    const prev = photoIndices[(currentPhotoPos - 1 + photoIndices.length) % photoIndices.length];
+                    setOpenIndex(prev);
+                  }}
+                  className="w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const photoIndices = mediaKeys
+                      .map((k, i) => ({ key: k, idx: i }))
+                      .filter(x => getMediaType(x.key) === 'photo')
+                      .map(x => x.idx);
+                    const currentPhotoPos = photoIndices.indexOf(openIndex);
+                    const next = photoIndices[(currentPhotoPos + 1) % photoIndices.length];
+                    setOpenIndex(next);
+                  }}
+                  className="w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-all"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

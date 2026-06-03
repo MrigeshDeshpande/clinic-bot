@@ -48,7 +48,19 @@ const TOTALS_CONFIG = [
   { key: 'no_show', label: 'No Show', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/30', ring: 'ring-red-100 dark:ring-red-800', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /> },
 ];
 
+function AppointmentsPageFallback() {
+  return <div className="p-8 text-center text-gray-400">Loading appointments...</div>;
+}
+
 function AppointmentsContent() {
+  return (
+    <Suspense fallback={<AppointmentsPageFallback />}>
+      <AppointmentsContentInner />
+    </Suspense>
+  );
+}
+
+function AppointmentsContentInner() {
   const { selectedDate, setSelectedDate } = useContext(DateContext);
   const { showToast } = useContext(ToastContext);
   const [data, setData] = useState(null);

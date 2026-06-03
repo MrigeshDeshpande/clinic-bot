@@ -8,7 +8,6 @@ import {
   ChevronRight, Users, AlertCircle, Star,
   ClipboardList, Edit3, Save, X, MessageSquare
 } from 'lucide-react';
-import MediaViewer from '@/components/MediaViewer';
 import { formatDate as fmtDate } from '@/lib/date';
 import { ToastContext } from '../../layout';
 
@@ -703,7 +702,18 @@ export default function PatientDetailPage() {
                           )}
                           {visit.chit_media && visit.chit_media.length > 0 && (
                             <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                              <MediaViewer mediaKeys={visit.chit_media} getSignedUrl={getSignedUrl} />
+                              <div className="flex flex-wrap gap-2">
+                                {visit.chit_media.filter(k => k.includes('_photo.')).map(key => (
+                                  <img key={key} src={getSignedUrl(key)} alt=""
+                                    className="w-16 h-16 rounded-xl object-cover border border-gray-200"
+                                    loading="lazy" />
+                                ))}
+                                {visit.chit_media.filter(k => !k.includes('_photo.')).length > 0 && (
+                                  <span className="inline-flex items-center px-2 py-1 text-xs text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+                                    +{visit.chit_media.filter(k => !k.includes('_photo.')).length} files
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           )}
                           {visit.notes && (

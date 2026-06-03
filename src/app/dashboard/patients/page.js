@@ -1,11 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Users, ChevronRight, Phone, Calendar, Activity } from 'lucide-react';
 import { formatDate } from '@/lib/date';
 
-export default function PatientsPage() {
+function PatientsPageFallback() {
+  return <div className="p-8 text-center text-gray-400">Loading...</div>;
+}
+
+function PatientsPageInner() {
   const searchParams = useSearchParams();
   const [patients, setPatients] = useState([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
@@ -205,5 +209,13 @@ export default function PatientsPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function PatientsPage() {
+  return (
+    <Suspense fallback={<PatientsPageFallback />}>
+      <PatientsPageInner />
+    </Suspense>
   );
 }
