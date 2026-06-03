@@ -17,7 +17,8 @@ export async function PATCH(req, { params }) {
     const body = await req.json();
 
     const allowed = ['patient_name', 'patient_phone', 'treatment', 'status',
-      'consultation_fee', 'treatment_charges', 'medicine_charges', 'location'];
+      'consultation_fee', 'treatment_charges', 'medicine_charges', 'location',
+      'diagnosis', 'notes', 'follow_up_date', 'follow_up_instructions'];
 
     const setClauses = [];
     const values = [];
@@ -27,8 +28,20 @@ export async function PATCH(req, { params }) {
       if (body[key] !== undefined) {
         const col = key.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
         setClauses.push(`${col} = $${idx++}`);
-        values.push(key.endsWith('_fee') || key.endsWith('_charges') ? (parseInt(body[key], 10) || 0) : body[key]);
+        if (key === 'medicines') {
+          values.push(JSON.stringify(body[key]));
+        } else if (key.endsWith('_fee') || key.endsWith('_charges')) {
+          values.push(parseInt(body[key], 10) || 0);
+        } else {
+          values.push(body[key]);
+        }
       }
+    }
+
+    // Handle medicines separately (array → JSON)
+    if (body.medicines !== undefined) {
+      setClauses.push(`medicines = $${idx++}`);
+      values.push(JSON.stringify(body.medicines));
     }
 
     if (setClauses.length === 0) {
