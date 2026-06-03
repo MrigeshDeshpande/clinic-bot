@@ -407,6 +407,12 @@ export async function runMigrations() {
       );
     `;
 
+    // Location column for appointments
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS location VARCHAR(100) DEFAULT '';
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {

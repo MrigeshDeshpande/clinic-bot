@@ -53,7 +53,10 @@ const DEFAULT_SLOTS = {
 function QuickBookForm({ date, time, onClose, onBooked }) {
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
+  const [patientAge, setPatientAge] = useState('');
+  const [patientSex, setPatientSex] = useState('');
   const [treatment, setTreatment] = useState('');
+  const [location, setLocation] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -87,6 +90,8 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
     setSelectedPatient(p);
     setPatientName(p.name);
     setPatientPhone(p.phone || '');
+    setPatientAge(p.age ? String(p.age) : '');
+    setPatientSex(p.sex || '');
     setSearchResults([]);
     setSelectedFamilyMember(null);
     fetch(`/api/dashboard/patients/${p.id}/family`)
@@ -108,9 +113,12 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         body: JSON.stringify({
           patientName: patientName.trim(),
           patientPhone: patientPhone.trim() || null,
+          patientAge: patientAge.trim() || null,
+          patientSex: patientSex || null,
           date,
           time,
           treatment: treatment || null,
+          location: location.trim() || null,
         }),
       });
       const data = await res.json();
@@ -188,6 +196,53 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         </div>
       </div>
 
+      {/* Age & Sex — side by side */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Age</label>
+          <input
+            type="number"
+            value={patientAge}
+            onChange={e => setPatientAge(e.target.value)}
+            placeholder="e.g. 35"
+            min="0"
+            max="150"
+            className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Sex</label>
+          <select
+            value={patientSex}
+            onChange={e => setPatientSex(e.target.value)}
+            className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 appearance-none cursor-pointer transition-colors"
+          >
+            <option value="">Select...</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Location */}
+      <div>
+        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Location</label>
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <input
+            type="text"
+            value={location}
+            onChange={e => setLocation(e.target.value)}
+            placeholder="Room, floor, or area"
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+          />
+        </div>
+      </div>
+
       {/* Family Member Selector */}
       {familyMembers.length > 0 && selectedPatient && (
         <div>
@@ -202,7 +257,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
             </button>
             {familyMembers.map(m => (
               <button key={m.id} type="button"
-                onClick={() => { setSelectedFamilyMember(m); setPatientName(m.name); setPatientPhone(m.phone || ''); }}
+                onClick={() => { setSelectedFamilyMember(m); setPatientName(m.name); setPatientPhone(m.phone || ''); setPatientAge(m.age ? String(m.age) : ''); setPatientSex(m.sex || ''); }}
                 className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${selectedFamilyMember?.id === m.id ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                 {m.name} {m.age ? `(${m.age}y)` : ''}
               </button>
@@ -445,6 +500,7 @@ export default function DashboardPage() {
   const [bookingModal, setBookingModal] = useState({ open: false, time: null });
   const [refreshKey, setRefreshKey] = useState(0);
   const [toast, setToast] = useState(null);
+  const [recentBookings, setRecentBookings] = useState([]);
   const bookSlotRef = useRef(null);
 
   useEffect(() => {
@@ -454,11 +510,12 @@ export default function DashboardPage() {
     const month = d.getMonth() + 1;
 
     Promise.all([
-      fetch(`/api/dashboard/appointments?date=${selectedDate}`).then(r => r.json()),
-      fetch(`/api/dashboard/calendar?year=${year}&month=${month}`).then(r => r.json()),
+      fetch(`/api/dashboard/appointments?date=${selectedDate}`).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch appointments'); return d; }),
+      fetch(`/api/dashboard/calendar?year=${year}&month=${month}`).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch calendar'); return d; }),
     ])
       .then(([apptData, calData]) => {
         if (cancelled) return;
+        if (apptData.error) throw new Error(apptData.error);
         setData(apptData);
         setDatesData(calData.dates || {});
         if (calData.slotDefinitions) setSlotDefinitions(calData.slotDefinitions);
@@ -483,8 +540,32 @@ export default function DashboardPage() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  function handleBookingComplete() {
-    setRefreshKey(k => k + 1);
+  function handleBookingComplete(appointment) {
+    if (appointment) {
+      setRecentBookings(prev => [appointment, ...prev].slice(0, 20));
+      setData(prev => {
+        if (!prev) return prev;
+        const exists = (prev.appointments || []).find(a => a.id === appointment.id);
+        if (exists) return prev;
+        return {
+          ...prev,
+          appointments: [...(prev.appointments || []), appointment].sort((a, b) => (a.time || '').localeCompare(b.time || '')),
+          totals: {
+            ...prev.totals,
+            confirmed: (prev.totals?.confirmed || 0) + 1,
+          },
+        };
+      });
+      // Refresh calendar data to show the blue dot on the booked date
+      const d = parseDateOnly(selectedDate) || new Date();
+      fetch(`/api/dashboard/calendar?year=${d.getFullYear()}&month=${d.getMonth() + 1}`)
+        .then(r => r.json())
+        .then(calData => {
+          setDatesData(calData.dates || {});
+          if (calData.slotDefinitions) setSlotDefinitions(calData.slotDefinitions);
+        })
+        .catch(() => {});
+    }
     setToast('Appointment booked successfully');
   }
 
@@ -631,9 +712,9 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-1">
               {confirmed.slice(0, 5).map((a, i) => (
-                <div key={a.id} className="flex items-start justify-between gap-2 py-3 px-3 -mx-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                <div key={a.id} className={`flex items-start justify-between gap-2 py-3 px-3 -mx-3 rounded-lg transition-colors ${recentBookings.some(b => b.id === a.id) ? 'bg-blue-50/80 dark:bg-blue-900/20 ring-1 ring-blue-200 dark:ring-blue-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/50 flex items-center justify-center text-xs font-semibold text-blue-700 dark:text-blue-300">
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${recentBookings.some(b => b.id === a.id) ? 'bg-blue-500 text-white shadow-sm' : 'bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/50 text-blue-700 dark:text-blue-300'}`}>
                       {(a.patient_name || 'P')[0].toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -645,6 +726,9 @@ export default function DashboardPage() {
                           </Link>
                         ) : (
                           a.patient_name || 'Patient'
+                        )}
+                        {recentBookings.some(b => b.id === a.id) && (
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 animate-scale-in">New</span>
                         )}
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{a.time?.slice(0, 5)} — {a.treatment || 'Visit'}</p>
@@ -731,7 +815,7 @@ export default function DashboardPage() {
               date={selectedDate}
               time={bookingModal.time}
               onClose={() => setBookingModal({ open: false, time: null })}
-              onBooked={() => { handleBookingComplete(); setBookingModal({ open: false, time: null }); }}
+              onBooked={(appt) => { handleBookingComplete(appt); setBookingModal({ open: false, time: null }); }}
             />
           </div>
         </div>

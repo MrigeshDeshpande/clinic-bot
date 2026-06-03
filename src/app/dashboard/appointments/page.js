@@ -60,8 +60,8 @@ function AppointmentsContent() {
     const controller = new AbortController();
     const signal = controller.signal;
     fetch(`/api/dashboard/appointments?date=${selectedDate}`, { signal })
-      .then(r => { if (!signal.aborted) return r.json(); })
-      .then(d => { if (!signal.aborted) { setData(d); setLoading(false); } })
+      .then(async r => { if (signal.aborted) return null; const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch appointments'); return d; })
+      .then(d => { if (!signal.aborted && d) { setData(d); setLoading(false); } })
       .catch(e => { if (!signal.aborted) { setError(e.message); setLoading(false); } });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCalendarDots(selectedDate);
@@ -95,8 +95,8 @@ function AppointmentsContent() {
     }
     setUpdating(null);
     fetch(`/api/dashboard/appointments?date=${selectedDate}`)
-      .then(r => r.json())
-      .then(d => setData(d))
+      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
+      .then(d => { if (d && !d.error) setData(d); })
       .catch(e => setError(e.message));
   }
 
@@ -120,13 +120,68 @@ function AppointmentsContent() {
     }
     setArrivalUpdating(null);
     fetch(`/api/dashboard/appointments?date=${selectedDate}`)
-      .then(r => r.json())
-      .then(d => setData(d))
+      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
+      .then(d => { if (d && !d.error) setData(d); })
       .catch(e => setError(e.message));
   }
 
+  const [editing, setEditing] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const editRef = useRef(null);
+
   function getMediaCount(a) {
     return a.chit_media?.length || 0;
+  }
+
+  async function handleInlineSave(appointmentId, field, value) {
+    setEditing(null);
+    const res = await fetch(`/api/dashboard/appointments/${appointmentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      setData(prev => ({
+        ...prev,
+        appointments: (prev?.appointments || []).map(a =>
+          a.id === appointmentId ? { ...a, ...json.appointment } : a
+        ),
+      }));
+    }
+  }
+
+  function startEdit(id, field, currentValue) {
+    setEditing(`${id}::${field}`);
+    setEditValue(String(currentValue ?? ''));
+    setTimeout(() => editRef.current?.select(), 0);
+  }
+
+  function InlineEdit({ appointmentId, field, value, display, className }) {
+    const key = `${appointmentId}::${field}`;
+    if (editing === key) {
+      return (
+        <input
+          ref={editRef}
+          type="text"
+          value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={() => handleInlineSave(appointmentId, field, editValue)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') handleInlineSave(appointmentId, field, editValue);
+            if (e.key === 'Escape') setEditing(null);
+          }}
+          className="w-full px-1 py-0.5 text-sm border border-blue-400 rounded bg-blue-50 dark:bg-blue-900/30 dark:border-blue-600 outline-none"
+          autoFocus
+        />
+      );
+    }
+    return (
+      <span onClick={() => startEdit(appointmentId, field, value)}
+        className={`cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 px-1 -mx-1 rounded transition-colors ${className || ''}`}>
+        {display ?? value ?? '—'}
+      </span>
+    );
   }
 
   return (
@@ -248,6 +303,7 @@ function AppointmentsContent() {
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Patient</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</th>
+                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Treatment</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
@@ -257,7 +313,7 @@ function AppointmentsContent() {
                 <tbody>
                   {(data?.appointments || []).length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-16 text-center">
+                      <td colSpan={8} className="px-5 py-16 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <svg className="w-12 h-12 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -291,12 +347,25 @@ function AppointmentsContent() {
                           </div>
                         </td>
                         <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {a.patient_phone ? (
-                            <span className="flex items-center gap-1">
-                              <PhoneIcon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                              {a.patient_phone}
-                            </span>
-                          ) : '—'}
+                          <InlineEdit
+                            appointmentId={a.id}
+                            field="patient_phone"
+                            value={a.patient_phone || ''}
+                            display={a.patient_phone ? (
+                              <span className="flex items-center gap-1">
+                                <PhoneIcon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                                {a.patient_phone}
+                              </span>
+                            ) : '—'}
+                          />
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                          <InlineEdit
+                            appointmentId={a.id}
+                            field="location"
+                            value={a.location || ''}
+                            display={a.location || '—'}
+                          />
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-1.5">
@@ -315,61 +384,69 @@ function AppointmentsContent() {
                         </td>
                         <td className="px-5 py-4"><StatusBadge status={a.status} arrivalStatus={a.arrival_status} /></td>
                         <td className="px-5 py-4 text-sm font-medium text-gray-700 dark:text-gray-300">
-                          ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}
+                          {editing === `${a.id}::fees` ? (
+                            <div className="flex gap-1 items-center min-w-[200px]">
+                              <input type="number" value={editValue.split(',')[0] || ''} onChange={e => setEditValue(`${e.target.value},${editValue.split(',')[1] || ''},${editValue.split(',')[2] || ''}`)}
+                                className="w-14 px-1 py-0.5 text-xs border border-blue-400 rounded bg-blue-50 dark:bg-blue-900/30 dark:border-blue-600 outline-none text-center" placeholder="C"
+                                onKeyDown={e => { if (e.key === 'Enter') handleInlineSave(a.id, 'consultation_fee', editValue.split(',')[0]) }} />
+                              <input type="number" value={editValue.split(',')[1] || ''} onChange={e => setEditValue(`${editValue.split(',')[0] || ''},${e.target.value},${editValue.split(',')[2] || ''}`)}
+                                className="w-14 px-1 py-0.5 text-xs border border-blue-400 rounded bg-blue-50 dark:bg-blue-900/30 dark:border-blue-600 outline-none text-center" placeholder="T"
+                                onKeyDown={e => { if (e.key === 'Enter') handleInlineSave(a.id, 'treatment_charges', editValue.split(',')[1]) }} />
+                              <input type="number" value={editValue.split(',')[2] || ''} onChange={e => setEditValue(`${editValue.split(',')[0] || ''},${editValue.split(',')[1] || ''},${e.target.value}`)}
+                                className="w-14 px-1 py-0.5 text-xs border border-blue-400 rounded bg-blue-50 dark:bg-blue-900/30 dark:border-blue-600 outline-none text-center" placeholder="M"
+                                onKeyDown={e => { if (e.key === 'Enter') handleInlineSave(a.id, 'medicine_charges', editValue.split(',')[2]) }}
+                                onBlur={async () => {
+                                  await handleInlineSave(a.id, 'consultation_fee', editValue.split(',')[0]);
+                                  await handleInlineSave(a.id, 'treatment_charges', editValue.split(',')[1]);
+                                  await handleInlineSave(a.id, 'medicine_charges', editValue.split(',')[2]);
+                                }} />
+                            </div>
+                          ) : (
+                            <span onClick={() => startEdit(a.id, 'fees', `${a.consultation_fee || 0},${a.treatment_charges || 0},${a.medicine_charges || 0}`)}
+                              className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 px-1 -mx-1 rounded transition-colors">
+                              ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}
+                            </span>
+                          )}
                         </td>
                         <td className="px-5 py-4 text-right">
-                          {a.status === 'confirmed' && (
-                            <div className="flex flex-col gap-1">
-                              {/* Arrival management */}
-                              <div className="flex gap-1 justify-end">
-                                {a.arrival_status === 'scheduled' && (
-                                  <button
-                                    onClick={() => handleArrivalChange(a.id, 'arrived')}
-                                    disabled={!!arrivalUpdating}
-                                    className="px-3 py-2.5 text-xs font-medium rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition-all disabled:opacity-50"
-                                  >
-                                    📍 Mark Arrived
-                                  </button>
-                                )}
-                                {a.arrival_status === 'arrived' && (
-                                  <button
-                                    onClick={() => handleArrivalChange(a.id, 'called')}
-                                    disabled={!!arrivalUpdating}
-                                    className="px-3 py-2.5 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50"
-                                  >
-                                    📞 Call Patient
-                                  </button>
-                                )}
-                                {a.arrival_status === 'called' && (
-                                  <button
-                                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=appointments`)}
-                                    className="px-3 py-2.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all"
-                                  >
-                                    ✓ Start Visit
-                                  </button>
-                                )}
-                              </div>
-                              {/* Primary actions */}
-                              <div className="flex gap-1 justify-end">
-                                {a.arrival_status !== 'called' && (
-                                  <button
-                                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=appointments`)}
-                                    className="px-3 py-2.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all hover:shadow-sm"
-                                  >
-                                    ✓ Complete
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => handleStatusChange(a.id, 'no_show')}
-                                  disabled={!!updating}
-                                  className="px-3 py-2.5 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition-all hover:shadow-sm disabled:opacity-50"
-                                >
-                                  ✕ No Show
-                                </button>
-                            </div>
-                            </div>
-                          )}
-
+                          <div className="flex gap-1 justify-end">
+                            {a.status === 'confirmed' && a.arrival_status === 'scheduled' && (
+                              <button onClick={() => handleArrivalChange(a.id, 'arrived')} disabled={!!arrivalUpdating}
+                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition-all disabled:opacity-50">
+                                📍 Arrived
+                              </button>
+                            )}
+                            {a.status === 'confirmed' && a.arrival_status === 'arrived' && (
+                              <button onClick={() => handleArrivalChange(a.id, 'called')} disabled={!!arrivalUpdating}
+                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50">
+                                📞 Call
+                              </button>
+                            )}
+                            {a.status === 'confirmed' && a.arrival_status === 'called' && (
+                              <button onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=appointments`)}
+                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all">
+                                ✓ Visit
+                              </button>
+                            )}
+                            {a.status === 'confirmed' && a.arrival_status !== 'called' && (
+                              <button onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=appointments`)}
+                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all">
+                                ✓ Done
+                              </button>
+                            )}
+                            {a.status === 'confirmed' && (
+                              <button onClick={() => handleStatusChange(a.id, 'no_show')} disabled={!!updating}
+                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition-all disabled:opacity-50">
+                                ✕ No Show
+                              </button>
+                            )}
+                            {a.status === 'completed' && (
+                              <span className="text-xs text-green-600 dark:text-green-400 font-medium">✓ Completed</span>
+                            )}
+                            {a.status === 'no_show' && (
+                              <span className="text-xs text-red-600 dark:text-red-400 font-medium">✕ No Show</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -383,3 +460,5 @@ function AppointmentsContent() {
     </div>
   );
 }
+
+export default AppointmentsContent;
