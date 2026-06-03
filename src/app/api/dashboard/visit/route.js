@@ -14,7 +14,7 @@ export async function POST(req) {
   try {
     const sql = getSql();
     const body = await req.json();
-    const { appointmentId, treatment, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, status: newStatus } = body;
+    const { appointmentId, treatment, treatments, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, status: newStatus } = body;
 
     // ── Update existing appointment ──
     if (appointmentId) {
@@ -26,6 +26,10 @@ export async function POST(req) {
       if (treatment !== undefined) {
         setClauses.push(`treatment = $${p++}`);
         params.push(treatment);
+      }
+      if (treatments !== undefined) {
+        setClauses.push(`treatments = $${p++}`);
+        params.push(JSON.stringify(treatments));
       }
       if (diagnosis !== undefined) {
         setClauses.push(`diagnosis = $${p++}`);
@@ -73,7 +77,7 @@ export async function POST(req) {
 
       const updated = await sql`
         SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,
-               diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
+               treatments, diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
                notes, follow_up_date, follow_up_instructions, prescription_key,
                status, arrival_status, created_at, updated_at
         FROM appointments WHERE id = ${appointmentId}

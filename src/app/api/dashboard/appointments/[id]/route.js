@@ -18,7 +18,7 @@ export async function PATCH(req, { params }) {
 
     const allowed = ['patient_name', 'patient_phone', 'treatment', 'status',
       'consultation_fee', 'treatment_charges', 'medicine_charges', 'location',
-      'diagnosis', 'notes', 'follow_up_date', 'follow_up_instructions'];
+      'diagnosis', 'notes', 'follow_up_date', 'follow_up_instructions', 'treatments'];
 
     const setClauses = [];
     const values = [];
@@ -28,7 +28,7 @@ export async function PATCH(req, { params }) {
       if (body[key] !== undefined) {
         const col = key.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
         setClauses.push(`${col} = $${idx++}`);
-        if (key === 'medicines') {
+        if (key === 'medicines' || key === 'treatments') {
           values.push(JSON.stringify(body[key]));
         } else if (key.endsWith('_fee') || key.endsWith('_charges')) {
           values.push(parseInt(body[key], 10) || 0);
@@ -36,12 +36,6 @@ export async function PATCH(req, { params }) {
           values.push(body[key]);
         }
       }
-    }
-
-    // Handle medicines separately (array → JSON)
-    if (body.medicines !== undefined) {
-      setClauses.push(`medicines = $${idx++}`);
-      values.push(JSON.stringify(body.medicines));
     }
 
     if (setClauses.length === 0) {
@@ -54,7 +48,7 @@ export async function PATCH(req, { params }) {
     await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${idx}`, values);
 
     const updated = await sql`
-      SELECT id, patient_name, patient_phone, treatment, status,
+      SELECT id, patient_name, patient_phone, treatment, treatments, status,
              consultation_fee, treatment_charges, medicine_charges, location,
              arrival_status, is_priority, notes, chit_media
       FROM appointments WHERE id = ${id}

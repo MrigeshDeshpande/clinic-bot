@@ -731,7 +731,7 @@ export default function DashboardPage() {
                           <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 animate-scale-in">New</span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{a.time?.slice(0, 5)} — {a.treatment || 'Visit'}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{a.time?.slice(0, 5)} — {Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'}</p>
                     </div>
                   </div>
                   <StatusBadge status={a.status} arrivalStatus={a.arrival_status} />
@@ -766,7 +766,7 @@ export default function DashboardPage() {
                           a.patient_name || 'Patient'
                         )}
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{a.treatment || 'Visit'} — ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'} — ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}</p>
                     </div>
                   </div>
                   <StatusBadge status={a.status} />

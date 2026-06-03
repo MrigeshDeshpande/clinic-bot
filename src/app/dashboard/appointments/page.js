@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileImage, Phone as PhoneIcon } from 'lucide-react';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
-import { TREATMENT_NAMES } from '@/lib/treatments';
 import Calendar from '@/components/Calendar';
+import VisitCompleteModal from './VisitCompleteModal';
 import { DateContext, ToastContext } from '../layout';
 
 function StatusBadge({ status, arrivalStatus }) {
@@ -18,254 +18,24 @@ function StatusBadge({ status, arrivalStatus }) {
   return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
 }
 
-// Preset fee packages for one-tap filling
-const PRESET_FEES = [
-  { label: 'Scaling', fee: 500, icon: '🦷' },
-  { label: 'Filling', fee: 800, icon: '🩹' },
-  { label: 'RCT', fee: 3000, icon: '🔬' },
-  { label: 'Extraction', fee: 600, icon: '🦷' },
-  { label: 'Cleaning', fee: 400, icon: '✨' },
-];
-
-// Follow-up auto-suggest in days based on treatment type
-const FOLLOW_UP_SUGGEST = {
-  'Root Canal': 7,
-  'Scaling': 180,
-  'Teeth Cleaning': 180,
-  'Dental Filling': 365,
-  'Extraction': 7,
-  'Crown': 14,
-  'Implants': 90,
-  'Braces Adjustment': 30,
-  'General Checkup': 180,
-  'Whitening': 365,
-  'Veneers': 365,
-  'Pediatric Dentistry': 180,
-};
-
-function computeFollowUpDate(treatmentName) {
-  const days = FOLLOW_UP_SUGGEST[treatmentName];
-  if (!days) return '';
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+function getTreatments(a) {
+  if (Array.isArray(a?.treatments) && a.treatments.length > 0) return a.treatments;
+  if (a?.treatment) return [a.treatment];
+  return [];
 }
 
-function VisitCompleteModal({ appointment, onClose, onComplete, showToast }) {
-  const [treatment, setTreatment] = useState(appointment?.treatment || '');
-  const [consultationFee, setConsultationFee] = useState(String(appointment?.consultation_fee || ''));
-  const [treatmentCharges, setTreatmentCharges] = useState(String(appointment?.treatment_charges || ''));
-  const [medicineCharges, setMedicineCharges] = useState(String(appointment?.medicine_charges || ''));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [showDetails, setShowDetails] = useState(false);
-  const [diagnosis, setDiagnosis] = useState('');
-  const [followUpDate, setFollowUpDate] = useState(
-    appointment?.treatment ? computeFollowUpDate(appointment.treatment) : ''
-  );
-  const [followUpInstructions, setFollowUpInstructions] = useState('');
-
-  function applyPreset(feeAmount) {
-    setConsultationFee(String(feeAmount));
-  }
-
-  function handleTreatmentChange(name) {
-    setTreatment(name);
-    const suggested = computeFollowUpDate(name);
-    if (suggested) setFollowUpDate(suggested);
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!treatment) { setError('Please select a treatment'); return; }
-    setSaving(true);
-    setError('');
-    try {
-      const res = await fetch('/api/dashboard/visit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointmentId: appointment.id,
-          treatment,
-          diagnosis: diagnosis.trim() || undefined,
-          consultationFee: Number(consultationFee) || 0,
-          treatmentCharges: Number(treatmentCharges) || 0,
-          medicineCharges: Number(medicineCharges) || 0,
-          followUpDate: followUpDate || undefined,
-          followUpInstructions: followUpInstructions.trim() || undefined,
-          status: 'completed',
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast('Visit completed successfully', 'success');
-        onComplete(appointment.id);
-      } else {
-        setError(data.error || 'Failed to complete visit');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!appointment) return null;
-
-  const total = Number(consultationFee) + Number(treatmentCharges) + Number(medicineCharges);
-
+function TreatmentPills({ appointment }) {
+  const treatments = getTreatments(appointment);
+  if (treatments.length === 0) return <span className="text-sm text-gray-400 dark:text-gray-500">—</span>;
+  if (treatments.length === 1) return <span className="text-sm text-gray-500 dark:text-gray-400">{treatments[0]}</span>;
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 animate-scale-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="px-5 pt-5 pb-2 flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md shrink-0">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Complete Visit</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {appointment.patient_name || 'Patient'}
-                {appointment.time && <span> · {appointment.time?.slice(0, 5)}</span>}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1.5 -mr-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="px-5 pb-5 pt-2">
-          {/* Treatment */}
-          <div className="mb-3.5">
-            <select value={treatment} onChange={e => handleTreatmentChange(e.target.value)}
-              className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 appearance-none transition-all cursor-pointer">
-              <option value="">Select treatment...</option>
-              {TREATMENT_NAMES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-
-          {/* Preset fee packages — hero element */}
-          <div className="mb-3.5">
-            <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">Fee</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {PRESET_FEES.map(p => (
-                <button key={p.label} type="button" onClick={() => applyPreset(p.fee)}
-                  className={`flex flex-col items-center gap-0.5 px-2 py-2.5 rounded-xl text-xs font-medium border transition-all active:scale-95 ${
-                    consultationFee === String(p.fee)
-                      ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 ring-1 ring-emerald-300 dark:ring-emerald-700'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-emerald-300 dark:hover:border-emerald-600 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10'
-                  }`}>
-                  <span className="text-base">{p.icon}</span>
-                  <span className="font-semibold">₹{p.fee}</span>
-                  <span className="text-[10px] opacity-70">{p.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Fee breakdown + Custom fee input */}
-          <div className="mb-3.5">
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <label className="text-[10px] font-medium text-gray-400 dark:text-gray-500">Consultation (₹)</label>
-                <input type="number" min="0" value={consultationFee} onChange={e => setConsultationFee(e.target.value)}
-                  className="w-full px-2.5 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all"
-                  placeholder="0" />
-              </div>
-              <div className="flex-1">
-                <label className="text-[10px] font-medium text-gray-400 dark:text-gray-500">Treatment (₹)</label>
-                <input type="number" min="0" value={treatmentCharges} onChange={e => setTreatmentCharges(e.target.value)}
-                  className="w-full px-2.5 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all"
-                  placeholder="0" />
-              </div>
-              <div className="flex-1">
-                <label className="text-[10px] font-medium text-gray-400 dark:text-gray-500">Medicines (₹)</label>
-                <input type="number" min="0" value={medicineCharges} onChange={e => setMedicineCharges(e.target.value)}
-                  className="w-full px-2.5 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all"
-                  placeholder="0" />
-              </div>
-            </div>
-            {total > 0 && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-right mt-1">
-                Total: <span className="font-semibold text-gray-900 dark:text-gray-100">₹{total.toLocaleString('en-IN')}</span>
-              </p>
-            )}
-          </div>
-
-          {/* Expandable details: Diagnosis + Follow-up */}
-          {!showDetails && (
-            <button type="button" onClick={() => setShowDetails(true)}
-              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all mb-2">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Add diagnosis & follow-up
-            </button>
-          )}
-
-          {showDetails && (
-            <div className="space-y-3 mb-3.5 animate-slide-down">
-              <div className="border-t border-gray-100 dark:border-gray-800 pt-3" />
-              {/* Diagnosis */}
-              <div>
-                <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Diagnosis / Observations</label>
-                <textarea value={diagnosis} onChange={e => setDiagnosis(e.target.value)}
-                  rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all resize-none"
-                  placeholder="Brief diagnosis or observations..." />
-              </div>
-              {/* Follow-up */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Follow-up Date</label>
-                  <input type="date" value={followUpDate} onChange={e => setFollowUpDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Instructions</label>
-                  <input type="text" value={followUpInstructions} onChange={e => setFollowUpInstructions(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all"
-                    placeholder="e.g. Return in 2 weeks" />
-                </div>
-              </div>
-              {treatment && FOLLOW_UP_SUGGEST[treatment] && (
-                <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                  💡 Suggested in {FOLLOW_UP_SUGGEST[treatment]} day{FOLLOW_UP_SUGGEST[treatment] > 1 ? 's' : ''} for {treatment}
-                </p>
-              )}
-              <button type="button" onClick={() => setShowDetails(false)}
-                className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                Hide details ↑
-              </button>
-            </div>
-          )}
-
-          {error && (
-            <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg px-3 py-2 border border-red-100 dark:border-red-800 mb-3">
-              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              {error}
-            </div>
-          )}
-
-          <div className="flex gap-2.5">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">Cancel</button>
-            <button type="submit" disabled={saving || !treatment}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-semibold rounded-xl hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98] shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50 flex items-center justify-center gap-2">
-              {saving ? (
-                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
-              ) : (
-                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Complete</>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
+    <div className="flex flex-wrap gap-1">
+      {treatments.map((t, i) => (
+        <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+          {t}
+        </span>
+      ))}
+      <span className="text-[10px] text-gray-400 dark:text-gray-500 self-center">×{treatments.length}</span>
     </div>
   );
 }
@@ -624,8 +394,8 @@ function AppointmentsContent() {
                           />
                         </td>
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">{a.treatment || '—'}</span>
+                          <div className="flex items-center gap-1.5 max-w-[180px]">
+                            <TreatmentPills appointment={a} />
                             {getMediaCount(a) > 0 && (
                               <Link
                                 href={a.patient_id ? `/dashboard/patients/${a.patient_id}` : '#'}

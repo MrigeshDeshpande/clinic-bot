@@ -97,6 +97,7 @@ export async function GET(req) {
     if (id) {
       const rows = await sql`
         SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+               a.treatments,
          a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                 a.consultation_fee, a.treatment_charges, a.medicine_charges,
                 a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
@@ -116,6 +117,7 @@ export async function GET(req) {
     const [appointments, totalsRaw] = await Promise.all([
       sql`
         SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+               a.treatments,
                a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                 a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
                 a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at
