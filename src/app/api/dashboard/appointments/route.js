@@ -96,13 +96,16 @@ export async function GET(req) {
     // Single appointment by ID
     if (id) {
       const rows = await sql`
-        SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+        SELECT a.id, a.logical_id, a.wa_id,
+               COALESCE(p.name, a.patient_name) AS patient_name,
+               a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
                a.treatments,
          a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
-                a.consultation_fee, a.treatment_charges, a.medicine_charges,
-                a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
-                a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at
+                 a.consultation_fee, a.treatment_charges, a.medicine_charges,
+                 a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
+                 a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at
         FROM appointments a
+        LEFT JOIN patients p ON p.id = a.patient_id
         WHERE a.id = ${id}
         LIMIT 1
       `;
@@ -116,12 +119,15 @@ export async function GET(req) {
 
     const [appointments, totalsRaw] = await Promise.all([
       sql`
-        SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+        SELECT a.id, a.logical_id, a.wa_id,
+               COALESCE(p.name, a.patient_name) AS patient_name,
+               a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
                a.treatments,
                a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                 a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
                 a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at
         FROM appointments a
+        LEFT JOIN patients p ON p.id = a.patient_id
         WHERE a.date = ${targetDate}
           AND a.status IN ('confirmed', 'completed', 'no_show')
         ORDER BY a.time ASC

@@ -28,8 +28,10 @@ export async function GET(req, { params }) {
         SELECT a.id, a.date, a.time, a.treatment, a.diagnosis, a.medicines,
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
                a.notes, a.follow_up_date, a.follow_up_instructions,
-               a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at
+               a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at,
+               COALESCE(p.name, a.patient_name) AS patient_name
         FROM appointments a
+        LEFT JOIN patients p ON p.id = a.patient_id
         WHERE a.patient_id = ${id}
           AND a.status IN ('completed', 'confirmed', 'no_show')
         ORDER BY a.date DESC, a.time DESC
@@ -101,6 +103,14 @@ export async function PATCH(req, { params }) {
 
     if (!rows || rows.length === 0) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
+    }
+
+    // Sync updated name to all appointments for this patient
+    if (name !== undefined) {
+      await sql`
+        UPDATE appointments SET patient_name = ${name}, updated_at = NOW()
+        WHERE patient_id = ${id}
+      `;
     }
 
     logger.info('PATIENT_UPDATED', { id, fields: setClauses.map(c => c.split(' =')[0]) });
