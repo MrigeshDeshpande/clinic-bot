@@ -75,6 +75,7 @@ function AppointmentsContentInner() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [scope, setScope] = useState('day');
   const [filterKey, setFilterKey] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const calRef = useRef();
   const router = useRouter();
 
@@ -85,6 +86,11 @@ function AppointmentsContentInner() {
     if (filterKey === 'in_session') return a.status === 'confirmed' && a.arrival_status === 'called';
     if (filterKey === 'arrived') return a.arrival_status === 'arrived';
     return true;
+  }).filter(a => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (a.patient_name || '').toLowerCase().includes(q)
+        || (a.patient_phone || '').includes(q);
   });
 
   const noFilter = !filterKey;
@@ -301,6 +307,28 @@ function AppointmentsContentInner() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-4">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search by patient name or phone..."
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
+        />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {loading ? (
