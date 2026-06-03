@@ -11,6 +11,7 @@ export const STATES = [
   'DOCTOR_PATIENT_VISITS','DOCTOR_EDIT_PATIENT','DOCTOR_FEEDBACK',
   'WALKIN_NAME','WALKIN_AGE','WALKIN_SEX','WALKIN_TREATMENT',
   'DOCTOR_LOG_VISIT_NAME','DOCTOR_VIEW_MESSAGES',
+  'BOOKING_PATIENT_AGE','BOOKING_PATIENT_SEX','BOOKING_PATIENT_LOCATION',
   'FAMILY_SELECTION',
   'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL','DOCTOR_VIEW_QUEUE',
 ];
@@ -65,6 +66,9 @@ export const TRANSITIONS = {
   RECEPTIONIST_VIEW_QUEUE: ['receptionist_queue_patient','back','emergency','escalate'],
   RECEPTIONIST_QUEUE_DETAIL: ['queue_mark_called','queue_toggle_priority','back','emergency','escalate'],
   DOCTOR_VIEW_QUEUE: ['doctor_call_next','doctor_call_patient','back','emergency','escalate'],
+  BOOKING_PATIENT_AGE: ['back','emergency','escalate'],
+  BOOKING_PATIENT_SEX: ['back','emergency','escalate'],
+  BOOKING_PATIENT_LOCATION: ['back','emergency','escalate'],
   FAMILY_SELECTION: ['select_family_patient','back','emergency','escalate'],
 
   // Walk-in registration states

@@ -252,6 +252,26 @@ export async function handle(state, { session, normalized, entities, intent }) {
     if (patients.length === 1) {
       session.context = { ...session.context, selectedPatientId: patients[0].id };
     }
+    // Check if patient demographics are needed — if so, collect them
+    const missingDemographics = await checkPatientDemographicsNeeded(session);
+    if (missingDemographics && missingDemographics.length > 0) {
+      const needed = { needsAge: missingDemographics.includes('age'), needsSex: missingDemographics.includes('sex'), needsLocation: missingDemographics.includes('location') };
+      session = {
+        ...session,
+        state: 'BOOKING_PATIENT_AGE',
+        context: {
+          ...session.context,
+          patientProfile: { age: null, sex: null, location: null, ...needed },
+        },
+        metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+      };
+      const name = session.profileName || 'Patient';
+      return {
+        session,
+        reply: tr(session, 'booking_ask_age', { name }),
+        replyType: 'text',
+      };
+    }
   }
   if (intent === 'back') {
     if (session.context?.role === 'doctor') {
@@ -484,6 +504,15 @@ async function handleDoctorMediaPatientLookup(session, query) {
     case 'CANCEL_CONFIRM':
       return handleCancelConfirm(session, intent);
 
+    case 'BOOKING_PATIENT_AGE':
+      return handleBookingPatientAge(session, normalized, entities, intent);
+
+    case 'BOOKING_PATIENT_SEX':
+      return handleBookingPatientSex(session, normalized, entities, intent);
+
+    case 'BOOKING_PATIENT_LOCATION':
+      return handleBookingPatientLocation(session, normalized, entities, intent);
+
     case 'FAMILY_SELECTION':
       return handleFamilySelection(session, intent, entities, normalized);
 
@@ -527,9 +556,35 @@ async function handleFamilySelection(session, intent, entities, normalized) {
           ...resetBookingContext(session.context),
           selectedPatientId: patient.id,
           familyPatients: undefined,
+          patientProfile: {
+            age: patient.age || null,
+            sex: patient.sex || null,
+            location: patient.location || null,
+          },
         },
         metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
       };
+      // Check if this family member needs demographics
+      const missing = [];
+      if (!patient.age) missing.push('age');
+      if (!patient.sex) missing.push('sex');
+      if (!patient.location) missing.push('location');
+
+      if (missing.length > 0) {
+        session.state = 'BOOKING_PATIENT_AGE';
+        session.context.patientProfile = {
+          age: null, sex: null, location: null,
+          needsAge: missing.includes('age'),
+          needsSex: missing.includes('sex'),
+          needsLocation: missing.includes('location'),
+        };
+        return {
+          session,
+          reply: tr(session, 'booking_ask_age', { name: patient.name }),
+          replyType: 'text',
+        };
+      }
+
       return {
         session,
         reply: { body: tr(session, 'ask_date_for_name', { name: patient.name }), buttonLabel: tr(session, 'select_date'), sections: getDateQuickPickSections(session) },
@@ -902,6 +957,136 @@ async function handleWalkinTreatment(session, entities, normalized, intent) {
     session,
     reply: tr(session, 'walkin_failed', { phone: CLINIC.phone }),
     replyType: 'text',
+  };
+}
+
+// ───────────────────────────────────────────────
+// Check if a patient's demographics need to be collected
+// Looks up the existing patient record by waId and returns
+// which fields (age, sex, location) are missing.
+// Returns empty array if patient doesn't exist yet or has all fields.
+// ───────────────────────────────────────────────
+async function checkPatientDemographicsNeeded(session) {
+  try {
+    // Check session-level stored demographics first (already collected in this session)
+    const pp = session.context?.patientProfile;
+    if (pp) {
+      const missing = [];
+      if (pp.needsAge && !pp.age) missing.push('age');
+      if (pp.needsSex && !pp.sex) missing.push('sex');
+      if (pp.needsLocation && !pp.location) missing.push('location');
+      if (missing.length > 0) return missing;
+    }
+
+    // Look up existing patient record
+    const patients = await findPatientsByWaId(session.waId);
+    if (patients.length === 0) {
+      // New patient — needs all demographics
+      return ['age', 'sex', 'location'];
+    }
+
+    const patient = patients[0];
+    const missing = [];
+    if (!patient.age) missing.push('age');
+    if (!patient.sex) missing.push('sex');
+    if (!patient.location) missing.push('location');
+    return missing;
+  } catch (error) {
+    logger.warn('DEMOGRAPHICS_CHECK_FAILED', { waId: session.waId, error: error.message });
+    return [];
+  }
+}
+
+// ───────────────────────────────────────────────
+// Booking — Patient demographic collection handlers
+// These run before the normal booking flow when demographics are missing.
+// ───────────────────────────────────────────────
+async function handleBookingPatientAge(session, normalized, entities, intent) {
+  const text = (normalized?.textTrimmed || '').trim();
+  const ageMatch = text.match(/(\d+)/);
+  const age = ageMatch ? parseInt(ageMatch[1], 10) : null;
+  if (!age || age < 1 || age > 150) {
+    session.metrics = { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 };
+    return { session, reply: tr(session, 'booking_ask_age_again'), replyType: 'text' };
+  }
+
+  const needsSex = session.context.patientProfile?.needsSex !== false;
+  session = {
+    ...session,
+    state: 'BOOKING_PATIENT_SEX',
+    context: {
+      ...session.context,
+      patientProfile: { ...session.context.patientProfile, age },
+    },
+    metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+  };
+  const name = session.profileName || 'Patient';
+  return { session, reply: tr(session, 'booking_ask_sex', { name }), replyType: 'text' };
+}
+
+async function handleBookingPatientSex(session, normalized, entities, intent) {
+  const text = (normalized?.textLower || '').trim();
+  let sex = null;
+  if (/^m(ale)?$/i.test(text)) sex = 'Male';
+  else if (/^f(emale)?$/i.test(text)) sex = 'Female';
+  else sex = text;
+
+  if (!sex) {
+    session.metrics = { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 };
+    return { session, reply: tr(session, 'booking_ask_sex_again'), replyType: 'text' };
+  }
+
+  const needsLocation = session.context.patientProfile?.needsLocation !== false;
+  if (!needsLocation) {
+    // Location not needed — skip straight to booking collection
+    return proceedToBookingCollection(session, { sex });
+  }
+
+  session = {
+    ...session,
+    state: 'BOOKING_PATIENT_LOCATION',
+    context: {
+      ...session.context,
+      patientProfile: { ...session.context.patientProfile, sex },
+    },
+    metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+  };
+  return { session, reply: tr(session, 'booking_ask_location'), replyType: 'text' };
+}
+
+async function handleBookingPatientLocation(session, normalized, entities, intent) {
+  const text = (normalized?.textTrimmed || '').trim();
+  if (!text || text.length < 2) {
+    session.metrics = { ...session.metrics, failedAttempts: (session.metrics.failedAttempts || 0) + 1 };
+    return { session, reply: tr(session, 'booking_ask_location_again'), replyType: 'text' };
+  }
+
+  return proceedToBookingCollection(session, { location: text });
+}
+
+/**
+ * Transition from demographic collection to normal booking collection.
+ */
+function proceedToBookingCollection(session, additionalProfile) {
+  const profile = { ...session.context.patientProfile, ...additionalProfile };
+  session = {
+    ...session,
+    state: 'BOOKING_COLLECTION',
+    previousState: session.state,
+    context: {
+      ...resetBookingContext(session.context),
+      patientProfile: profile,
+    },
+    metrics: { ...session.metrics, failedAttempts: 0, messagesInState: 0 },
+  };
+  return {
+    session,
+    reply: {
+      body: tr(session, 'ask_date'),
+      buttonLabel: tr(session, 'select_date'),
+      sections: getDateQuickPickSections(session),
+    },
+    replyType: 'list',
   };
 }
 
@@ -1669,11 +1854,27 @@ async function handleBookingConfirmation(session, intent, entities) {
             : null;
           patientId = match ? match.id : existingPatients[0].id;
           patientPhone = match ? match.phone : existingPatients[0].phone;
+
+          // Save any demographics collected during booking to the patient record
+          const pp = session.context?.patientProfile;
+          if (pp && (pp.age || pp.sex || pp.location)) {
+            const updateFields = {};
+            if (pp.age) updateFields.age = pp.age;
+            if (pp.sex) updateFields.sex = pp.sex;
+            if (pp.location) updateFields.location = pp.location;
+            await updatePatient(patientId, updateFields).catch(e =>
+              logger.warn('PATIENT_DEMOGRAPHICS_UPDATE_FAILED', { patientId, error: e.message })
+            );
+          }
         } else {
+          const pp = session.context?.patientProfile || {};
           const newPatient = await createPatient({
             name: booking.patientName || session.profileName || 'Patient',
             waId: session.waId,
             phone: session.waId,
+            age: pp.age || null,
+            sex: pp.sex || null,
+            location: pp.location || null,
           });
           if (newPatient) {
             patientId = newPatient.id;

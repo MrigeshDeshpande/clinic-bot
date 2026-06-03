@@ -403,13 +403,20 @@ export async function runMigrations() {
                   'LOG_TREATMENT','LOG_CONSULTATION_FEE','LOG_TREATMENT_CHARGES','LOG_MEDICINE_CHARGES',
                   'LOG_NEXT_VISIT','LOG_NOTES','LOG_MEDIA','DOCTOR_SEARCH_PATIENT','DOCTOR_VIEW_CHIT','DOCTOR_PATIENT_VISITS','DOCTOR_VIEW_MESSAGES',
                   'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL',
-                  'WALKIN_NAME','WALKIN_AGE','WALKIN_SEX','WALKIN_TREATMENT')
+                  'WALKIN_NAME','WALKIN_AGE','WALKIN_SEX','WALKIN_TREATMENT',
+                  'BOOKING_PATIENT_AGE','BOOKING_PATIENT_SEX','BOOKING_PATIENT_LOCATION')
       );
     `;
 
     // Location column for appointments
     await db`
       ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS location VARCHAR(100) DEFAULT '';
+    `;
+
+    // Location column on patients (city/area the patient is from)
+    await db`
+      ALTER TABLE patients
         ADD COLUMN IF NOT EXISTS location VARCHAR(100) DEFAULT '';
     `;
 

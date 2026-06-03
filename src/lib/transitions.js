@@ -47,6 +47,9 @@ export function getNextState(state, intent, entities) {
         case 'RECEPTIONIST_VIEW_QUEUE': return 'RECEPTIONIST_MAIN_MENU';
         case 'RECEPTIONIST_QUEUE_DETAIL': return 'RECEPTIONIST_VIEW_QUEUE';
         // Walk-in back navigation
+        case 'BOOKING_PATIENT_LOCATION': return 'BOOKING_PATIENT_SEX';
+        case 'BOOKING_PATIENT_SEX':       return 'BOOKING_PATIENT_AGE';
+        case 'BOOKING_PATIENT_AGE':       return 'MAIN_MENU';
         case 'WALKIN_TREATMENT': return 'WALKIN_SEX';
         case 'WALKIN_SEX':       return 'WALKIN_AGE';
         case 'WALKIN_AGE':       return 'WALKIN_NAME';

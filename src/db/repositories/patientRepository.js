@@ -1,17 +1,18 @@
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
-export async function createPatient({ name, age, sex, phone, waId }) {
+export async function createPatient({ name, age, sex, phone, waId, location }) {
   const sql = getSql();
   if (!sql) return null;
   try {
     const rows = await sql`
-      INSERT INTO patients (name, age, sex, phone, wa_id)
-      VALUES (${name}, ${age || null}, ${sex || null}, ${phone}, ${waId || null})
+      INSERT INTO patients (name, age, sex, phone, wa_id, location)
+      VALUES (${name}, ${age || null}, ${sex || null}, ${phone}, ${waId || null}, ${location || null})
       ON CONFLICT (phone) DO UPDATE
         SET name = COALESCE(NULLIF(EXCLUDED.name, ''), patients.name),
             age = COALESCE(EXCLUDED.age, patients.age),
             sex = COALESCE(NULLIF(EXCLUDED.sex, ''), patients.sex),
+            location = COALESCE(NULLIF(EXCLUDED.location, ''), patients.location),
             wa_id = COALESCE(EXCLUDED.wa_id, patients.wa_id),
             updated_at = NOW()
       RETURNING *
@@ -184,7 +185,7 @@ export async function updatePatient(id, fields) {
     let idx = 1;
 
     for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined && ['name', 'age', 'sex', 'phone'].includes(key)) {
+      if (value !== undefined && ['name', 'age', 'sex', 'phone', 'location'].includes(key)) {
         setClauses.push(`${key} = $${idx++}`);
         values.push(key === 'age' ? (value || null) : value);
       }

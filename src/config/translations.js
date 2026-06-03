@@ -447,6 +447,32 @@ export const T = {
   },
 
   thanks_reply: { en: "You're welcome! Let me know if you need anything else.", hi: 'Aapka swagat hai! Agar aur kuch chahiye to batayein.' },
+  // ── Booking: Patient Demographics ──
+  booking_ask_age: {
+    en: 'Thanks, {name}! How old are you?',
+    hi: 'Shukriya, {name}! Aapki umar kya hai?',
+  },
+  booking_ask_age_again: {
+    en: 'Please share your age in years (e.g. 25).',
+    hi: 'Kripya apni umar saalo me batayein (jaise: 25).',
+  },
+  booking_ask_sex: {
+    en: 'Got it! And your gender? (Male / Female / Other)',
+    hi: 'Theek hai! Aur aapka ling? (Male / Female / Other)',
+  },
+  booking_ask_sex_again: {
+    en: 'Please reply Male, Female, or Other.',
+    hi: 'Kripya Male, Female, ya Other reply karein.',
+  },
+  booking_ask_location: {
+    en: 'Thanks! Which area are you from?\n(e.g., Bhilai, Durg, Raipur — or just your locality)',
+    hi: 'Shukriya! Aap kahan se hain?\n(Jaise: Bhilai, Durg, Raipur — ya apna area batayein)',
+  },
+  booking_ask_location_again: {
+    en: 'Please share your city or area name.',
+    hi: 'Kripya apna sheher ya area ka naam batayein.',
+  },
+
   treatment_help_prompt: {
     en: "No problem! Tell me a bit about what you're experiencing:\n\n\u2022 Tooth pain or sensitivity?\n\u2022 Need a routine checkup?\n\u2022 Looking for cosmetic treatment (whitening, braces)?\n\u2022 Something else?\n\nJust describe your symptoms and I'll recommend the right treatment.",
     hi: "Koi baat nahi! Apni problem thoda batayein:\n\n\u2022 Dant me dard ya sensitivity?\n\u2022 Routine checkup chahiye?\n\u2022 Cosmetic treatment (whitening, braces)?\n\u2022 Kuch aur?\n\nApni symptoms batayein, main sahi treatment suggest karunga.",
