@@ -138,7 +138,7 @@ export async function GET(req) {
             `,
             sql`
               SELECT
-                COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'arrived') AS waiting,
+                COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status != 'called') AS waiting,
                 COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'called') AS in_session,
                 COUNT(*) FILTER (WHERE a.status = 'confirmed') AS confirmed,
                 COUNT(*) FILTER (WHERE a.status = 'completed') AS completed,
@@ -166,7 +166,7 @@ export async function GET(req) {
             `,
             sql`
               SELECT
-                COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'arrived') AS waiting,
+                COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status != 'called') AS waiting,
                 COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'called') AS in_session,
                 COUNT(*) FILTER (WHERE a.status = 'confirmed') AS confirmed,
                 COUNT(*) FILTER (WHERE a.status = 'completed') AS completed,

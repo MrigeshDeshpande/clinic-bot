@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useContext, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+
 import { FileImage, Phone as PhoneIcon, Download } from 'lucide-react';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
 import Calendar from '@/components/Calendar';
@@ -73,20 +73,19 @@ function AppointmentsContentInner() {
   const [dotDates, setDotDates] = useState([]);
   const [showCalendar, setShowCalendar] = useState(false);
   const [scope, setScope] = useState('day');
+  const [filterKey, setFilterKey] = useState(null);
   const calRef = useRef();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeStatus = searchParams.get('status');
-  const activeArrival = searchParams.get('arrival');
 
   const filteredAppointments = (data?.appointments || []).filter(a => {
-    if (activeStatus) return a.status === activeStatus;
-    if (activeArrival === 'arrived') return a.arrival_status === 'arrived';
-    if (activeArrival === 'called') return a.arrival_status === 'called';
+    if (filterKey === 'completed') return a.status === 'completed';
+    if (filterKey === 'no_show') return a.status === 'no_show';
+    if (filterKey === 'waiting') return a.status === 'confirmed' && a.arrival_status !== 'called';
+    if (filterKey === 'in_session') return a.status === 'confirmed' && a.arrival_status === 'called';
+    if (filterKey === 'arrived') return a.arrival_status === 'arrived';
     return true;
   });
 
-  const noFilter = !activeStatus && !activeArrival;
+  const noFilter = !filterKey;
 
   const fetchCalendarDots = useCallback(async (date) => {
     const d = parseDateOnly(date) || new Date();
@@ -315,21 +314,9 @@ function AppointmentsContentInner() {
             {data?.totals && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
               {TOTALS_CONFIG.map(cfg => {
-                const isActive = cfg.key === 'confirmed' ? noFilter
-                  : cfg.key === 'waiting' ? activeArrival === 'arrived'
-                  : cfg.key === 'in_session' ? activeArrival === 'called'
-                  : cfg.key === 'completed' ? activeStatus === 'completed'
-                  : cfg.key === 'no_show' ? activeStatus === 'no_show'
-                  : false;
-                const links = {
-                  confirmed: '/dashboard/appointments',
-                  waiting: '/dashboard/appointments?arrival=arrived',
-                  in_session: '/dashboard/appointments?arrival=called',
-                  completed: '/dashboard/appointments?status=completed',
-                  no_show: '/dashboard/appointments?status=no_show',
-                };
+                const isActive = cfg.key === 'confirmed' ? noFilter : filterKey === cfg.key;
                 return (
-                <button key={cfg.key} onClick={() => router.push(isActive ? '/dashboard/appointments' : links[cfg.key])}
+                <button key={cfg.key} onClick={() => setFilterKey(isActive ? null : cfg.key)}
                   className={`w-full text-left bg-white dark:bg-gray-900 rounded-xl border shadow-sm p-4 transition-all duration-200 group cursor-pointer active:scale-[0.98] ${isActive ? 'border-blue-500 dark:border-blue-400 ring-1 ring-blue-500/20 dark:ring-blue-400/20 -translate-y-0.5 shadow-md' : 'border-gray-100 dark:border-gray-800 hover:shadow-md dark:hover:shadow-gray-900/50 hover:-translate-y-0.5'}`}>
                   <div className="flex items-center justify-between mb-2">
                     <p className={`text-xs font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>{cfg.label}</p>
@@ -410,7 +397,7 @@ function AppointmentsContentInner() {
                       </td>
                     </tr>
                   ) : (
-                    (data?.appointments || []).map((a) => (
+                    filteredAppointments.map((a) => (
                       <tr key={a.id} className={`border-b border-gray-50 dark:border-gray-800 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors ${updating === a.id ? 'opacity-50 pointer-events-none' : ''}`}>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
