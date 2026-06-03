@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getSql } from '@/db/pool';
+import { getSql, runMigrations } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET(req, { params }) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
+  await runMigrations();
   try {
     const sql = getSql();
     const { id } = await params;
@@ -17,6 +18,7 @@ export async function GET(req, { params }) {
     const [patientRows, visits] = await Promise.all([
       sql`
         SELECT p.id, p.name, p.phone, p.age, p.sex, p.wa_id, p.created_at,
+          p.allergies, p.chronic_conditions, p.blood_group, p.bp, p.weight, p.medications,
           (SELECT COUNT(*) FROM appointments a WHERE a.patient_id = p.id AND a.status = 'completed') AS visit_count,
           (SELECT COALESCE(SUM(a.consultation_fee + a.treatment_charges + a.medicine_charges), 0)
            FROM appointments a WHERE a.patient_id = p.id AND a.status = 'completed') AS total_spent
@@ -58,6 +60,7 @@ export async function PATCH(req, { params }) {
   if (rateErr) return rateErr;
   const sizeErr = checkBodySize(req);
   if (sizeErr) return sizeErr;
+  await runMigrations();
   try {
     const sql = getSql();
     const { id } = await params;

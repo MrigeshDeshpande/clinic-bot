@@ -52,6 +52,11 @@ export default function PatientDetailPage() {
       try {
         const res = await fetch(`/api/dashboard/patients/${id}`);
         const data = await res.json();
+        if (!res.ok || !data.patient) {
+          setPatient(null);
+          setLoading(false);
+          return;
+        }
         setPatient(data.patient);
         setVisits(data.visits || []);
         setEditForm({

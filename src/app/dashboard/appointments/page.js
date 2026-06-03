@@ -4,15 +4,17 @@ import { useState, useEffect, useCallback, useRef, useContext, Suspense } from '
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FileImage, Phone as PhoneIcon } from 'lucide-react';
+import { FileImage, Phone as PhoneIcon, Download } from 'lucide-react';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
 import Calendar from '@/components/Calendar';
 import VisitCompleteModal from './VisitCompleteModal';
+import RescheduleModal from './RescheduleModal';
 import { DateContext, ToastContext } from '../layout';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
   if (status === 'no_show') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">No Show</span>;
+  if (status === 'cancelled') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 line-through">Cancelled</span>;
   if (arrivalStatus === 'called') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">In Session</span>;
   if (arrivalStatus === 'arrived') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">Waiting</span>;
   return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
@@ -162,9 +164,36 @@ function AppointmentsContentInner() {
   }
 
   const [completeModal, setCompleteModal] = useState(null);
+  const [rescheduleModal, setRescheduleModal] = useState(null);
+  const [cancelUpdating, setCancelUpdating] = useState(null);
   const [editing, setEditing] = useState(null);
   const [editValue, setEditValue] = useState('');
   const editRef = useRef(null);
+
+  async function handleCancel(appointmentId) {
+    if (!confirm('Cancel this appointment? This action cannot be undone.')) return;
+    setCancelUpdating(appointmentId);
+    try {
+      const res = await fetch(`/api/dashboard/appointments/${appointmentId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Cancelled from dashboard' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Appointment cancelled', 'success');
+      } else {
+        showToast(data.error || 'Failed to cancel', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    }
+    setCancelUpdating(null);
+    fetch(`/api/dashboard/appointments?date=${selectedDate}`)
+      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
+      .then(d => { if (d && !d.error) setData(d); })
+      .catch(e => setError(e.message));
+  }
 
   function getMediaCount(a) {
     return a.chit_media?.length || 0;
@@ -418,6 +447,13 @@ function AppointmentsContentInner() {
                                 {getMediaCount(a)}
                               </Link>
                             )}
+                            {a.prescription_key && (
+                              <a href={`/api/dashboard/media/signed?key=${encodeURIComponent(a.prescription_key)}`} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                                title="Download Prescription">
+                                <Download className="w-3 h-3" />
+                              </a>
+                            )}
                           </div>
                         </td>
                         <td className="px-5 py-4"><StatusBadge status={a.status} arrivalStatus={a.arrival_status} /></td>
@@ -472,11 +508,41 @@ function AppointmentsContentInner() {
                                 ✕ No Show
                               </button>
                             )}
+                            {a.status === 'confirmed' && (
+                              <button onClick={() => setRescheduleModal(a)} disabled={!!cancelUpdating}
+                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50">
+                                ↻ Reschedule
+                              </button>
+                            )}
+                            {a.status === 'confirmed' && (
+                              <button onClick={() => handleCancel(a.id)} disabled={!!cancelUpdating}
+                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 transition-all disabled:opacity-50">
+                                ✕ Cancel
+                              </button>
+                            )}
                             {a.status === 'completed' && (
-                              <span className="text-xs text-green-600 dark:text-green-400 font-medium">✓ Completed</span>
+                              <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
+                                ✓ Completed
+                                {!a.prescription_key && (
+                                  <button onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const res = await fetch(`/api/dashboard/visits/${a.id}/prescription`, { method: 'POST' });
+                                      const data = await res.json();
+                                      if (res.ok && data.url) window.open(data.url, '_blank');
+                                    } catch {}
+                                  }}
+                                    className="px-1 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-[10px]">
+                                    Rx
+                                  </button>
+                                )}
+                              </span>
                             )}
                             {a.status === 'no_show' && (
                               <span className="text-xs text-red-600 dark:text-red-400 font-medium">✕ No Show</span>
+                            )}
+                            {a.status === 'cancelled' && (
+                              <span className="text-xs text-gray-400 dark:text-gray-500 font-medium line-through">Cancelled</span>
                             )}
                           </div>
                         </td>
@@ -491,6 +557,23 @@ function AppointmentsContentInner() {
       )}
 
     </div>
+
+      {/* Reschedule Modal */}
+      {typeof window !== 'undefined' && rescheduleModal && createPortal(
+        <RescheduleModal
+          appointment={rescheduleModal}
+          onClose={() => setRescheduleModal(null)}
+          onReschedule={() => {
+            setRescheduleModal(null);
+            fetch(`/api/dashboard/appointments?date=${selectedDate}`)
+              .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
+              .then(d => { if (d && !d.error) setData(d); })
+              .catch(e => setError(e.message));
+          }}
+          showToast={showToast}
+        />,
+        document.body
+      )}
 
       {/* One-click Visit Complete Modal — outside animate-fade-in to avoid transform breaking fixed positioning */}
       {typeof window !== 'undefined' && completeModal && createPortal(

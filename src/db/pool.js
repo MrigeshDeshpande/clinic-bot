@@ -420,6 +420,17 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS location VARCHAR(100) DEFAULT '';
     `;
 
+    // Medical history columns on patients
+    await db`
+      ALTER TABLE patients
+        ADD COLUMN IF NOT EXISTS allergies TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS chronic_conditions TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS blood_group VARCHAR(10) DEFAULT '',
+        ADD COLUMN IF NOT EXISTS bp VARCHAR(20) DEFAULT '',
+        ADD COLUMN IF NOT EXISTS weight VARCHAR(20) DEFAULT '',
+        ADD COLUMN IF NOT EXISTS medications TEXT DEFAULT '';
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {

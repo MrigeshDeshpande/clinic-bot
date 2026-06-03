@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useRef, useContext } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext } from '../layout';
-import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 import MediaViewer from '@/components/MediaViewer';
 
@@ -186,6 +186,16 @@ function VisitPageInner() {
           function applyPatientProfile(p) {
             setPatientProfile(p);
             setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: p.sex || '' }));
+            if (p.allergies !== undefined || p.chronicConditions !== undefined || p.bloodGroup !== undefined || p.bp !== undefined || p.weight !== undefined || p.medications !== undefined) {
+              setMedicalHistory({
+                allergies: p.allergies || '',
+                chronicConditions: p.chronicConditions || '',
+                bloodGroup: p.bloodGroup || '',
+                bp: p.bp || '',
+                weight: p.weight || '',
+                medications: p.medications || '',
+              });
+            }
             setLoadingExtra(true);
             // Fetch visits history (already returned by patient API)
             if (p.visits) setPatientVisits(p.visits);
@@ -367,6 +377,25 @@ function VisitPageInner() {
       });
       const data = await res.json();
       if (res.ok) {
+        // Save medical history
+        const patientIdForHistory = patientProfile?.id || appointmentMeta?.patient_id || data.appointment?.patient_id;
+        if (patientIdForHistory) {
+          const mhPayload = {};
+          if (medicalHistory.allergies) mhPayload.allergies = medicalHistory.allergies;
+          if (medicalHistory.chronicConditions) mhPayload.chronicConditions = medicalHistory.chronicConditions;
+          if (medicalHistory.bloodGroup) mhPayload.bloodGroup = medicalHistory.bloodGroup;
+          if (medicalHistory.bp) mhPayload.bp = medicalHistory.bp;
+          if (medicalHistory.weight) mhPayload.weight = medicalHistory.weight;
+          if (medicalHistory.medications) mhPayload.medications = medicalHistory.medications;
+          if (Object.keys(mhPayload).length > 0) {
+            await fetch(`/api/dashboard/patients/${patientIdForHistory}/medical-history`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(mhPayload),
+            });
+          }
+        }
+
         const appointmentIdForMedia = data.appointment?.id || appointmentId;
         console.log('[MEDIA] Visit saved, uploading', mediaFiles.length, 'file(s) for appointment', appointmentIdForMedia);
         if (appointmentIdForMedia && mediaFiles.length > 0) {
@@ -558,10 +587,34 @@ function VisitPageInner() {
                     <MediaViewer mediaKeys={appointmentMeta.chit_media} getSignedUrl={getSignedUrl} />
                   </div>
                 )}
-                {appointmentMeta?.prescription_key && (
+                {appointmentMeta?.status === 'completed' && (
                   <div>
                     <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription</span>
-                    <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">Available</p>
+                    {appointmentMeta?.prescription_key ? (
+                      <a href={getSignedUrl(appointmentMeta.prescription_key)} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 mt-0.5 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
+                        <Download className="w-3.5 h-3.5" />
+                        Download PDF
+                      </a>
+                    ) : (
+                      <button onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/dashboard/visits/${appointmentMeta.id}/prescription`, { method: 'POST' });
+                          const data = await res.json();
+                          if (res.ok && data.url) {
+                            window.open(data.url, '_blank');
+                          } else {
+                            showToast(data.error || 'Failed to generate prescription', 'error');
+                          }
+                        } catch {
+                          showToast('Network error', 'error');
+                        }
+                      }}
+                        className="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 mt-0.5 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+                        <Download className="w-3.5 h-3.5" />
+                        Generate
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

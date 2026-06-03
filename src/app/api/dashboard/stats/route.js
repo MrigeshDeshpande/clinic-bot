@@ -41,6 +41,8 @@ export async function GET(req) {
       dayOfWeekStats,
       demographicsSex,
       demographicsAge,
+      feeBreakdown,
+      topPatients,
     ] = await Promise.all([
       // Daily stats for the period
       sql`
@@ -174,6 +176,32 @@ export async function GET(req) {
         GROUP BY age_group
         ORDER BY age_group
       `,
+      // Revenue breakdown by fee type
+      sql`
+        SELECT
+          COALESCE(SUM(a.consultation_fee), 0) AS consultation,
+          COALESCE(SUM(a.treatment_charges), 0) AS treatment,
+          COALESCE(SUM(a.medicine_charges), 0) AS medicine
+        FROM appointments a
+        WHERE a.date >= ${startStr} AND a.date <= ${endStr}
+          AND a.status = 'completed'
+      `,
+      // Top patients by revenue
+      sql`
+        SELECT
+          COALESCE(p.name, a.patient_name) AS patient_name,
+          a.patient_id,
+          COUNT(*) AS visit_count,
+          COALESCE(SUM(a.consultation_fee + a.treatment_charges + a.medicine_charges), 0) AS total_revenue
+        FROM appointments a
+        LEFT JOIN patients p ON p.id = a.patient_id
+        WHERE a.date >= ${startStr} AND a.date <= ${endStr}
+          AND a.status = 'completed'
+          AND a.patient_id IS NOT NULL
+        GROUP BY a.patient_id, p.name, a.patient_name
+        ORDER BY total_revenue DESC
+        LIMIT 5
+      `,
     ]);
 
     const today = todayStats[0] || { today_appointments: 0, today_revenue: 0 };
@@ -236,6 +264,13 @@ export async function GET(req) {
         byAgeGroup: (demographicsAge || []).map(d => ({ ageGroup: d.age_group, count: Number(d.count) })),
       },
       daily: dailyStats || [],
+      feeBreakdown: feeBreakdown[0] || { consultation: 0, treatment: 0, medicine: 0 },
+      topPatients: sanitizeResponse((topPatients || []).map(p => ({
+        patientName: p.patient_name,
+        patientId: p.patient_id,
+        visitCount: Number(p.visit_count),
+        totalRevenue: Number(p.total_revenue),
+      }))),
       period,
       startDate: startStr,
       endDate: endStr,

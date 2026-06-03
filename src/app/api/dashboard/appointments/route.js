@@ -70,8 +70,8 @@ export async function POST(req) {
     // Create appointment — use phone as wa_id for walk-in tracking, or a placeholder if no phone
     const waId = patientPhone || `w-${Date.now()}`;
     const rows = await sql`
-      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, status${location ? sql`, location` : sql``})
-      VALUES (gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, 'confirmed'${location ? sql`, ${location}` : sql``})
+      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, status, location)
+      VALUES (gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, 'confirmed', ${location || ''})
       RETURNING *
     `;
 
@@ -138,10 +138,11 @@ export async function GET(req) {
           COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'called') AS in_session,
           COUNT(*) FILTER (WHERE a.status = 'confirmed') AS confirmed,
           COUNT(*) FILTER (WHERE a.status = 'completed') AS completed,
-          COUNT(*) FILTER (WHERE a.status = 'no_show') AS no_show
+          COUNT(*) FILTER (WHERE a.status = 'no_show') AS no_show,
+          COUNT(*) FILTER (WHERE a.status = 'cancelled') AS cancelled
         FROM appointments a
         WHERE a.date = ${targetDate}
-          AND a.status IN ('confirmed', 'completed', 'no_show')
+          AND a.status IN ('confirmed', 'completed', 'no_show', 'cancelled')
       `,
     ]);
 

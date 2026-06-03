@@ -81,14 +81,81 @@ export async function generatePrescription({ patient, visit, appointment }) {
 
   y = boxY + boxH + 20;
 
+  // Diagnosis
+  if (visit?.diagnosis) {
+    doc.fontSize(11).font('Helvetica-Bold');
+    doc.text('Diagnosis:', leftMargin, y);
+    y += 16;
+    doc.fontSize(10).font('Helvetica');
+    doc.text(visit.diagnosis, leftMargin + 10, y, { width: 475, align: 'left' });
+    y += doc.heightOfString(visit.diagnosis, { width: 475 }) + 20;
+  }
+
+  // Medicines
+  if (visit?.medicines?.length > 0) {
+    doc.fontSize(11).font('Helvetica-Bold');
+    doc.text('Prescribed Medicines:', leftMargin, y);
+    y += 16;
+
+    const tableLeft = leftMargin + 10;
+    const col1 = 180;
+    const col2 = 90;
+    const col3 = 100;
+    const col4 = 80;
+    const rowH = 18;
+
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text('Medicine', tableLeft, y, { width: col1 });
+    doc.text('Dosage', tableLeft + col1, y, { width: col2 });
+    doc.text('Frequency', tableLeft + col1 + col2, y, { width: col3 });
+    doc.text('Duration', tableLeft + col1 + col2 + col3, y, { width: col4 });
+    y += rowH;
+
+    doc.moveTo(tableLeft, y).lineTo(tableLeft + col1 + col2 + col3 + col4, y).stroke('#cccccc');
+    y += 4;
+
+    doc.font('Helvetica');
+    for (const med of visit.medicines) {
+      if (!med.name) continue;
+      const name = med.name;
+      const dosage = med.dosage || '';
+      const frequency = med.frequency || '';
+      const duration = med.duration || '';
+
+      doc.text(name, tableLeft, y, { width: col1 });
+      doc.text(dosage, tableLeft + col1, y, { width: col2 });
+      doc.text(frequency, tableLeft + col1 + col2, y, { width: col3 });
+      doc.text(duration, tableLeft + col1 + col2 + col3, y, { width: col4 });
+      y += rowH;
+
+      if (y > 700) {
+        doc.addPage();
+        y = 50;
+      }
+    }
+    y += 10;
+  }
+
   // Treatment
-  doc.fontSize(11).font('Helvetica-Bold');
-  doc.text('Treatment:', leftMargin, y);
-  y += 16;
-  doc.fontSize(10).font('Helvetica');
-  const treatmentText = visit?.treatment || appointment?.treatment || 'N/A';
-  doc.text(treatmentText, leftMargin + 10, y);
-  y += 20;
+  const treatmentText = visit?.treatment || appointment?.treatment || '';
+  if (treatmentText) {
+    doc.fontSize(11).font('Helvetica-Bold');
+    doc.text('Treatment:', leftMargin, y);
+    y += 16;
+    doc.fontSize(10).font('Helvetica');
+    doc.text(treatmentText, leftMargin + 10, y);
+    y += 20;
+  }
+
+  // Follow-up instructions
+  if (visit?.followUpInstructions) {
+    doc.fontSize(11).font('Helvetica-Bold');
+    doc.text('Follow-up Instructions:', leftMargin, y);
+    y += 16;
+    doc.fontSize(10).font('Helvetica');
+    doc.text(visit.followUpInstructions, leftMargin + 10, y, { width: 475, align: 'left' });
+    y += doc.heightOfString(visit.followUpInstructions, { width: 475 }) + 20;
+  }
 
   // Fees
   doc.fontSize(11).font('Helvetica-Bold');

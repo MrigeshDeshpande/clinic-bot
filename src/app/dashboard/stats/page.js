@@ -184,6 +184,99 @@ export default function StatsPage() {
           />
         </div>
 
+        {/* Revenue Breakdown */}
+        {stats?.feeBreakdown && (stats.feeBreakdown.consultation > 0 || stats.feeBreakdown.treatment > 0 || stats.feeBreakdown.medicine > 0) && (
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-6">
+              <DollarSign className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Revenue Breakdown</h2>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                {[
+                  { label: 'Consultation Fees', value: stats.feeBreakdown.consultation, color: 'bg-blue-500', pct: stats.totalRevenue > 0 ? (stats.feeBreakdown.consultation / stats.totalRevenue) * 100 : 0 },
+                  { label: 'Treatment Charges', value: stats.feeBreakdown.treatment, color: 'bg-emerald-500', pct: stats.totalRevenue > 0 ? (stats.feeBreakdown.treatment / stats.totalRevenue) * 100 : 0 },
+                  { label: 'Medicine Charges', value: stats.feeBreakdown.medicine, color: 'bg-violet-500', pct: stats.totalRevenue > 0 ? (stats.feeBreakdown.medicine / stats.totalRevenue) * 100 : 0 },
+                ].map(item => (
+                  <div key={item.label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(item.value)}</span>
+                    </div>
+                    <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${item.color} transition-all duration-700`} style={{ width: `${Math.max(item.pct, 2)}%` }} />
+                    </div>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{item.pct.toFixed(0)}% of total</span>
+                  </div>
+                ))}
+              </div>
+              {stats.totalRevenue > 0 && (
+                <div className="flex items-center justify-center">
+                  <div className="relative w-48 h-48">
+                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                      {[
+                        { pct: (stats.feeBreakdown.consultation / stats.totalRevenue) * 100, color: '#3b82f6', offset: 0 },
+                        { pct: (stats.feeBreakdown.treatment / stats.totalRevenue) * 100, color: '#10b981', offset: (stats.feeBreakdown.consultation / stats.totalRevenue) * 100 },
+                        { pct: (stats.feeBreakdown.medicine / stats.totalRevenue) * 100, color: '#8b5cf6', offset: ((stats.feeBreakdown.consultation + stats.feeBreakdown.treatment) / stats.totalRevenue) * 100 },
+                      ].filter(s => s.pct > 0).map((seg, i) => (
+                        <circle key={i} cx="50" cy="50" r="40" fill="none"
+                          stroke={seg.color} strokeWidth="12"
+                          strokeDasharray={`${seg.pct * 2.513} ${(100 - seg.pct) * 2.513}`}
+                          strokeDashoffset={-seg.offset * 2.513}
+                          className="transition-all duration-700" />
+                      ))}
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center flex-col">
+                      <span className="text-xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(stats.totalRevenue)}</span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400">Total</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Top Patients by Revenue */}
+        {stats?.topPatients?.length > 0 && (
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-6">
+              <Users className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Top Patients by Revenue</h2>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">({periodLabel})</span>
+            </div>
+            <div className="space-y-3">
+              {stats.topPatients.map((p, i) => {
+                const maxRev = stats.topPatients[0]?.totalRevenue || 1;
+                const pct = (p.totalRevenue / maxRev) * 100;
+                return (
+                  <div key={p.patientId || i} className="flex items-center gap-4 group">
+                    <span className="w-6 text-center text-sm font-bold text-gray-400 dark:text-gray-500">#{i + 1}</span>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-800/30 flex items-center justify-center text-sm font-semibold text-amber-700 dark:text-amber-300 shrink-0">
+                      {(p.patientName || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <button onClick={() => router.push(`/dashboard/patients/${p.patientId}`)}
+                          className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-amber-600 dark:hover:text-amber-400 transition-colors truncate">
+                          {p.patientName}
+                        </button>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 shrink-0 ml-2">{formatCurrency(p.totalRevenue)}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-700" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">{p.visitCount} visit{p.visitCount !== 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Daily Trend Chart */}
         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
           <div className="flex items-center gap-2.5 mb-6">
