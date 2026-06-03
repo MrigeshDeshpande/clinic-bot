@@ -435,6 +435,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { selectedDate, setSelectedDate } = useContext(DateContext);
   const [data, setData] = useState(null);
   const [datesData, setDatesData] = useState(null);
@@ -587,7 +588,16 @@ export default function DashboardPage() {
           else if (card.key === 'revenue') value = formatCurrency(todayRevenue);
           else value = totals[card.key] || 0;
           return (
-            <div key={card.key} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:shadow-md dark:hover:shadow-gray-900/50 hover:-translate-y-0.5 transition-all duration-200 group">
+            <button key={card.key} onClick={() => {
+              const links = {
+                total: '/dashboard/appointments',
+                waiting: '/dashboard/appointments?arrival=arrived',
+                in_session: '/dashboard/appointments?arrival=called',
+                completed: '/dashboard/appointments?status=completed',
+                revenue: '/dashboard/stats',
+              };
+              router.push(links[card.key] || '/dashboard/appointments');
+            }} className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:shadow-md dark:hover:shadow-gray-900/50 hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer active:scale-[0.98]">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{card.label}</p>
                 <div className={`w-9 h-9 rounded-lg ${c.bg} flex items-center justify-center ring-1 ${c.ring} group-hover:scale-110 transition-transform duration-200`}>
@@ -599,7 +609,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <p className={`text-3xl font-bold ${c.text}`}>{value}</p>
-            </div>
+            </button>
           );
         })}
       </div>

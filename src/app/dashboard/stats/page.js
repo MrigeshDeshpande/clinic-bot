@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   TrendingUp, DollarSign, Calendar, Activity, Stethoscope,
   Pill, Clock, Users, XCircle, Download, ArrowUp, ArrowDown, Mars, Venus,
@@ -17,6 +18,7 @@ const PERIODS = [
 ];
 
 export default function StatsPage() {
+  const router = useRouter();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('week');
@@ -143,6 +145,7 @@ export default function StatsPage() {
             badge={`${stats?.totalAppointments || 0} in ${periodLabel}`}
             badgeColor="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30"
             trend={stats?.visitsChange}
+            onClick={() => router.push('/dashboard/appointments')}
           />
 
           {/* Revenue */}
@@ -155,6 +158,7 @@ export default function StatsPage() {
             sub={`Avg ₹${stats?.avgRevenuePerVisit || 0}/visit`}
             trend={stats?.revenueChange}
             trendLabel="vs prev period"
+            onClick={() => router.push('/dashboard/appointments')}
           />
 
           {/* No-Show Rate */}
@@ -165,6 +169,7 @@ export default function StatsPage() {
             value={`${stats?.noShowPct || 0}%`}
             label="No-Show Rate"
             sub={`${stats?.totalNoShows || 0} no-shows`}
+            onClick={() => router.push('/dashboard/appointments?status=no_show')}
           />
 
           {/* Retention Rate */}
@@ -175,6 +180,7 @@ export default function StatsPage() {
             value={`${stats?.retentionRate || 0}%`}
             label="Returning Patients"
             sub={`${stats?.returningPatients || 0} of ${stats?.totalPatients || 0}`}
+            onClick={() => router.push('/dashboard/patients')}
           />
         </div>
 
@@ -425,9 +431,10 @@ export default function StatsPage() {
   );
 }
 
-function KpiCard({ icon, iconBg, iconColor, value, label, badge, badgeColor, sub, trend, trendLabel }) {
+function KpiCard({ icon, iconBg, iconColor, value, label, badge, badgeColor, sub, trend, trendLabel, onClick }) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm hover:shadow-md dark:hover:shadow-gray-900/50 transition-shadow duration-200">
+    <div onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(e); } : undefined}
+      className={`bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm hover:shadow-md dark:hover:shadow-gray-900/50 transition-shadow duration-200 ${onClick ? 'cursor-pointer text-left w-full active:scale-[0.98]' : ''}`}>
       <div className="flex items-center justify-between mb-4">
         <div className={`p-2.5 rounded-xl bg-gradient-to-br ${iconBg}`}>
           <span className={iconColor}>{icon}</span>

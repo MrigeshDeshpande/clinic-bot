@@ -80,7 +80,8 @@ export default function FeedbackPage() {
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{total} total responses</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+        <button onClick={() => document.getElementById('feedback-entries')?.scrollIntoView({ behavior: 'smooth' })}
+          className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer active:scale-[0.98]">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Great</p>
             <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
@@ -89,9 +90,10 @@ export default function FeedbackPage() {
           </div>
           <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{summary.great}</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{total > 0 ? Math.round((summary.great / total) * 100) : 0}% of responses</p>
-        </div>
+        </button>
 
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+        <button onClick={() => document.getElementById('feedback-entries')?.scrollIntoView({ behavior: 'smooth' })}
+          className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer active:scale-[0.98]">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Okay</p>
             <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center">
@@ -100,9 +102,10 @@ export default function FeedbackPage() {
           </div>
           <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{summary.okay}</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{total > 0 ? Math.round((summary.okay / total) * 100) : 0}% of responses</p>
-        </div>
+        </button>
 
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+        <button onClick={() => document.getElementById('feedback-entries')?.scrollIntoView({ behavior: 'smooth' })}
+          className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer active:scale-[0.98]">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Poor</p>
             <div className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
@@ -111,12 +114,12 @@ export default function FeedbackPage() {
           </div>
           <p className="text-3xl font-bold text-red-600 dark:text-red-400">{summary.poor}</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{total > 0 ? Math.round((summary.poor / total) * 100) : 0}% of responses</p>
-        </div>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Feedback Entries */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div id="feedback-entries" className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
           <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
             <h2 className="font-semibold text-gray-900 dark:text-gray-100">Recent Feedback</h2>
           </div>

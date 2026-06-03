@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useContext } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FileImage, Phone as PhoneIcon } from 'lucide-react';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
 import Calendar from '@/components/Calendar';
@@ -24,7 +24,7 @@ const TOTALS_CONFIG = [
   { key: 'no_show', label: 'No Show', color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/30', ring: 'ring-red-100 dark:ring-red-800', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /> },
 ];
 
-export default function AppointmentsPage() {
+function AppointmentsContent() {
   const { selectedDate, setSelectedDate } = useContext(DateContext);
   const { showToast } = useContext(ToastContext);
   const [data, setData] = useState(null);
@@ -36,6 +36,18 @@ export default function AppointmentsPage() {
   const [showCalendar, setShowCalendar] = useState(false);
   const calRef = useRef();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeStatus = searchParams.get('status');
+  const activeArrival = searchParams.get('arrival');
+
+  const filteredAppointments = (data?.appointments || []).filter(a => {
+    if (activeStatus) return a.status === activeStatus;
+    if (activeArrival === 'arrived') return a.arrival_status === 'arrived';
+    if (activeArrival === 'called') return a.arrival_status === 'called';
+    return true;
+  });
+
+  const noFilter = !activeStatus && !activeArrival;
 
   const fetchCalendarDots = useCallback(async (date) => {
     const d = parseDateOnly(date) || new Date();
@@ -160,17 +172,33 @@ export default function AppointmentsPage() {
           {/* Summary Cards */}
             {data?.totals && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {TOTALS_CONFIG.map(cfg => (
-                <div key={cfg.key} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 hover:shadow-md dark:hover:shadow-gray-900/50 hover:-translate-y-0.5 transition-all duration-200 group">
+              {TOTALS_CONFIG.map(cfg => {
+                const isActive = cfg.key === 'confirmed' ? noFilter
+                  : cfg.key === 'waiting' ? activeArrival === 'arrived'
+                  : cfg.key === 'in_session' ? activeArrival === 'called'
+                  : cfg.key === 'completed' ? activeStatus === 'completed'
+                  : cfg.key === 'no_show' ? activeStatus === 'no_show'
+                  : false;
+                const links = {
+                  confirmed: '/dashboard/appointments',
+                  waiting: '/dashboard/appointments?arrival=arrived',
+                  in_session: '/dashboard/appointments?arrival=called',
+                  completed: '/dashboard/appointments?status=completed',
+                  no_show: '/dashboard/appointments?status=no_show',
+                };
+                return (
+                <button key={cfg.key} onClick={() => router.push(isActive ? '/dashboard/appointments' : links[cfg.key])}
+                  className={`w-full text-left bg-white dark:bg-gray-900 rounded-xl border shadow-sm p-4 transition-all duration-200 group cursor-pointer active:scale-[0.98] ${isActive ? 'border-blue-500 dark:border-blue-400 ring-1 ring-blue-500/20 dark:ring-blue-400/20 -translate-y-0.5 shadow-md' : 'border-gray-100 dark:border-gray-800 hover:shadow-md dark:hover:shadow-gray-900/50 hover:-translate-y-0.5'}`}>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{cfg.label}</p>
+                    <p className={`text-xs font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>{cfg.label}</p>
                     <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center ring-1 ${cfg.ring} group-hover:scale-110 transition-transform`}>
                       <svg className={`w-4 h-4 ${cfg.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">{cfg.icon}</svg>
                     </div>
                   </div>
                   <p className={`text-2xl font-bold ${cfg.color}`}>{Number(data.totals[cfg.key] || 0)}</p>
-                </div>
-              ))}
+                </button>
+                );
+              })}
             </div>
           )}
 
