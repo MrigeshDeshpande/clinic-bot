@@ -18,7 +18,7 @@ export async function GET(req, { params }) {
     const [patientRows, visits] = await Promise.all([
       sql`
         SELECT p.id, p.name, p.phone, p.age, p.sex, p.wa_id, p.created_at,
-          p.allergies, p.chronic_conditions, p.blood_group, p.bp, p.weight, p.medications,
+          p.location, p.allergies, p.chronic_conditions, p.blood_group, p.bp, p.weight, p.medications,
           (SELECT COUNT(*) FROM appointments a WHERE a.patient_id = p.id AND a.status = 'completed') AS visit_count,
           (SELECT COALESCE(SUM(a.consultation_fee + a.treatment_charges + a.medicine_charges), 0)
            FROM appointments a WHERE a.patient_id = p.id AND a.status = 'completed') AS total_spent
@@ -65,7 +65,7 @@ export async function PATCH(req, { params }) {
     const sql = getSql();
     const { id } = await params;
     const body = await req.json();
-    const { name, age, sex, phone } = body;
+    const { name, age, sex, phone, location } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Patient ID required' }, { status: 400 });
@@ -90,6 +90,10 @@ export async function PATCH(req, { params }) {
     if (phone !== undefined) {
       setClauses.push(`phone = $${p++}`);
       queryParams.push(phone);
+    }
+    if (location !== undefined) {
+      setClauses.push(`location = $${p++}`);
+      queryParams.push(location);
     }
 
     if (setClauses.length === 0) {

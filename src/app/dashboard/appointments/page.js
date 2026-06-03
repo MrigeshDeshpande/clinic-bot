@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useContext, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { FileImage, Phone as PhoneIcon, Download } from 'lucide-react';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
@@ -75,6 +76,7 @@ function AppointmentsContentInner() {
   const [scope, setScope] = useState('day');
   const [filterKey, setFilterKey] = useState(null);
   const calRef = useRef();
+  const router = useRouter();
 
   const filteredAppointments = (data?.appointments || []).filter(a => {
     if (filterKey === 'completed') return a.status === 'completed';
@@ -398,7 +400,7 @@ function AppointmentsContentInner() {
                     </tr>
                   ) : (
                     filteredAppointments.map((a) => (
-                      <tr key={a.id} className={`border-b border-gray-50 dark:border-gray-800 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors ${updating === a.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <tr key={a.id} onClick={e => { if (e.target.closest('button, a, input, [contenteditable]')) return; router.push(`/dashboard/visit?appointmentId=${a.id}`); }} className={`cursor-pointer border-b border-gray-50 dark:border-gray-800 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors ${updating === a.id ? 'opacity-50 pointer-events-none' : ''}`}>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
                             <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'completed' ? 'bg-green-400' : a.status === 'no_show' ? 'bg-red-400' : 'bg-blue-400'}`} />
@@ -438,7 +440,7 @@ function AppointmentsContentInner() {
                             appointmentId={a.id}
                             field="location"
                             value={a.location || ''}
-                            display={a.location || '—'}
+                            display={a.patient_location || a.location || '—'}
                           />
                         </td>
                         <td className="px-5 py-4">

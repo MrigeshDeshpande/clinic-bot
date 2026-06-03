@@ -21,7 +21,7 @@ export default function PatientDetailPage() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', age: '', sex: '', phone: '' });
+  const [editForm, setEditForm] = useState({ name: '', age: '', sex: '', phone: '', location: '' });
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('visits');
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -64,6 +64,7 @@ export default function PatientDetailPage() {
           age: data.patient?.age?.toString() || '',
           sex: data.patient?.sex || '',
           phone: data.patient?.phone || '',
+          location: data.patient?.location || '',
         });
         if (data.patient?.wa_id) {
           const fbRes = await fetch(`/api/dashboard/feedback?limit=20&waId=${encodeURIComponent(data.patient.wa_id)}`);
@@ -235,6 +236,7 @@ export default function PatientDetailPage() {
           age: editForm.age ? parseInt(editForm.age, 10) : null,
           sex: editForm.sex || null,
           phone: editForm.phone.trim(),
+          location: editForm.location.trim(),
         }),
       });
       const data = await res.json();
@@ -414,6 +416,9 @@ export default function PatientDetailPage() {
                         {patient.age && (
                           <span>{patient.age} yrs{patient.sex ? `, ${patient.sex}` : ''}</span>
                         )}
+                        {patient.location && (
+                          <span className="text-gray-400 dark:text-gray-500">{patient.location}</span>
+                        )}
                       </>
                     )}
                   </div>
@@ -441,6 +446,16 @@ export default function PatientDetailPage() {
                           <option value="Other">Other</option>
                         </select>
                       </label>
+                      <label className="text-xs text-gray-500 dark:text-gray-400">
+                        Location
+                        <input
+                          type="text"
+                          value={editForm.location}
+                          onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
+                          placeholder="e.g. Bhilai, Durg"
+                          className="ml-2 w-28 bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none text-sm text-gray-900 dark:text-gray-100"
+                        />
+                      </label>
                     </div>
                   )}
                 </div>
@@ -456,7 +471,7 @@ export default function PatientDetailPage() {
                         {saving ? 'Saving...' : 'Save'}
                       </button>
                       <button
-                        onClick={() => { setEditing(false); setEditForm({ name: patient.name, age: patient.age?.toString() || '', sex: patient.sex || '', phone: patient.phone || '' }); }}
+                        onClick={() => { setEditing(false); setEditForm({ name: patient.name, age: patient.age?.toString() || '', sex: patient.sex || '', phone: patient.phone || '', location: patient.location || '' }); }}
                         className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
                       >
                         <X className="w-4 h-4" />
