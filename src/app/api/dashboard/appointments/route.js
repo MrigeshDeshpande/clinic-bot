@@ -92,6 +92,7 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     const date = searchParams.get('date');
+    const scope = searchParams.get('scope');
 
     // Single appointment by ID
     if (id) {
@@ -115,36 +116,68 @@ export async function GET(req) {
       return NextResponse.json({ appointment: sanitizeResponse(rows[0]) });
     }
 
+    const isFutureScope = scope === 'future';
     const targetDate = date || new Date().toISOString().slice(0, 10);
 
-    const [appointments, totalsRaw] = await Promise.all([
-      sql`
-        SELECT a.id, a.logical_id, a.wa_id,
-               COALESCE(p.name, a.patient_name) AS patient_name,
-               a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
-               a.treatments,
-               a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
-                a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
-                a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at
-        FROM appointments a
-        LEFT JOIN patients p ON p.id = a.patient_id
-        WHERE a.date = ${targetDate}
-          AND a.status IN ('confirmed', 'completed', 'no_show')
-        ORDER BY a.time ASC
-      `,
-      sql`
-        SELECT
-          COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'arrived') AS waiting,
-          COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'called') AS in_session,
-          COUNT(*) FILTER (WHERE a.status = 'confirmed') AS confirmed,
-          COUNT(*) FILTER (WHERE a.status = 'completed') AS completed,
-          COUNT(*) FILTER (WHERE a.status = 'no_show') AS no_show,
-          COUNT(*) FILTER (WHERE a.status = 'cancelled') AS cancelled
-        FROM appointments a
-        WHERE a.date = ${targetDate}
-          AND a.status IN ('confirmed', 'completed', 'no_show', 'cancelled')
-      `,
-    ]);
+    const [appointments, totalsRaw] = await Promise.all(
+      isFutureScope
+        ? [
+            sql`
+              SELECT a.id, a.logical_id, a.wa_id,
+                     COALESCE(p.name, a.patient_name) AS patient_name,
+                     a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+                     a.treatments,
+                     a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
+                      a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
+                      a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at
+              FROM appointments a
+              LEFT JOIN patients p ON p.id = a.patient_id
+              WHERE a.date >= CURRENT_DATE
+                AND a.status IN ('confirmed', 'completed', 'no_show')
+              ORDER BY a.date ASC, a.time ASC
+            `,
+            sql`
+              SELECT
+                COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'arrived') AS waiting,
+                COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'called') AS in_session,
+                COUNT(*) FILTER (WHERE a.status = 'confirmed') AS confirmed,
+                COUNT(*) FILTER (WHERE a.status = 'completed') AS completed,
+                COUNT(*) FILTER (WHERE a.status = 'no_show') AS no_show,
+                COUNT(*) FILTER (WHERE a.status = 'cancelled') AS cancelled
+              FROM appointments a
+              WHERE a.date >= CURRENT_DATE
+                AND a.status IN ('confirmed', 'completed', 'no_show', 'cancelled')
+            `,
+          ]
+        : [
+            sql`
+              SELECT a.id, a.logical_id, a.wa_id,
+                     COALESCE(p.name, a.patient_name) AS patient_name,
+                     a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+                     a.treatments,
+                     a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
+                      a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
+                      a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at
+              FROM appointments a
+              LEFT JOIN patients p ON p.id = a.patient_id
+              WHERE a.date = ${targetDate}
+                AND a.status IN ('confirmed', 'completed', 'no_show')
+              ORDER BY a.time ASC
+            `,
+            sql`
+              SELECT
+                COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'arrived') AS waiting,
+                COUNT(*) FILTER (WHERE a.status = 'confirmed' AND a.arrival_status = 'called') AS in_session,
+                COUNT(*) FILTER (WHERE a.status = 'confirmed') AS confirmed,
+                COUNT(*) FILTER (WHERE a.status = 'completed') AS completed,
+                COUNT(*) FILTER (WHERE a.status = 'no_show') AS no_show,
+                COUNT(*) FILTER (WHERE a.status = 'cancelled') AS cancelled
+              FROM appointments a
+              WHERE a.date = ${targetDate}
+                AND a.status IN ('confirmed', 'completed', 'no_show', 'cancelled')
+            `,
+          ]
+    );
 
     return NextResponse.json({ appointments: sanitizeResponse(appointments || []), totals: totalsRaw[0] || {} });
   } catch (error) {

@@ -72,6 +72,7 @@ function AppointmentsContentInner() {
   const [arrivalUpdating, setArrivalUpdating] = useState(null);
   const [dotDates, setDotDates] = useState([]);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [scope, setScope] = useState('day');
   const calRef = useRef();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -97,14 +98,15 @@ function AppointmentsContentInner() {
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
-    fetch(`/api/dashboard/appointments?date=${selectedDate}`, { signal })
+    const scopeParam = scope === 'future' ? 'scope=future' : `date=${selectedDate}`;
+    fetch(`/api/dashboard/appointments?${scopeParam}`, { signal })
       .then(async r => { if (signal.aborted) return null; const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch appointments'); return d; })
       .then(d => { if (!signal.aborted && d) { setData(d); setLoading(false); } })
       .catch(e => { if (!signal.aborted) { setError(e.message); setLoading(false); } });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCalendarDots(selectedDate);
     return () => controller.abort();
-  }, [selectedDate, fetchCalendarDots]);
+  }, [selectedDate, scope, fetchCalendarDots]);
 
   useEffect(() => {
     function handleClick(e) { if (calRef.current && !calRef.current.contains(e.target)) setShowCalendar(false); }
@@ -258,27 +260,45 @@ function AppointmentsContentInner() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Appointments</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {formatDateLong(selectedDate)}
+            {scope === 'future' ? 'All upcoming appointments' : formatDateLong(selectedDate)}
           </p>
         </div>
-        <div className="relative" ref={calRef}>
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowCalendar(!showCalendar)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-600 hover:shadow-sm transition-all text-sm text-gray-700 dark:text-gray-300"
+            onClick={() => setScope(s => s === 'future' ? 'day' : 'future')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm transition-all ${
+              scope === 'future'
+                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-200 dark:hover:border-blue-600 hover:shadow-sm'
+            }`}
           >
-            <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
-            {formatDateShort(selectedDate)}
+            All Future
           </button>
-          {showCalendar && (
-            <>
-              <div className="fixed inset-0 bg-black/20 dark:bg-black/50 z-40" onClick={() => setShowCalendar(false)} />
-              <div className="fixed md:absolute left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 md:right-0 top-1/4 md:top-full mt-2 z-50 w-72 animate-slide-down shadow-xl">
-                <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} onMonthChange={(y, m) => fetchCalendarDots(`${y}-${String(m).padStart(2,'0')}-01`)} />
-              </div>
-            </>
-          )}
+          <div className="relative" ref={calRef}>
+            <button
+              onClick={() => setShowCalendar(!showCalendar)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm transition-all ${
+                scope === 'future' ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 cursor-not-allowed' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-600 hover:shadow-sm text-gray-700 dark:text-gray-300'
+              }`}
+              disabled={scope === 'future'}
+            >
+              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {formatDateShort(selectedDate)}
+            </button>
+            {showCalendar && scope !== 'future' && (
+              <>
+                <div className="fixed inset-0 bg-black/20 dark:bg-black/50 z-40" onClick={() => setShowCalendar(false)} />
+                <div className="fixed md:absolute left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 md:right-0 top-1/4 md:top-full mt-2 z-50 w-72 animate-slide-down shadow-xl">
+                  <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} onMonthChange={(y, m) => fetchCalendarDots(`${y}-${String(m).padStart(2,'0')}-01`)} />
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
