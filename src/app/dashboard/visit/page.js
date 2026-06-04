@@ -5,7 +5,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext } from '../layout';
 import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
+import { MEDICINE_SALTS } from '@/lib/medicines';
 import MediaViewer from '@/components/MediaViewer';
+
+const DRAFT_KEY = 'visit_draft';
+const TEMPLATES_KEY = 'treatment_templates';
 
 const PRESET_FEES = [
   { label: 'General Checkup', fee: 300, icon: '🏥' },
@@ -138,6 +142,20 @@ function VisitPageInner() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef(null);
   const fileInputRef = useRef(null);
+  const formReadyRef = useRef(false);
+
+  // Auto-save draft
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftAvailable, setDraftAvailable] = useState(false);
+
+  // Templates
+  const [templates, setTemplates] = useState([]);
+  const [templateName, setTemplateName] = useState('');
+  const [showTemplateInput, setShowTemplateInput] = useState(false);
+  const [showTemplateLoad, setShowTemplateLoad] = useState(false);
+
+  // Salt search
+  const [saltSearch, setSaltSearch] = useState('');
 
   useEffect(() => {
     setForm(f => ({
@@ -278,6 +296,92 @@ function VisitPageInner() {
     return () => clearTimeout(timer);
   }, [form.patientName, appointmentId]);
 
+  // ── Auto-save draft to localStorage ──
+  useEffect(() => {
+    if (!formReadyRef.current) return;
+    if (submitting) return;
+    const timer = setTimeout(() => {
+      const draft = {
+        form: { ...form },
+        treatmentFees: { ...treatmentFees },
+        consultationFee,
+        medicalHistory: { ...medicalHistory },
+        mediaFiles: mediaFiles.map(f => ({ name: f.name, size: f.size, type: f.type })),
+        savedAt: Date.now(),
+        appointmentId,
+      };
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch {}
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [form, treatmentFees, consultationFee, medicalHistory, mediaFiles, submitting, appointmentId]);
+
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        if (draft.appointmentId === appointmentId) {
+          setDraftAvailable(true);
+        }
+      }
+    } catch {}
+    formReadyRef.current = true;
+  }, [appointmentId]);
+
+  function restoreDraft() {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (!saved) return;
+      const draft = JSON.parse(saved);
+      if (draft.appointmentId !== appointmentId) return;
+      setForm(draft.form);
+      setTreatmentFees(draft.treatmentFees || {});
+      if (draft.consultationFee) setConsultationFee(draft.consultationFee);
+      if (draft.medicalHistory) setMedicalHistory(draft.medicalHistory);
+      setDraftRestored(true);
+      setDraftAvailable(false);
+      showToast('Draft restored', 'success');
+    } catch {}
+  }
+
+  function dismissDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftAvailable(false);
+  }
+
+  // Load templates on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TEMPLATES_KEY);
+      if (saved) setTemplates(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    function handleKeyDown(e) {
+      // Ctrl+Enter or Cmd+Enter to submit
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        const submitBtn = document.querySelector('button[type="submit"]');
+        if (submitBtn && !submitBtn.disabled) submitBtn.click();
+      }
+      // Escape to close dropdowns
+      if (e.key === 'Escape') {
+        setShowSearch(false);
+        setShowSuggestions(false);
+        setShowTemplateLoad(false);
+        setShowTemplateInput(false);
+        setSaltSearch('');
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   function selectPatient(p) {
     setForm(f => ({
       ...f,
@@ -289,6 +393,50 @@ function VisitPageInner() {
     setShowSearch(false);
     setSearchResults([]);
   }
+
+  // ── Treatment Templates ──
+  function saveTemplate() {
+    if (!templateName.trim()) { showToast('Enter a template name', 'error'); return; }
+    const newTemplate = {
+      id: Date.now().toString(),
+      name: templateName.trim(),
+      treatmentFees: { ...treatmentFees },
+      consultationFee,
+    };
+    const updated = [...templates, newTemplate];
+    setTemplates(updated);
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updated));
+    setTemplateName('');
+    setShowTemplateInput(false);
+    showToast(`Template "${newTemplate.name}" saved`, 'success');
+  }
+
+  function loadTemplate(tpl) {
+    setTreatmentFees({ ...tpl.treatmentFees });
+    if (tpl.consultationFee) setConsultationFee(tpl.consultationFee);
+    setShowTemplateLoad(false);
+    showToast(`Template "${tpl.name}" loaded`, 'success');
+  }
+
+  function deleteTemplate(id) {
+    const updated = templates.filter(t => t.id !== id);
+    setTemplates(updated);
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updated));
+  }
+
+  // ── Salt tap-to-add ──
+  function toggleSalt(salt) {
+    const existing = form.medicines.findIndex(m => m.name === salt);
+    if (existing >= 0) {
+      setForm(f => ({ ...f, medicines: f.medicines.filter((_, i) => i !== existing) }));
+    } else {
+      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '' }] }));
+    }
+  }
+
+  const filteredSalts = saltSearch.trim().length >= 1
+    ? MEDICINE_SALTS.filter(s => s.toLowerCase().includes(saltSearch.toLowerCase()))
+    : MEDICINE_SALTS;
 
   async function handleMediaUpload(e) {
     const files = Array.from(e.target.files || []);
@@ -419,6 +567,7 @@ function VisitPageInner() {
         } else {
           console.log('[MEDIA] No files to upload or missing appointment ID');
         }
+        localStorage.removeItem(DRAFT_KEY);
         setResult({ patient_name: form.patientName, treatment: primaryTreatment });
       } else {
         showToast(data.error || 'Failed to log visit', 'error');
@@ -445,6 +594,12 @@ function VisitPageInner() {
     setErrors({});
     setMediaFiles([]);
     setSymptomInput('');
+    setShowTemplateInput(false);
+    setShowTemplateLoad(false);
+    setTemplateName('');
+    setDraftRestored(false);
+    setDraftAvailable(false);
+    setSaltSearch('');
   }
 
   function getFilePreview(file) {
@@ -525,6 +680,41 @@ function VisitPageInner() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
+          {/* ── Draft restore banner ── */}
+          {draftAvailable && (
+            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-500" />
+                <p className="text-sm text-amber-800 dark:text-amber-300">You have an unsaved draft</p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={restoreDraft}
+                  className="px-3 py-1.5 text-xs font-medium bg-amber-100 dark:bg-amber-800 text-amber-800 dark:text-amber-200 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-700 transition-all">Restore</button>
+                <button type="button" onClick={dismissDraft}
+                  className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Dismiss</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Draft restored indicator ── */}
+          {draftRestored && (
+            <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">Draft restored — changes auto-save every few seconds</p>
+              </div>
+              <button type="button" onClick={() => setDraftRestored(false)}
+                className="p-1 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-800/50 text-emerald-500 transition-all">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Keyboard shortcut hint */}
+          <div className="text-right text-[10px] text-gray-400 dark:text-gray-500">
+            <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-[10px]">Ctrl+Enter</kbd> to submit
+          </div>
+
           {/* ── Patient Profile + Appointment Context ── */}
           {appointmentId && (appointmentMeta || patientProfile) ? (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
@@ -912,7 +1102,67 @@ function VisitPageInner() {
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30"><Stethoscope className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /></div>
                 <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Treatments</h2>
+                <div className="ml-auto flex items-center gap-1">
+                  <button type="button" onClick={() => setShowTemplateLoad(true)} title="Load template"
+                    className="p-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-emerald-500 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-700 transition-all">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  </button>
+                  <button type="button" onClick={() => { setShowTemplateInput(true); setShowTemplateLoad(false); }} title="Save as template"
+                    className="p-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-amber-500 dark:hover:text-amber-400 hover:border-amber-200 dark:hover:border-amber-700 transition-all">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                  </button>
+                </div>
               </div>
+
+              {/* Save template input */}
+              {showTemplateInput && (
+                <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700">
+                  <div className="flex gap-2">
+                    <input type="text" value={templateName} onChange={e => setTemplateName(e.target.value)}
+                      placeholder="Template name..."
+                      className="flex-1 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 transition-all placeholder-gray-400"
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveTemplate(); } }} />
+                    <button type="button" onClick={saveTemplate}
+                      className="px-3 py-1.5 text-xs font-medium bg-amber-100 dark:bg-amber-800 text-amber-800 dark:text-amber-200 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-700 transition-all">Save</button>
+                    <button type="button" onClick={() => { setShowTemplateInput(false); setTemplateName(''); }}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Load template */}
+              {showTemplateLoad && (
+                <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Load Template</span>
+                    <button type="button" onClick={() => setShowTemplateLoad(false)}
+                      className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {templates.length === 0 ? (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-3">No saved templates</p>
+                  ) : (
+                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                      {templates.map(t => (
+                        <div key={t.id} className="flex items-center justify-between px-2 py-1.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+                          <span className="text-xs text-gray-700 dark:text-gray-300">{t.name}</span>
+                          <div className="flex gap-1">
+                            <button type="button" onClick={() => loadTemplate(t)}
+                              className="px-2 py-0.5 text-[10px] font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">Apply</button>
+                            <button type="button" onClick={() => deleteTemplate(t.id)}
+                              className="p-0.5 text-gray-400 hover:text-red-500 transition-all">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Symptom-based treatment suggestion */}
               <div className="mb-3">
@@ -1165,34 +1415,91 @@ function VisitPageInner() {
 
           {/* Medicines — full width */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30"><Pill className="w-4 h-4 text-violet-500 dark:text-violet-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Prescribed Medicines</h2>
-              </div>
-              <button type="button" onClick={addMedicine} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 rounded-xl hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-all active:scale-95">
-                <Plus className="w-3.5 h-3.5" /> Add
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="p-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30"><Pill className="w-4 h-4 text-violet-500 dark:text-violet-400" /></div>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Prescribed Medicines</h2>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Tap a salt to add</span>
+            </div>
+
+            {/* Salt search */}
+            <div className="relative mb-3">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input type="text" value={saltSearch} onChange={e => setSaltSearch(e.target.value)}
+                placeholder="Search salts..."
+                className="w-full pl-8 pr-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 transition-all placeholder-gray-400" />
+              {saltSearch && (
+                <button type="button" onClick={() => setSaltSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Salt chips grid */}
+            <div className="flex flex-wrap gap-1.5 mb-4 max-h-[180px] overflow-y-auto">
+              {filteredSalts.map(salt => {
+                const isSelected = form.medicines.some(m => m.name === salt);
+                return (
+                  <button key={salt} type="button" onClick={() => toggleSalt(salt)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all active:scale-95 ${
+                      isSelected
+                        ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-600 text-violet-800 dark:text-violet-200 ring-1 ring-violet-200 dark:ring-violet-700'
+                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-violet-200 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20'
+                    }`}>
+                    {salt}
+                    {isSelected && <span className="ml-1">✓</span>}
+                  </button>
+                );
+              })}
+              {filteredSalts.length === 0 && saltSearch && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 py-2">No salts match "{saltSearch}"</p>
+              )}
+            </div>
+
+            {/* Custom salt input */}
+            <div className="mb-4">
+              <button type="button" onClick={addMedicine}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 rounded-xl hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-all active:scale-95">
+                <Plus className="w-3 h-3" /> Add custom medicine
               </button>
             </div>
+
+            {/* Selected medicines rows */}
             {form.medicines.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">No medicines added.</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4 italic">Tap a salt above or add a custom medicine</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {form.medicines.map((med, idx) => (
-                  <div key={idx} className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 relative group">
+                  <div key={idx} className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-3.5 border border-gray-100 dark:border-gray-700 relative group">
                     <button type="button" onClick={() => removeMedicine(idx)}
                       className="absolute -top-2 -right-2 w-6 h-6 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-700 transition-all opacity-0 group-hover:opacity-100 shadow-sm">
                       <Trash2 className="w-3 h-3" />
                     </button>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {[['name','Medicine','e.g. Amoxicillin'],['dosage','Dosage','e.g. 500mg'],['frequency','Frequency','e.g. Twice daily'],['duration','Duration','e.g. 5 days']].map(([f, lbl, ph]) => (
-                        <div key={f}>
-                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{lbl}</label>
-                          <input type="text" value={med[f]} onChange={e => updateMedicine(idx, f, e.target.value)}
-                            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
-                            placeholder={ph} />
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Medicine</label>
+                        <input type="text" value={med.name} onChange={e => updateMedicine(idx, 'name', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+                          placeholder="e.g. Amoxicillin" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Dosage</label>
+                        <input type="text" value={med.dosage} onChange={e => updateMedicine(idx, 'dosage', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+                          placeholder="e.g. 500mg" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Frequency</label>
+                        <input type="text" value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+                          placeholder="e.g. Twice daily" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Duration</label>
+                        <input type="text" value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+                          placeholder="e.g. 5 days" />
+                      </div>
                     </div>
                   </div>
                 ))}
