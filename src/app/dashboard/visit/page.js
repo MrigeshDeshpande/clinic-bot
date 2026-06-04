@@ -8,8 +8,21 @@ import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments'
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import MediaViewer from '@/components/MediaViewer';
 
-const DRAFT_KEY = 'visit_draft';
-const TEMPLATES_KEY = 'treatment_templates';
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash', icon: '\u{1F4B5}' },
+  { value: 'upi', label: 'UPI', icon: '\u{1F4F1}' },
+  { value: 'card', label: 'Card', icon: '\u{1F4B3}' },
+  { value: 'other', label: 'Other', icon: '\u{1FA99}' },
+];
+
+function upiDeepLink(amount, txnRef, note) {
+  const pa = encodeURIComponent(process.env.NEXT_PUBLIC_UPI_ID || 'clinic@upi');
+  const pn = encodeURIComponent('Shri Balaji Dental Clinic');
+  const am = encodeURIComponent(amount.toString());
+  const tr = encodeURIComponent(txnRef || '');
+  const tn = encodeURIComponent(note || '');
+  return `upi://pay?pa=${pa}&pn=${pn}&am=${am}&tr=${tr}&tn=${tn}&cu=INR`;
+}
 
 const PRESET_FEES = [
   { label: 'General Checkup', fee: 300, icon: '🏥' },
@@ -157,6 +170,12 @@ function VisitPageInner() {
   // Salt search
   const [saltSearch, setSaltSearch] = useState('');
 
+  // Payment
+  const [paymentStatus, setPaymentStatus] = useState('pending');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [transactionId, setTransactionId] = useState('');
+  const [sendingPaymentLink, setSendingPaymentLink] = useState(false);
+
   useEffect(() => {
     setForm(f => ({
       ...f,
@@ -200,6 +219,9 @@ function VisitPageInner() {
           if (a.consultation_fee) {
             setConsultationFee(a.consultation_fee);
           }
+          if (a.payment_status) setPaymentStatus(a.payment_status);
+          if (a.payment_method) setPaymentMethod(a.payment_method);
+          if (a.transaction_id) setTransactionId(a.transaction_id);
           // Fetch patient demographics + extra data (visits, messages, family)
           function applyPatientProfile(p) {
             setPatientProfile(p);
@@ -307,6 +329,9 @@ function VisitPageInner() {
         consultationFee,
         medicalHistory: { ...medicalHistory },
         mediaFiles: mediaFiles.map(f => ({ name: f.name, size: f.size, type: f.type })),
+        paymentStatus,
+        paymentMethod,
+        transactionId,
         savedAt: Date.now(),
         appointmentId,
       };
@@ -341,6 +366,9 @@ function VisitPageInner() {
       setTreatmentFees(draft.treatmentFees || {});
       if (draft.consultationFee) setConsultationFee(draft.consultationFee);
       if (draft.medicalHistory) setMedicalHistory(draft.medicalHistory);
+      if (draft.paymentStatus) setPaymentStatus(draft.paymentStatus);
+      if (draft.paymentMethod) setPaymentMethod(draft.paymentMethod);
+      if (draft.transactionId) setTransactionId(draft.transactionId);
       setDraftRestored(true);
       setDraftAvailable(false);
       showToast('Draft restored', 'success');
@@ -434,6 +462,32 @@ function VisitPageInner() {
     }
   }
 
+  async function sendPaymentLink() {
+    const phone = patientProfile?.phone || appointmentMeta?.patient_phone || form.patientPhone;
+    if (!phone) { showToast('No patient phone number', 'error'); return; }
+    setSendingPaymentLink(true);
+    try {
+      const link = upiDeepLink(totalFees, `VST${Date.now()}`, `${form.patientName} - ${form.diagnosis?.slice(0, 30) || 'Payment'}`);
+      const message = `Dear ${form.patientName},\n\nPlease pay ₹${totalFees.toLocaleString('en-IN')} for your recent visit to Shri Balaji Dental Clinic.\n\nClick to pay: ${link}\n\nThank you!`;
+      const waId = phone.startsWith('+') ? phone.slice(1) : phone;
+      const res = await fetch('/api/dashboard/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: waId, message }),
+      });
+      if (res.ok) {
+        showToast('Payment link sent on WhatsApp', 'success');
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to send', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setSendingPaymentLink(false);
+    }
+  }
+
   const filteredSalts = saltSearch.trim().length >= 1
     ? MEDICINE_SALTS.filter(s => s.toLowerCase().includes(saltSearch.toLowerCase()))
     : MEDICINE_SALTS;
@@ -486,6 +540,12 @@ function VisitPageInner() {
     try {
       const primaryTreatment = selectedTreatments[0] || form.treatment || 'Walk-in';
       const walkInAge = form.patientAge ? parseInt(form.patientAge, 10) : undefined;
+      const paymentPayload = {
+        paymentStatus,
+        paymentMethod: paymentStatus === 'paid' ? paymentMethod : undefined,
+        transactionId: transactionId.trim() || undefined,
+      };
+
       const payload = appointmentId
         ? {
             appointmentId,
@@ -500,6 +560,7 @@ function VisitPageInner() {
             followUpDate: form.followUpDate || undefined,
             followUpInstructions: form.followUpInstructions.trim() || undefined,
             status: 'completed',
+            ...paymentPayload,
           }
         : {
             patient_name: form.patientName.trim(),
@@ -516,6 +577,7 @@ function VisitPageInner() {
             followUpDate: form.followUpDate || undefined,
             followUpInstructions: form.followUpInstructions.trim() || undefined,
             notes: form.notes.trim() || undefined,
+            ...paymentPayload,
           };
 
       const res = await fetch('/api/dashboard/visit', {
@@ -600,6 +662,9 @@ function VisitPageInner() {
     setDraftRestored(false);
     setDraftAvailable(false);
     setSaltSearch('');
+    setPaymentStatus('pending');
+    setPaymentMethod('');
+    setTransactionId('');
   }
 
   function getFilePreview(file) {
@@ -1316,6 +1381,78 @@ function VisitPageInner() {
                 <div className="flex items-center justify-between pt-2 border-t-2 border-gray-200 dark:border-gray-700">
                   <span className="text-base font-bold text-gray-900 dark:text-gray-100">Total</span>
                   <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">₹{totalFees.toLocaleString('en-IN')}</span>
+                </div>
+
+                {/* Payment — compact */}
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/30">
+                      <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Payment</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 mb-2">
+                    <button type="button" onClick={() => { setPaymentStatus('paid'); if (!paymentMethod) setPaymentMethod('cash'); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                        paymentStatus === 'paid'
+                          ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-emerald-200'
+                      }`}>
+                      <span className="flex items-center justify-center gap-1">{'\u2713'} Paid</span>
+                    </button>
+                    <button type="button" onClick={() => setPaymentStatus('pending')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                        paymentStatus === 'pending'
+                          ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-300'
+                          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-amber-200'
+                      }`}>
+                      <span className="flex items-center justify-center gap-1">{'\u23F3'} Pending</span>
+                    </button>
+                  </div>
+
+                  {paymentStatus === 'pending' && (patientProfile?.phone || appointmentMeta?.patient_phone || form.patientPhone) && (
+                    <div className="mb-2">
+                      <button type="button" onClick={sendPaymentLink} disabled={sendingPaymentLink}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-medium rounded-lg border border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 transition-all disabled:opacity-50">
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                        {sendingPaymentLink ? 'Sending...' : 'Send UPI Link on WhatsApp'}
+                      </button>
+                    </div>
+                  )}
+
+                  {paymentStatus === 'paid' && (
+                    <div className="space-y-2">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {PAYMENT_METHODS.map(m => (
+                          <button key={m.value} type="button" onClick={() => setPaymentMethod(m.value)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+                              paymentMethod === m.value
+                                ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'
+                            }`}>
+                            {m.icon} {m.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="relative">
+                        <input type="text" value={transactionId} onChange={e => setTransactionId(e.target.value)}
+                          placeholder="Transaction ID / ref (optional)"
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[11px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
+                      </div>
+                      {paymentMethod === 'upi' && (
+                        <div className="flex items-center gap-2">
+                          <a href={upiDeepLink(totalFees, transactionId || `VST${Date.now()}`, `${form.patientName} ${form.diagnosis?.slice(0, 30) || ''}`)}
+                            target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-medium rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                            UPI Link
+                          </a>
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500">Opens UPI app</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSql } from '@/db/pool';
+import { getSql, runMigrations } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
@@ -7,6 +7,7 @@ export async function GET(req) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
   try {
+    await runMigrations();
     const sql = getSql();
 
     const { searchParams } = new URL(req.url);

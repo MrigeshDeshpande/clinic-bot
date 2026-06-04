@@ -354,6 +354,15 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS prescription_key TEXT;
     `;
 
+    // Payment tracking columns
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20),
+        ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+    `;
+
     // post_visit_sent_at — tracks whether post-visit summary has been sent
     await db`
       ALTER TABLE appointments

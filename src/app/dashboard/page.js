@@ -611,6 +611,9 @@ export default function DashboardPage() {
   const confirmed = appointments.filter(a => a.status === 'confirmed');
   const completed = appointments.filter(a => a.status === 'completed');
   const todayRevenue = completed.reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
+  const todayCollected = completed.filter(a => a.payment_status === 'paid').reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
+  const todayPending = completed.filter(a => a.payment_status !== 'paid').reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
+  const paymentMethods = completed.filter(a => a.payment_status === 'paid').reduce((acc, a) => { const m = a.payment_method || 'cash'; acc[m] = (acc[m] || 0) + 1; return acc; }, {});
 
   function formatCurrency(amount) {
     return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
@@ -694,6 +697,45 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
+      {/* Today's Collection Breakdown */}
+      {completed.length > 0 && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30">
+              <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            </div>
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Today's Collection</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">{completed.length} completed visits</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Collected</span>
+              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(todayCollected)}</p>
+            </div>
+            <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
+            <div>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Pending</span>
+              <p className="text-lg font-bold text-amber-500 dark:text-amber-400">{formatCurrency(todayPending)}</p>
+            </div>
+            <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
+            <div className="flex gap-3">
+              {Object.entries(paymentMethods).map(([method, count]) => (
+                <div key={method} className="text-center">
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase block">{method}</span>
+                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{count}</span>
+                </div>
+              ))}
+            </div>
+            {todayPending > 0 && (
+              <button onClick={() => router.push('/dashboard/appointments?status=completed')}
+                className="ml-auto px-3 py-1.5 text-[11px] font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all">
+                Collect Pending
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Upcoming & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

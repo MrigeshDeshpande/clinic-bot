@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSql } from '@/db/pool';
+import { getSql, runMigrations } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
@@ -11,6 +11,7 @@ export async function POST(req) {
   const sizeErr = checkBodySize(req);
   if (sizeErr) return sizeErr;
   try {
+    await runMigrations();
     const sql = getSql();
     const body = await req.json();
     const { patientName, patientPhone, patientAge, patientSex, date, time, treatment, location } = body;
@@ -87,6 +88,7 @@ export async function GET(req) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
   try {
+    await runMigrations();
     const sql = getSql();
 
     const { searchParams } = new URL(req.url);
@@ -104,7 +106,8 @@ export async function GET(req) {
          a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                  a.consultation_fee, a.treatment_charges, a.medicine_charges,
                  a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
-                 a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at
+                  a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at,
+                  a.payment_status, a.payment_method, a.transaction_id
         FROM appointments a
         LEFT JOIN patients p ON p.id = a.patient_id
         WHERE a.id = ${id}
@@ -129,12 +132,13 @@ export async function GET(req) {
                      a.treatments,
                      a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                       a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
-                      a.chit_media, a.prescription_key, a.location, p.location AS patient_location, a.created_at, a.updated_at
-              FROM appointments a
-              LEFT JOIN patients p ON p.id = a.patient_id
-              WHERE a.date >= CURRENT_DATE
-                AND a.status IN ('confirmed', 'completed', 'no_show')
-              ORDER BY a.date ASC, a.time ASC
+                       a.chit_media, a.prescription_key, a.location, p.location AS patient_location,
+                       a.payment_status, a.payment_method, a.transaction_id, a.created_at, a.updated_at
+               FROM appointments a
+               LEFT JOIN patients p ON p.id = a.patient_id
+               WHERE a.date >= CURRENT_DATE
+                 AND a.status IN ('confirmed', 'completed', 'no_show')
+               ORDER BY a.date ASC, a.time ASC
             `,
             sql`
               SELECT
@@ -156,13 +160,14 @@ export async function GET(req) {
                      a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
                      a.treatments,
                      a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
-                       a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
-                       a.chit_media, a.prescription_key, a.location, p.location AS patient_location, a.created_at, a.updated_at
-              FROM appointments a
-              LEFT JOIN patients p ON p.id = a.patient_id
-              WHERE a.date = ${targetDate}
-                AND a.status IN ('confirmed', 'completed', 'no_show')
-              ORDER BY a.time ASC
+                        a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
+                        a.chit_media, a.prescription_key, a.location, p.location AS patient_location,
+                        a.payment_status, a.payment_method, a.transaction_id, a.created_at, a.updated_at
+               FROM appointments a
+               LEFT JOIN patients p ON p.id = a.patient_id
+               WHERE a.date = ${targetDate}
+                 AND a.status IN ('confirmed', 'completed', 'no_show')
+               ORDER BY a.time ASC
             `,
             sql`
               SELECT
