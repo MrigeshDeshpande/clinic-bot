@@ -17,11 +17,10 @@ const PAYMENT_METHODS = [
 
 function upiDeepLink(amount, txnRef, note) {
   const pa = encodeURIComponent(process.env.NEXT_PUBLIC_UPI_ID || 'clinic@upi');
-  const pn = encodeURIComponent('Shri Balaji Dental Clinic');
   const am = encodeURIComponent(amount.toString());
   const tr = encodeURIComponent(txnRef || '');
   const tn = encodeURIComponent(note || '');
-  return `upi://pay?pa=${pa}&pn=${pn}&am=${am}&tr=${tr}&tn=${tn}&cu=INR`;
+  return `upi://pay?pa=${pa}&am=${am}&tn=${tn}${tr ? `&tr=${tr}` : ''}`;
 }
 
 const PRESET_FEES = [
@@ -467,7 +466,7 @@ function VisitPageInner() {
     if (!phone) { showToast('No patient phone number', 'error'); return; }
     setSendingPaymentLink(true);
     try {
-      const link = upiDeepLink(totalFees, `VST${Date.now()}`, `${form.patientName} - ${form.diagnosis?.slice(0, 30) || 'Payment'}`);
+      const link = upiDeepLink(totalFees, Date.now().toString(36), `${form.patientName} - ${form.diagnosis?.slice(0, 30) || 'Payment'}`);
       const message = `Dear ${form.patientName},\n\nPlease pay ₹${totalFees.toLocaleString('en-IN')} for your recent visit to Shri Balaji Dental Clinic.\n\nClick to pay: ${link}\n\nThank you!`;
       const waId = phone.startsWith('+') ? phone.slice(1) : phone;
       const res = await fetch('/api/dashboard/send-whatsapp', {
@@ -1442,7 +1441,7 @@ function VisitPageInner() {
                       </div>
                       {paymentMethod === 'upi' && (
                         <div className="flex items-center gap-2">
-                          <a href={upiDeepLink(totalFees, transactionId || `VST${Date.now()}`, `${form.patientName} ${form.diagnosis?.slice(0, 30) || ''}`)}
+                          <a href={upiDeepLink(totalFees, transactionId || Date.now().toString(36), `${form.patientName} ${form.diagnosis?.slice(0, 30) || ''}`)}
                             target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-medium rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
