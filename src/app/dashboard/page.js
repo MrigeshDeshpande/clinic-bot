@@ -611,9 +611,9 @@ export default function DashboardPage() {
   const confirmed = appointments.filter(a => a.status === 'confirmed');
   const completed = appointments.filter(a => a.status === 'completed');
   const todayRevenue = completed.reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
-  const todayCollected = completed.filter(a => a.payment_status === 'paid').reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
-  const todayPending = completed.filter(a => a.payment_status !== 'paid').reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
-  const paymentMethods = completed.filter(a => a.payment_status === 'paid').reduce((acc, a) => { const m = a.payment_method || 'cash'; acc[m] = (acc[m] || 0) + 1; return acc; }, {});
+  const todayCollected = completed.reduce((sum, a) => sum + Number(a.paid_amount || 0), 0);
+  const todayPending = completed.reduce((sum, a) => sum + (Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0) - Number(a.paid_amount || 0)), 0);
+  const paymentMethods = completed.filter(a => a.payment_status === 'paid' || a.payment_status === 'partial').reduce((acc, a) => { const m = a.payment_method || 'cash'; acc[m] = (acc[m] || 0) + 1; return acc; }, {});
 
   function formatCurrency(amount) {
     return `₹${Number(amount || 0).toLocaleString('en-IN')}`;

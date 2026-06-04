@@ -320,6 +320,8 @@ export default function PatientDetailPage() {
 
   const completedVisits = visits.filter(v => v.status === 'completed');
   const totalRevenue = completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0);
+  const totalCollected = completedVisits.reduce((sum, v) => sum + Number(v.paid_amount || 0), 0);
+  const totalDue = totalRevenue - totalCollected;
   const upcomingFollowUp = completedVisits.find(v => v.follow_up_date && v.follow_up_date >= new Date().toISOString().slice(0, 10));
 
   if (loading) {
@@ -569,6 +571,9 @@ export default function PatientDetailPage() {
                   Revenue
                 </div>
                 <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{formatCurrency(totalRevenue)}</div>
+                {totalDue > 0 && (
+                  <div className="text-[10px] sm:text-xs text-amber-500 dark:text-amber-400 mt-0.5">Collected {formatCurrency(totalCollected)} · Due {formatCurrency(totalDue)}</div>
+                )}
               </button>
               <button onClick={() => setActiveTab('visits')}
                 className="text-left bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-900/20 dark:to-violet-800/20 rounded-2xl p-3 sm:p-4 border border-violet-200/50 dark:border-violet-800 hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-[0.98]">
@@ -684,6 +689,12 @@ export default function PatientDetailPage() {
                                 <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
                                   <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500" />
                                   {formatCurrency(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0))}
+                                  {visit.payment_status === 'partial' && (
+                                    <span className="text-amber-500 dark:text-amber-400 ml-1">(Paid {formatCurrency(visit.paid_amount || 0)})</span>
+                                  )}
+                                  {visit.payment_status === 'pending' && (
+                                    <span className="text-red-400 dark:text-red-400 ml-1">(Unpaid)</span>
+                                  )}
                                 </span>
                               )}
                             </div>

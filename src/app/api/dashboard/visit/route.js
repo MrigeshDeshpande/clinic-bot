@@ -14,7 +14,7 @@ export async function POST(req) {
   try {
     const sql = getSql();
     const body = await req.json();
-    const { appointmentId, treatment, treatments, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, status: newStatus, paymentStatus, paymentMethod, transactionId } = body;
+    const { appointmentId, treatment, treatments, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount } = body;
 
     // ── Update existing appointment ──
     if (appointmentId) {
@@ -67,11 +67,23 @@ export async function POST(req) {
         setClauses.push(`status = $${p++}`);
         params.push(newStatus);
       }
+      if (paidAmount !== undefined) {
+        setClauses.push(`paid_amount = $${p++}`);
+        params.push(parseInt(paidAmount, 10) || 0);
+      }
       if (paymentStatus !== undefined) {
+        const cons = parseInt(consultationFee, 10) || 0;
+        const treat = parseInt(treatmentCharges, 10) || 0;
+        const med = parseInt(medicineCharges, 10) || 0;
+        const total = cons + treat + med;
+        const amt = paidAmount !== undefined ? (parseInt(paidAmount, 10) || 0) : 0;
+        let status = paymentStatus;
+        if (amt > 0 && amt < total) status = 'partial';
+        else if (amt >= total) status = 'paid';
         setClauses.push(`payment_status = $${p++}`);
-        params.push(paymentStatus);
-        if (paymentStatus === 'paid') {
-          setClauses.push(`paid_at = NOW()`);
+        params.push(status);
+        if (status === 'paid' || status === 'partial') {
+          setClauses.push(`paid_at = COALESCE(paid_at, NOW())`);
         }
       }
       if (paymentMethod !== undefined) {
@@ -94,7 +106,7 @@ export async function POST(req) {
         SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,
                treatments, diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
                notes, follow_up_date, follow_up_instructions, prescription_key,
-               status, arrival_status, payment_status, payment_method, transaction_id,
+               status, arrival_status, payment_status, payment_method, transaction_id, paid_amount,
                created_at, updated_at
         FROM appointments WHERE id = ${appointmentId}
       `;
@@ -126,10 +138,14 @@ export async function POST(req) {
       }
     }
 
-    const pStatus = paymentStatus || 'pending';
-    const pMethod = paymentStatus === 'paid' ? (paymentMethod || 'cash') : null;
+    const paidAmt = paidAmount !== undefined ? (parseInt(paidAmount, 10) || 0) : 0;
+    const totalFees = consFee + treatFee + medFee;
+    let pStatus = paymentStatus || 'pending';
+    if (paidAmt > 0 && paidAmt < totalFees) pStatus = 'partial';
+    else if (paidAmt >= totalFees) pStatus = 'paid';
+    const pMethod = pStatus === 'paid' || pStatus === 'partial' ? (paymentMethod || 'cash') : null;
     const txnId = transactionId || null;
-    const paidAt = paymentStatus === 'paid' ? 'NOW()' : null;
+    const paidAt = pStatus === 'paid' || pStatus === 'partial' ? 'NOW()' : null;
 
     const rows = await sql`
       INSERT INTO appointments (
@@ -138,7 +154,7 @@ export async function POST(req) {
         consultation_fee, treatment_charges, medicine_charges,
         diagnosis, medicines, notes, follow_up_date, follow_up_instructions,
         arrival_status,
-        payment_status, payment_method, transaction_id, paid_at
+        payment_status, payment_method, transaction_id, paid_at, paid_amount
       ) VALUES (
         gen_random_uuid(), 1, ${patient_phone || null}, ${patient_name}, ${patient_phone || null}, ${patientId},
         ${today}, NULL, ${treatment || 'Walk-in'}, 'completed',
@@ -146,7 +162,7 @@ export async function POST(req) {
         ${diagnosis || ''}, ${JSON.stringify(medicines || [])}, ${notes || ''},
         ${followUpDate || null}, ${followUpInstructions || ''},
         'arrived',
-        ${pStatus}, ${pMethod}, ${txnId}, ${paidAt}
+        ${pStatus}, ${pMethod}, ${txnId}, ${paidAt}, ${paidAmt}
       )
       RETURNING *
     `;

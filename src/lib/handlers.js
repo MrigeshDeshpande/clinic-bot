@@ -4240,6 +4240,8 @@ async function handleLogMedia(session, normalized, intent) {
 
 async function sendPatientSummary(waId, patientName, vl, appt) {
   const total = (vl.consultationFee || 0) + (vl.treatmentCharges || 0) + (vl.medicineCharges || 0);
+  const paid = appt?.paid_amount || 0;
+  const due = total - paid;
   const dateStr = appt?.date ? formatDate(appt.date) : '';
   const timeStr = appt?.time ? formatTime(appt.time) : '';
 
@@ -4250,7 +4252,12 @@ async function sendPatientSummary(waId, patientName, vl, appt) {
   body += `   Treatment:       ₹${vl.treatmentCharges || 0}\n`;
   body += `   Medicines:       ₹${vl.medicineCharges || 0}\n`;
   body += `   ─────────────────\n`;
-  body += `   *Total Paid:      ₹${total}*\n\n`;
+  body += `   *Total Bill:      ₹${total}*\n`;
+  body += `   *Amount Paid:     ₹${paid}*\n`;
+  if (due > 0) {
+    body += `   *Outstanding:     ₹${due}*\n`;
+  }
+  body += `\n`;
 
   // Don't show "next visit" in patient-facing if not set
   if (vl.nextVisit?.date) {
