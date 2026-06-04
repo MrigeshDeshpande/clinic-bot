@@ -249,10 +249,10 @@ export default function DashboardLayout({ children }) {
     setSidebarOpen(false);
   }, [pathname]);
 
-  function showToast(message, type = 'info') {
+  function showToast(message, type = 'info', opts) {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), opts?.duration || 4000);
   }
 
   function removeToast(id) {

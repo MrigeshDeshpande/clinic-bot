@@ -76,8 +76,13 @@ function AppointmentsContentInner() {
   const [scope, setScope] = useState('day');
   const [filterKey, setFilterKey] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const lastAction = useRef(null);
   const calRef = useRef();
   const router = useRouter();
+
+  const todayRevenue = (data?.appointments || [])
+    .filter(a => a.status === 'completed')
+    .reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
 
   const filteredAppointments = (data?.appointments || []).filter(a => {
     if (filterKey === 'completed') return a.status === 'completed';
@@ -124,6 +129,9 @@ function AppointmentsContentInner() {
   function handleDateSelect(date) { setSelectedDate(date); setShowCalendar(false); }
 
   async function handleStatusChange(appointmentId, newStatus) {
+    const appt = data?.appointments?.find(a => a.id === appointmentId);
+    const prevStatus = appt?.status;
+    const prevArrival = appt?.arrival_status;
     setUpdating(appointmentId);
     try {
       const res = await fetch('/api/dashboard/visit', {
@@ -133,12 +141,44 @@ function AppointmentsContentInner() {
       });
       const data = await res.json();
       if (res.ok) {
-        showToast(newStatus === 'completed' ? 'Marked as completed' : 'Marked as no show', 'success');
+        lastAction.current = { id: appointmentId, status: prevStatus, arrivalStatus: prevArrival };
+        showToast(
+          <span className="flex items-center gap-3">
+            <span>{newStatus === 'completed' ? '✓ Completed' : '✕ No Show'}</span>
+            <button onClick={undoLastAction}
+              className="ml-2 px-2.5 py-1 text-xs font-medium rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+              Undo
+            </button>
+          </span>,
+          'success', { duration: 6000 }
+        );
       } else {
         showToast(data.error || 'Failed to update status', 'error');
       }
     } catch {
       showToast('Network error', 'error');
+    }
+    setUpdating(null);
+    fetch(`/api/dashboard/appointments?date=${selectedDate}`)
+      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
+      .then(d => { if (d && !d.error) setData(d); })
+      .catch(e => setError(e.message));
+  }
+
+  async function undoLastAction() {
+    const action = lastAction.current;
+    if (!action) return;
+    lastAction.current = null;
+    setUpdating(action.id);
+    try {
+      await fetch('/api/dashboard/visit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId: action.id, status: action.status }),
+      });
+      showToast('Change undone', 'success');
+    } catch {
+      showToast('Failed to undo', 'error');
     }
     setUpdating(null);
     fetch(`/api/dashboard/appointments?date=${selectedDate}`)
@@ -268,6 +308,11 @@ function AppointmentsContentInner() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Appointments</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             {scope === 'future' ? 'All upcoming appointments' : formatDateLong(selectedDate)}
+            {todayRevenue > 0 && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                ₹{todayRevenue.toLocaleString('en-IN')}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
