@@ -35,11 +35,12 @@ export async function POST(req) {
         return Response.json({ received: true }, { status: 200 });
     }
 
-    // Return 200 immediately — process async
     // Ensure migrations complete before processing events (critical on cold start)
-    runMigrations()
-      .then(() => processEvent(payload))
-      .catch(err => logger.error('Unhandled engine error', { error: err.message }));
+    await runMigrations().catch(err => logger.error('Migration failed', { error: err.message }));
+
+    // Process the event and wait for completion — Vercel terminates the function
+    // if we return 200 immediately and the background work never finishes.
+    await processEvent(payload).catch(err => logger.error('Unhandled engine error', { error: err.message }));
 
     return Response.json({ received: true }, { status: 200 });
 }
