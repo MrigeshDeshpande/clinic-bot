@@ -9,7 +9,7 @@ export async function middleware(req) {
   }
 
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/api/dashboard')) {
-    if (pathname === '/dashboard/login') {
+    if (pathname === '/dashboard/login' || pathname === '/api/dashboard/login') {
       return NextResponse.next();
     }
 
