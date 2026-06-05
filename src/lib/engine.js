@@ -1,6 +1,6 @@
 import { isDuplicate } from '@/lib/deduplicate';
 import { getOrCreate, save } from '@/lib/session';
-import { classifyIntent } from '@/lib/router';
+import { classifyWithFallback } from '@/lib/ai';
 import { extractEntities, accumulateEntities } from '@/lib/entities';
 import { handle, checkAndSendPostVisit } from '@/lib/handlers';
 import { getNextState } from '@/lib/transitions';
@@ -241,8 +241,8 @@ export async function processEvent(payload) {
       // Track last message IDs for continuity
       session.context.lastMessageIds = [...(session.context.lastMessageIds || []).slice(-4), normalized.msgId];
 
-      // Step 2e: classifyIntent (also checks for corrections internally)
-      const intentResult = classifyIntent(normalized, session);
+      // Step 2e: classifyIntent — uses AI with rule fallback in shadow/production
+      const intentResult = await classifyWithFallback(normalized, session);
 
       // Step 2e-ii: Explicit correction detection (for non-booking states where router may miss it)
       // Only needed if classifyIntent didn't already catch it as correction_* intent
