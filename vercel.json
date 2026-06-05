@@ -1,0 +1,20 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/daily-summary",
+      "schedule": "50 3 * * *"
+    },
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "30 17 * * *"
+    },
+    {
+      "path": "/api/cron/evening-checkin",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/feedback",
+      "schedule": "30 10 * * *"
+    }
+  ]
+}

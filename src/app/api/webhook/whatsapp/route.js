@@ -1,4 +1,13 @@
+import { processEvent } from '@/lib/engine';
+import { runMigrations } from '@/db/pool';
+import { logger } from '@/lib/logger';
+import { WEBHOOK_LIMITER } from '@/lib/rateLimit';
+
 export async function GET(req) {
+  const rateCheck = WEBHOOK_LIMITER(req);
+  if (rateCheck.blocked) {
+    return new Response('Too many requests', { status: 429 });
+  }
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get('hub.mode');
     const token = searchParams.get('hub.verify_token');
@@ -10,82 +19,27 @@ export async function GET(req) {
     return new Response('Forbidden', { status: 403 });
 }
 
-async function sendWhatsAppMessage(to, message) {
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-
-    if (!token || !phoneNumberId) {
-        console.error('[WHATSAPP] Missing ACCESS_TOKEN or PHONE_NUMBER_ID');
-        return;
-    }
-
-    const url = `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`;
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to,
-                type: 'text',
-                text: { body: message },
-            }),
-        });
-
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error('[WHATSAPP] Meta API error:', response.status, errorBody);
-            return;
-        }
-
-        const data = await response.json();
-        console.log('[WHATSAPP] Message sent successfully:', data.messages?.[0]?.id ?? 'unknown');
-    } catch (error) {
-        console.error('[WHATSAPP] Network failure sending message:', error);
-    }
-}
-
 export async function POST(req) {
-    try {
-        const body = await req.json();
-
-        const entries = body?.entry;
-        if (!entries || !Array.isArray(entries)) {
-            return Response.json({ received: true });
-        }
-
-        for (const entry of entries) {
-            const changes = entry?.changes;
-            if (!changes || !Array.isArray(changes)) continue;
-
-            for (const change of changes) {
-                const value = change?.value;
-                if (!value) continue;
-
-                const messages = value?.messages;
-                if (!messages || !Array.isArray(messages)) continue;
-
-                for (const msg of messages) {
-                    if (msg?.type !== 'text') continue;
-
-                    const sender = msg.from;
-                    const text = msg?.text?.body;
-                    const msgId = msg.id;
-
-                    console.log('[WHATSAPP] Incoming text:', { sender, text, msgId });
-
-                    await sendWhatsAppMessage(sender, 'Hello from Shri Balaji Dental Clinic bot.');
-                }
-            }
-        }
-
-        return Response.json({ received: true });
-    } catch (error) {
-        console.error('[WHATSAPP] Webhook error:', error);
-        return Response.json({ received: true });
+    const rateCheck = WEBHOOK_LIMITER(req);
+    if (rateCheck.blocked) {
+      return Response.json({ error: 'Too many requests' }, { status: 429 });
     }
+    const rawBody = await req.text();
+
+    // JSON.parse happens EXACTLY ONCE — right here — never again downstream
+    let payload;
+    try {
+        payload = JSON.parse(rawBody);
+    } catch {
+        logger.warn('Invalid JSON in webhook body');
+        return Response.json({ received: true }, { status: 200 });
+    }
+
+    // Return 200 immediately — process async
+    // Ensure migrations complete before processing events (critical on cold start)
+    runMigrations()
+      .then(() => processEvent(payload))
+      .catch(err => logger.error('Unhandled engine error', { error: err.message }));
+
+    return Response.json({ received: true }, { status: 200 });
 }

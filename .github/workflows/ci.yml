@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm test
+
+      - name: Check build
+        run: npm run build
+        env:
+          DASHBOARD_PASSWORD: ci-test-password
+          WHATSAPP_ACCESS_TOKEN: ci-test
+          WHATSAPP_PHONE_NUMBER_ID: ci-test
+          WHATSAPP_VERIFY_TOKEN: ci-test
+          DATABASE_URL: postgres://ci-test/db
+          CRON_SECRET: ci-test

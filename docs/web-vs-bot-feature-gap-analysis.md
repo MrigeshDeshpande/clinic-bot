@@ -1,0 +1,234 @@
+# Web Dashboard vs WhatsApp Bot — Feature Gap Analysis
+
+> Generated: June 1, 2026  
+> Last Updated: June 2, 2026  
+> Context: Analysis of features present in the web dashboard (`/dashboard`) that are missing from the WhatsApp bot, and vice versa, with recommendations for improving the overall flow.
+
+---
+
+## Overall Status
+
+| Area | Completion |
+|---|---|
+| **High Priority** (Items 1–4) | ✅ **4/4 Complete** — Patient messaging from dashboard, patient edit on bot, feedback view on bot, stats on bot |
+| **Medium Priority** (Items 5–8) | ✅ **4/4 Complete** — Mark arrived from queue, bulk ops on web, notification panel, send message from web |
+| **Nice to Have** (Items 9, 10, 12) | ✅ **3/3 Complete** — Symptom matching, family accounts, editing past visits |
+| **Deferred** (Item 11) | ❌ Language toggle — not started |
+| **Bot Features Not in Web** | ✅ **All mentioned features documented** — Booking flow, emergency detection, notifications, etc. |
+| **Architecture (Manual Chat)** | ✅ **Fully implemented** — Doctor sends message → session enters manual mode → bot stops auto-replying → SSE delivers replies |
+
+---
+
+## Features Only in the Web Dashboard (Not in Bot)
+
+### 📊 Dashboard Overview (`/dashboard`)
+
+| Feature | Bot Equivalent | Priority |
+|---|---|---|
+| **Calendar view** with color-coded dots (booked/closed/open) | ❌ No — bot lists dates as text | Nice to have |
+| **Slot grid** — visual time slots showing booked vs open at a glance | ❌ No — bot shows text-based quick picks | Nice to have |
+| **Quick Book** — modal to book any slot with patient search | ⚠️ Partial — bot does full booking flow but different UX | Different use case |
+| **Stats cards** (total, waiting, in-session, completed, revenue) | ❌ No aggregated day stats | Good to have |
+| **Upcoming + Recent Activity** lists side-by-side | ❌ No | Nice to have |
+
+### 📅 Appointments (`/dashboard/appointments`)
+
+| Feature | Bot Equivalent | Priority |
+|---|---|---|
+| **Full appointment table** with patient, phone, treatment, status, amount | ⚠️ Partial — bot shows list but less detail | Nice to have |
+| **Mark Arrived / Call Patient / Start Visit** action buttons | ⚠️ Partial — bot has queue with similar actions | Already covered |
+| **Summary cards** (5-column KPI row) | ❌ No aggregated per-day stats | Good to have |
+| **Appointment amount display** (consultation + treatment + medicine fees) | ⚠️ Partial — shown in visit log | Good to have |
+
+### 👥 Patients (`/dashboard/patients`)
+
+| Feature | Bot Equivalent | Priority |
+|---|---|---|
+| **Searchable patient list** with visit count & last visit date | ⚠️ Partial — bot can search but shows one at a time | **Needed** |
+| **Patient detail page** — edit name/age/sex/phone | ✅ Yes — bot has `DOCTOR_EDIT_PATIENT` for editing details | Already covered |
+| **Patient stats** (total visits, revenue, last visit, follow-up) | ✅ Yes — shown in `showPatientVisits` handler | Already covered |
+| **Visit history** with rich display (diagnosis, medicines, fees, follow-up) | ⚠️ Partial — bot shows visits as text | Nice to have |
+| **Message history** — full WhatsApp conversation transcript | ❌ Completely missing | **Needed** |
+| **Media viewer** — inline images/audio/video from visits | ❌ No — bot sends signed URLs as text links | **Needed** |
+
+### 🚦 Queue Board (`/dashboard/queue`)
+
+| Feature | Bot Equivalent | Priority |
+|---|---|---|
+| **Kanban-style columns** (Waiting / In Session / Completed) | ⚠️ Partial — bot has text queue | Nice to have |
+| **Auto-refresh every 15 seconds** | ❌ No | Nice to have |
+| **Visual priority indicators** | ⚠️ Partial — bot has priority toggle | Already covered |
+
+### 🏥 Log Visit (`/dashboard/visit`)
+
+| Feature | Bot Equivalent | Priority |
+|---|---|---|
+| **Full visit logging form** with fee breakdown + medicines + follow-up + notes + media | ⚠️ Partial — bot has LOG_* state flow but requires 10+ back-and-forths | **Needed** (UX improvement) |
+| **Media upload** (drag & drop file picker) | ❌ No — bot only accepts WhatsApp media | Already covered |
+| **Patient search & auto-fill** on visit form | ❌ No | Nice to have |
+
+### 📈 Statistics (`/dashboard/stats`)
+
+| Feature | Bot Equivalent | Priority |
+|---|---|---|
+| **KPI cards** (today's appointments, revenue, new patients) | ✅ Yes — bot `DOCTOR_STATS` shows revenue, count, trends | Already covered |
+| **Treatment breakdown** with visual bar chart | ❌ No text equivalent | Nice to have |
+
+### 📋 Schedule (`/dashboard/schedule`)
+
+| Feature | Bot Equivalent | Priority |
+|---|---|---|
+| **Visual calendar** to block/unblock dates with reasons | ⚠️ Partial — bot can block dates via text menus | Already covered |
+| **Blocked dates list** with quick unblock | ⚠️ Partial | Already covered |
+
+### ⭐ Feedback (`/dashboard/feedback`)
+
+| Feature | Bot Equivalent | Priority |
+|---|---|---|
+| **Satisfaction % KPIs** | ✅ Yes — bot `DOCTOR_FEEDBACK` shows satisfaction % | Already covered |
+| **Aggregated feedback entries** with ratings & comments | ✅ Yes — bot shows recent entries + rating breakdown | Already covered |
+| **Callback request list** | ✅ Yes — bot shows pending callbacks in feedback view | Already covered |
+| **Rating distribution bar chart** | ❌ No | Nice to have |
+
+---
+
+## Features Only in the Bot (Not in Web Dashboard)
+
+| Bot Feature | Could Help Web? | Notes |
+|---|---|---|
+| **Full booking conversation flow** (date/time/treatment collection) | ✅ Yes — Quick Book could use bot's date suggestions & availability logic | Bot handles fragmented messages, corrections, and progressive fill |
+| **Emergency detection** | ❌ N/A — web is staff-only | |
+| **Language switching** (English/Hinglish) | ✅ Could be nice | For patient-facing forms |
+| **Callback request flow** | ⚠️ Already shown in feedback page | Could add a "Mark as contacted" action |
+| **Human escalation** | ❌ N/A — web is staff-only | |
+| **Family accounts** (booking for different family members) | ✅ Could enhance Quick Book | Add a family member dropdown |
+| **Symptom → treatment matching** | ✅ Could enhance treatment dropdown | Auto-suggest treatment based on description |
+| **Frustration detection & auto-escalation** | ❌ N/A — web is staff-only | |
+| **Correction handling** (e.g., "actually, change the time") | ✅ Could enhance Quick Book | Allow editing individual fields after booking |
+| **Overbooking prevention** (slot-level availability) | ✅ Already in web Quick Book | |
+| **Proactive notifications** (daily summary, reminders, evening check-in, feedback) | ✅ Implemented as notification panel | `/api/dashboard/notifications` + `NotificationPanel` component |
+| **Doctor notifications** (new booking, cancellation) | ✅ Implemented as notification panel | Shown in real-time panel on dashboard sidebar |
+| **Audio transcription** for notes | ✅ Already available | Could be exposed in web visit form too |
+| **Multi-treatment booking** | ✅ Could enhance web | Allow multiple treatments per appointment |
+| **Auto field progression** (fragmented messages) | ❌ N/A — web forms are structured | |
+| **Bulk operations** (complete all / cancel all for a date) | ✅ Implemented on web | "Complete All" / "Cancel All" buttons on appointments page |
+
+---
+
+## Architecture: Doctor Chat vs Bot Auto-Reply
+
+When the doctor sends a message from the dashboard, the patient's session enters **manual mode**. The bot stops auto-replying until the doctor explicitly ends the chat.
+
+### Flow
+
+```
+Doctor sends message from Dashboard
+  │
+  ├── WhatsApp message delivered to patient
+  ├── Message saved to messages table (role='bot')
+  └── Patient's session.context.manualMode = true
+
+Patient replies to the message
+  │
+  └── Webhook → Engine.processEvent()
+        │
+        ├── session.manualMode === true?
+        │
+        ├─ YES ──────────────────────────────────
+        │    ├── Save reply to messages table
+        │    ├── Send ack: "Your message has been
+        │    │   forwarded to the clinic..."
+        │    └── SKIP classifyIntent / handle /
+        │        sendReply / state transition
+        │
+        └─ NO ── Normal bot pipeline (as before)
+
+Doctor sees reply in Messages tab (via SSE)
+  │
+  ├── Server pushes "new_message" event
+  │   └── Client calls loadMessages() → UI updates instantly
+  │
+  ├── Blue banner: "Doctor Chat Active" (while manualMode=true)
+  ├── No polling — SSE connection open only when tab is active
+  │
+  └── Clicks "End Chat"
+        └── session.context.manualMode = false
+              └── Patient back to normal bot flow
+```
+
+### Safety
+
+- **Auto-timeout**: Manual mode auto-releases after 24 hours of inactivity (checked on session load in `rowToSession()`).
+- **Acknowledgment**: Patient always gets a message confirming their reply was received.
+- **No data loss**: All messages are saved to the DB regardless of mode.
+
+### Key Files
+
+| File | Purpose |
+|---|---|---|
+| `src/lib/session.js` | `manualMode` / `manualModeStartedAt` in context + 24h auto-timeout |
+| `src/app/api/dashboard/patients/[id]/send-message/route.js` | Sets `manualMode=true` after sending + emits SSE event |
+| `src/lib/engine.js` | Early-exit when `manualMode=true` — saves msg + sends ack + emits SSE event |
+| `src/lib/messageEvents.js` | **New** — global EventEmitter for SSE pub/sub |
+| `src/app/api/dashboard/patients/[id]/messages/stream/route.js` | **New** — SSE endpoint, pushes `new_message` events |
+| `src/app/api/dashboard/patients/[id]/chat-mode/route.js` | **New** — GET/PATCH endpoint for chat status |
+| `src/app/dashboard/patients/[id]/page.js` | Chat banner + End Chat button + SSE client in Messages tab |
+
+---
+
+## Recommended Improvements (Priority Order)
+
+> Status key: ✅ Implemented · 🚧 In Progress · ❌ Not Started
+
+### 🔴 High Priority
+
+1. ✅ **Patient communication from dashboard** — "Send Message" button + modal on patient detail page. Message history tab with full WhatsApp transcript (chronological, auto-scroll, 200 msg limit, pagination). Real-time updates via SSE — no polling.
+   - Files: `src/app/dashboard/patients/[id]/page.js`, `src/app/api/dashboard/patients/[id]/send-message/route.js`, `src/app/api/dashboard/patients/[id]/messages/route.js`, `src/app/api/dashboard/patients/[id]/messages/stream/route.js`, `src/lib/messageEvents.js`
+
+2. ✅ **Patient detail & edit on bot** — `DOCTOR_EDIT_PATIENT` state allows editing name/age/sex. Rich visit history shown via `showPatientVisits` handler.
+
+3. ✅ **Aggregated feedback view on bot** — `DOCTOR_FEEDBACK` state shows satisfaction %, recent entries, pending callbacks in the doctor menu.
+
+4. ✅ **Stats at a glance on bot** — `DOCTOR_STATS` handler shows today's appointments, revenue, new patients, weekly/monthly trends.
+
+### 🟡 Medium Priority
+
+5. ✅ **Quick "Mark Arrived" from bot queue** — Doctor queue (`DOCTOR_VIEW_QUEUE`) shows pending arrival patients with tap-to-mark. Receptionist queue (`RECEPTIONIST_QUEUE_DETAIL`) has "Mark Arrived" button.
+
+6. ✅ **Bulk operations on web** — "Complete All" / "Cancel All" buttons on appointments page using `/api/dashboard/appointments/bulk`.
+   - Files: `src/app/dashboard/appointments/page.js:155-189`, `src/app/api/dashboard/appointments/bulk/route.js`
+
+7. ✅ **Notification panel on web** — In-app notification panel in dashboard sidebar showing today's stats, upcoming appointments, pending callbacks, and recent cancellations.
+   - Files: `src/components/NotificationPanel.js` (new), `src/app/api/dashboard/notifications/route.js` (new)
+
+8. ✅ **Send message to patient from web** — Message button + send modal on patient detail page (same as #1).
+
+### 🟢 Nice to Have
+
+11. ❌ **Language toggle on web** — Add English/Hinglish toggle for patient-facing content. (Deferred)
+
+---
+
+## Completed Since Last Update (June 2, 2026)
+
+| Item | What Was Done | Key Files |
+|------|--------------|-----------|
+| **9. Symptom matching on web** | Created shared `src/lib/treatments.js` with `suggestTreatment()` function (alias keyword matching, same logic as bot). Replaced hardcoded treatment dropdowns in `visit/page.js` and `dashboard/page.js` with the shared treatment list. Added symptom description input with auto-suggest in the visit log form — staff types symptoms like "tooth pain when chewing" and sees matching treatment suggestions. | `src/lib/treatments.js` (new), `src/app/dashboard/visit/page.js`, `src/app/dashboard/page.js` |
+| **10. Family account support on web** | Added `GET /api/dashboard/patients/[id]/family` endpoint returning other patients sharing the same `wa_id`. Patient detail page shows family members as clickable chips in the header card. Quick Book modal shows a family member selector when a patient with family links is selected — staff can book for the patient or their family member. | `src/app/api/dashboard/patients/[id]/family/route.js` (new), `src/app/dashboard/patients/[id]/page.js`, `src/app/dashboard/page.js` |
+| **12. Editing past visits** | Added "Edit" button on each completed visit card in the patient detail page → navigates to `/dashboard/visit?appointmentId=X&edit=true`. Visit page loads existing data on mount when `edit=true` is present. Added `GET /api/dashboard/appointments?id=X` endpoint for single appointment fetch. Update submit (reuses existing `POST /api/dashboard/visit`) with "Save Changes" button and "Visit Updated" confirmation. | `src/app/dashboard/patients/[id]/page.js`, `src/app/dashboard/visit/page.js`, `src/app/api/dashboard/appointments/route.js` |
+| **7b. Queue pause on background** | Added `visibilitychange` listener — polling pauses when tab is backgrounded, resumes when visible. | `src/app/dashboard/queue/page.js` |
+| **8b. SSE keepalive 15s** | Changed keepalive interval from 30s to 15s to prevent Vercel serverless function idle timeout on streaming responses. | `src/app/api/dashboard/patients/[id]/messages/stream/route.js` |
+| **parseDateOnly utility** | Created `src/lib/date.js` with `parseDateOnly(dateStr)` (avoids the fragile `T12:00:00` workaround) and `formatDate`/`formatDateLong`/`formatDateShort`. Replaced `new Date(dateStr + 'T12:00:00')` pattern across 10 files. | `src/lib/date.js` (new), `src/app/dashboard/page.js`, `src/app/dashboard/appointments/page.js`, `src/app/dashboard/schedule/page.js`, `src/app/dashboard/patients/page.js`, `src/app/dashboard/patients/[id]/page.js`, `src/app/api/dashboard/calendar/route.js`, `src/app/api/cron/reminders/route.js`, `src/lib/handlers.js` |
+| **runMigrations removed from cron** | Removed `runMigrations()` import and call from `/api/cron/reminders` — migrations are now only run once at startup in `pool.js`. | `src/app/api/cron/reminders/route.js` |
+| **Hardcoded password removed** | Removed fallback `'admin123'` password from middleware and login route — now requires `DASHBOARD_PASSWORD` env var or returns 500. | `src/middleware.js`, `src/app/api/dashboard/login/route.js` |
+
+---
+
+## Existing Documentation References
+
+- `docs/enhancements-roadmap.md` — Existing enhancements roadmap
+- `docs/current-enhancement-status.md` — Current status of enhancements
+- `docs/audit-and-improvements.md` — Previous audit and improvements
+- `docs/doctor-flow.md` — Doctor flow documentation
+- `docs/patient-flow-improvements.md` — Patient flow improvements
+- `docs/reception-desk-flow.md` — Reception desk flow
