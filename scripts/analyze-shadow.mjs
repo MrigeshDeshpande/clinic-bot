@@ -1,24 +1,24 @@
 /**
  * Shadow Mode Analyzer
  *
- * Analyzes INTENT_CLASSIFICATION_SHADOW log entries to produce
+ * Analyzes shadow_logs (from DB or log file) to produce
  * agreement reports, per-intent accuracy, high-risk disagreements,
  * and pattern clustering.
  *
- * Usage:
+ * Usage (log file):
  *   node scripts/analyze-shadow.mjs app.log
  *   node scripts/analyze-shadow.mjs app.log --csv
  *   node scripts/analyze-shadow.mjs app.log --csv > report.csv
+ *
+ * Usage (database):
+ *   node --experimental-loader ./tests/replay/path-loader.js scripts/analyze-shadow.mjs --db
+ *   node --experimental-loader ./tests/replay/path-loader.js scripts/analyze-shadow.mjs --db --from 2026-06-01 --to 2026-06-07
+ *   node --experimental-loader ./tests/replay/path-loader.js scripts/analyze-shadow.mjs --db --csv
  */
 
 import { readFileSync, existsSync } from 'fs';
 
 const HIGH_RISK_INTENTS = ['confirm', 'confirm_cancel', 'emergency'];
-const MEDIUM_RISK_INTENTS = [
-  'provide_date', 'provide_time', 'cancel_appointment', 'reschedule',
-  'edit_date', 'edit_time', 'edit_treatment',
-  'correction_date', 'correction_time', 'correction_treatment',
-];
 
 const RISK_SCORE_MAP = {
   'confirm': 5, 'confirm_cancel': 5, 'emergency': 5,
@@ -77,8 +77,8 @@ function buildReport(entries) {
   for (const entry of entries) {
     const ruleIntent = entry.rule_intent || 'unknown';
     const aiIntent = entry.ai_intent || 'unknown';
-    const text = (entry.text || '').trim().toLowerCase();
-    const state = entry.state || '';
+    const text = (entry.text || entry.message_text || '').trim().toLowerCase();
+    const state = entry.state || entry.session_state || '';
     const aiConfidence = entry.ai_confidence || 0;
     const risk = riskLabel(ruleIntent, aiIntent);
 
@@ -99,7 +99,7 @@ function buildReport(entries) {
     } else {
       byIntent[ruleIntent].disagreements.push({ aiIntent, text, state, risk, aiConfidence });
 
-      const key = `${ruleIntent} → ${aiIntent}`;
+      const key = `${ruleIntent} \u2192 ${aiIntent}`;
       if (!textPatterns[key]) {
         textPatterns[key] = { count: 0, examples: [], ruleIntent, aiIntent };
       }
@@ -185,7 +185,7 @@ function printReport(report) {
     console.log(`${subSeparator}\n`);
 
     for (const d of report.highRiskDisagreements.slice(0, 20)) {
-      console.log(`  ${d.ruleIntent} → ${d.aiIntent}`);
+      console.log(`  ${d.ruleIntent} \u2192 ${d.aiIntent}`);
       console.log(`    Text:  "${d.text}"`);
       console.log(`    State: ${d.state}`);
       console.log(`    Risk:  ${d.risk}`);
@@ -196,7 +196,7 @@ function printReport(report) {
   console.log(subSeparator);
   console.log('Risk Legend');
   console.log(`${subSeparator}`);
-  console.log('  CRITICAL: confirm→cancel, cancel→confirm, emergency→anything');
+  console.log('  CRITICAL: confirm\u2192cancel, cancel\u2192confirm, emergency\u2192anything');
   console.log('  HIGH:     booking actions mapped to wrong action');
   console.log('  MEDIUM:   wrong date/time/treatment, correct category');
   console.log('  LOW:      info intent confusion (services vs timings)');
@@ -221,19 +221,104 @@ function printCsv(report) {
   }
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
-  if (args.length === 0) {
-    console.error('Usage: node scripts/analyze-shadow.mjs <logfile> [--csv]');
-    console.error('  --csv    Output CSV of disagreements instead of report');
+  const csvMode = args.includes('--csv');
+  const dbMode = args.includes('--db');
+  const fromArg = args.includes('--from') ? args[args.indexOf('--from') + 1] : null;
+  const toArg = args.includes('--to') ? args[args.indexOf('--to') + 1] : null;
+
+  if (dbMode) {
+    const { getStats, getIntentBreakdown, getDisagreements, getDisagreementPatterns } =
+      await import('@/db/repositories/shadowLogRepository');
+
+    const startDate = fromArg ? new Date(fromArg) : null;
+    const endDate = toArg ? new Date(toArg + 'T23:59:59Z') : null;
+
+    const stats = await getStats(startDate, endDate);
+    if (!stats || stats.total === 0) {
+      console.error('No shadow_logs entries found in database.');
+      process.exit(1);
+    }
+
+    const intentBreakdown = await getIntentBreakdown(startDate, endDate);
+    const disagreements = await getDisagreements({ limit: 500 });
+    const patterns = await getDisagreementPatterns({ minCount: 1 });
+
+    // Build report object in the same shape as buildReport
+    const byIntent = {};
+    for (const row of intentBreakdown) {
+      byIntent[row.rule_intent] = {
+        total: row.total,
+        matches: row.matches,
+        disagreements: [],
+        texts: [],
+      };
+    }
+
+    const report = {
+      total: stats.total,
+      matches: stats.matches,
+      disagreements: stats.disagreements,
+      agreementRate: stats.agreement_rate?.toString() || '0.0',
+      highRiskCount: disagreements.filter(d =>
+        riskLabel(d.rule_intent, d.ai_intent) === 'CRITICAL' ||
+        riskLabel(d.rule_intent, d.ai_intent) === 'HIGH'
+      ).length,
+      byIntent,
+      textPatterns: Object.fromEntries(
+        patterns.map(p => [
+          `${p.rule_intent} → ${p.ai_intent}`,
+          {
+            count: p.count,
+            examples: [],
+            ruleIntent: p.rule_intent,
+            aiIntent: p.ai_intent,
+          },
+        ])
+      ),
+      disagreements: disagreements.map(d => ({
+        ruleIntent: d.rule_intent,
+        aiIntent: d.ai_intent,
+        text: d.message_text,
+        state: d.session_state,
+        risk: riskLabel(d.rule_intent, d.ai_intent),
+        aiConfidence: d.ai_confidence,
+      })),
+      highRiskDisagreements: disagreements
+        .filter(d => {
+          const r = riskLabel(d.rule_intent, d.ai_intent);
+          return r === 'CRITICAL' || r === 'HIGH';
+        })
+        .map(d => ({
+          ruleIntent: d.rule_intent,
+          aiIntent: d.ai_intent,
+          text: d.message_text,
+          state: d.session_state,
+          risk: riskLabel(d.rule_intent, d.ai_intent),
+          aiConfidence: d.ai_confidence,
+        })),
+    };
+
+    if (csvMode) {
+      printCsv(report);
+    } else {
+      printReport(report);
+    }
+    return;
+  }
+
+  // Log file mode
+  const filePath = args[0];
+  if (!filePath) {
+    console.error('Usage:');
+    console.error('  node scripts/analyze-shadow.mjs <logfile> [--csv]');
+    console.error('');
+    console.error('  node --experimental-loader ./tests/replay/path-loader.js scripts/analyze-shadow.mjs --db [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--csv]');
     process.exit(1);
   }
 
-  const filePath = args[0];
-  const csvMode = args.includes('--csv');
-
   const entries = loadEntries(filePath);
-
   if (entries.length === 0) {
     console.error('No INTENT_CLASSIFICATION_SHADOW entries found in', filePath);
     process.exit(1);

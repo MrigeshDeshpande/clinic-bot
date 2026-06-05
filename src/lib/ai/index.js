@@ -2,6 +2,7 @@ import { classifyIntent } from '@/lib/router';
 import { classify as geminiClassify } from '@/lib/ai/gemini';
 import { classify as mockClassify } from '@/lib/ai/mock';
 import { logger } from '@/lib/logger';
+import { insertShadowLog } from '@/db/repositories/shadowLogRepository';
 import {
   AI_TIMEOUT_MS,
   AI_CONFIDENCE_THRESHOLD_HIGH,
@@ -97,6 +98,20 @@ export async function classifyWithFallback(normalized, session) {
           state: session.state,
           text: normalized.textClean,
         });
+
+        insertShadowLog({
+          waId: normalized.waId,
+          sessionState: session.state,
+          messageText: normalized.textClean,
+          ruleIntent: ruleResult.intent,
+          aiIntent: aiResult.intent,
+          aiConfidence: aiResult.confidence,
+          matched: ruleResult.intent === aiResult.intent,
+          provider: aiResult.source || 'gemini',
+          processingTimeMs: Date.now() - startTime,
+          ruleUsed: true,
+        }).catch(err => logger.warn('SHADOW_LOG_INSERT_FAILED', { error: err.message }));
+
         ruleResult.source = 'rule_fallback';
         return ruleResult;
       }

@@ -390,6 +390,30 @@ export async function runMigrations() {
       );
     `;
 
+    // Shadow logs — AI evaluation data (stored separately from production tables)
+    await db`
+      CREATE TABLE IF NOT EXISTS shadow_logs (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        wa_id             VARCHAR(50) NOT NULL,
+        session_state     VARCHAR(50) NOT NULL DEFAULT '',
+        message_text      TEXT NOT NULL DEFAULT '',
+        rule_intent       VARCHAR(50) NOT NULL DEFAULT '',
+        ai_intent         VARCHAR(50) NOT NULL DEFAULT '',
+        ai_confidence     REAL NOT NULL DEFAULT 0,
+        matched           BOOLEAN NOT NULL DEFAULT FALSE,
+        provider          VARCHAR(20) NOT NULL DEFAULT 'gemini',
+        processing_time_ms INTEGER NOT NULL DEFAULT 0,
+        rule_used         BOOLEAN NOT NULL DEFAULT FALSE
+      );
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_shadow_logs_created ON shadow_logs(created_at);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_shadow_logs_matched ON shadow_logs(matched);
+    `;
+
     // Patient relationships table (explicit family links)
     await db`
       CREATE TABLE IF NOT EXISTS patient_relationships (
