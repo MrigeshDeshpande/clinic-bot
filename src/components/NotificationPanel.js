@@ -7,7 +7,50 @@ export default function NotificationPanel() {
   const [notifications, setNotifications] = useState(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [manualMessages, setManualMessages] = useState([]);
   const ref = useRef(null);
+  const esRef = useRef(null);
+
+  // Request browser notification permission
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Subscribe to SSE stream for manual chat notifications
+  useEffect(() => {
+    function connect() {
+      const es = new EventSource('/api/dashboard/notifications/stream');
+      esRef.current = es;
+
+      es.onmessage = (event) => {
+        if (event.data === 'connected' || event.data.startsWith(': keepalive')) return;
+        try {
+          const data = JSON.parse(event.data);
+          setManualMessages(prev => {
+            const next = [{ ...data, id: Date.now() }, ...prev].slice(0, 20);
+            return next;
+          });
+          // Show browser notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(`New message from ${data.profileName || 'Patient'}`, {
+              body: data.text?.slice(0, 100),
+              icon: '/favicon.ico',
+            });
+          }
+        } catch {}
+      };
+
+      es.onerror = () => {
+        es.close();
+        setTimeout(connect, 3000);
+      };
+    }
+
+    connect();
+    return () => esRef.current?.close();
+  }, []);
 
   useEffect(() => {
     function handleClick(e) {
@@ -21,6 +64,7 @@ export default function NotificationPanel() {
     const next = !open;
     setOpen(next);
     if (next) {
+      setManualMessages([]);
       setLoading(true);
       fetch('/api/dashboard/notifications')
         .then(r => r.json())
@@ -30,9 +74,9 @@ export default function NotificationPanel() {
     }
   }
 
-  const totalAlerts = notifications
+  const totalAlerts = (notifications
     ? (notifications.pendingCallbacks?.length || 0) + (notifications.recentCancellations?.length || 0)
-    : 0;
+    : 0) + manualMessages.length;
 
   return (
     <div className="relative" ref={ref}>
@@ -68,6 +112,23 @@ export default function NotificationPanel() {
             </div>
 
             <div className="max-h-[420px] overflow-y-auto">
+              {/* Incoming manual messages */}
+              {manualMessages.length > 0 && (
+                <div className="px-5 py-3 border-b border-gray-50 dark:border-gray-800">
+                  <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Bell className="w-3 h-3 text-blue-500" /> Incoming Messages ({manualMessages.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {manualMessages.map(msg => (
+                      <div key={msg.id} className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-300 shrink-0 mt-0.5">{msg.profileName}:</span>
+                        <span className="text-xs text-gray-600 dark:text-gray-400 truncate">{msg.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {loading ? (
                 <div className="p-6 space-y-3 animate-pulse">
                   {[1,2,3].map(i => (

@@ -8,7 +8,7 @@ import { detectCorrection } from '@/lib/correction-detector';
 import { evaluateOverwrite } from '@/lib/overwrite-policy';
 import { sendText, sendButtons, sendList, markAsRead } from '@/lib/whatsapp';
 import { createMessage, createMessages } from '@/db/repositories/messageRepository';
-import { notifyNewMessage } from '@/lib/messageEvents';
+import { notifyNewMessage, notifyManualMessage } from '@/lib/messageEvents';
 import { logger } from '@/lib/logger';
 
 export const PIPELINE_HALT = Symbol('PIPELINE_HALT');
@@ -217,6 +217,23 @@ export async function processEvent(payload) {
           metadata: {},
         }).catch(err => logger.error('MANUAL_CHAT_SAVE_FAILED', { msgId: normalized.msgId, error: err.message }));
         notifyNewMessage(normalized.waId);
+
+        // Notify doctor on WhatsApp
+        const doctorWaId = process.env.DOCTOR_WA_ID;
+        if (doctorWaId && doctorWaId !== normalized.waId) {
+          const preview = normalized.textClean.slice(0, 120);
+          const name = normalized.profileName || `Patient (${normalized.waId})`;
+          sendText(doctorWaId, `📩 ${name}: ${preview}`).catch(() => {});
+        }
+
+        // Fire global notification event for dashboard
+        notifyManualMessage({
+          waId: normalized.waId,
+          text: normalized.textClean,
+          profileName: normalized.profileName || 'Patient',
+          timestamp: normalized.timestamp,
+        });
+
         save(session).catch(() => {});
         continue;
       }
