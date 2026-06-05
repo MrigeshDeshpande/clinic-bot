@@ -1,0 +1,40 @@
+name: Cron Jobs
+
+on:
+  schedule:
+    - cron: '50 3 * * *'   # 9:20 AM IST — daily summary to doctor
+    - cron: '30 17 * * *'  # 11:00 PM IST — appointment reminders
+    - cron: '0 14 * * *'   # 7:30 PM IST — evening check-in to doctor
+    - cron: '30 10 * * *'  # 4:00 PM IST — post-visit feedback
+    - cron: '0 11 * * *'   # 4:30 PM IST — due reminders
+
+jobs:
+  daily-summary:
+    if: github.event.schedule == '50 3 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -sSf "${{ secrets.CRON_BASE_URL }}/api/cron/daily-summary?secret=${{ secrets.CRON_SECRET }}"
+
+  reminders:
+    if: github.event.schedule == '30 17 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -sSf "${{ secrets.CRON_BASE_URL }}/api/cron/reminders?secret=${{ secrets.CRON_SECRET }}"
+
+  evening-checkin:
+    if: github.event.schedule == '0 14 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -sSf "${{ secrets.CRON_BASE_URL }}/api/cron/evening-checkin?secret=${{ secrets.CRON_SECRET }}"
+
+  feedback:
+    if: github.event.schedule == '30 10 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -sSf "${{ secrets.CRON_BASE_URL }}/api/cron/feedback?secret=${{ secrets.CRON_SECRET }}"
+
+  due-reminders:
+    if: github.event.schedule == '0 11 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -sSf "${{ secrets.CRON_BASE_URL }}/api/cron/due-reminders?secret=${{ secrets.CRON_SECRET }}"
