@@ -17,6 +17,9 @@ const USE_AI = process.env.GEMINI_API_KEY && process.env.NODE_ENV !== 'test';
 const REPLAY_MODE = process.env.REPLAY_MODE === 'true';
 const SHADOW_MODE = process.env.SHADOW_MODE === 'true';
 
+// Sample 5% of messages in shadow mode to stay within free tier quota (20 RPD)
+const SHADOW_SAMPLE_RATE = 0.05;
+
 let classifier;
 
 if (REPLAY_MODE) {
@@ -60,7 +63,9 @@ export async function classifyWithFallback(normalized, session) {
   }
 
   // Priority 1: AI classification (if configured)
-  if (classifier) {
+  // In shadow mode, sample a fraction of messages to conserve quota
+  const shouldSampleAI = !SHADOW_MODE || Math.random() < SHADOW_SAMPLE_RATE;
+  if (classifier && shouldSampleAI) {
     try {
       const aiResult = await Promise.race([
         classifier({

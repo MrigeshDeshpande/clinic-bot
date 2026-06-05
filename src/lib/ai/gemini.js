@@ -1,7 +1,8 @@
 import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
 
-const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_API = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const INTENT_CATALOG = [
   'appointment', 'provide_date', 'provide_time', 'provide_treatment',
@@ -126,9 +127,11 @@ export async function classify(request) {
     body: JSON.stringify(body),
   });
 
+  logger.info('GEMINI_REQUEST', { model: GEMINI_MODEL, text: request.text, state: request.state });
+
   if (!res.ok) {
     const err = await res.text();
-    logger.error('GEMINI_API_ERROR', { status: res.status, error: err });
+    logger.error('GEMINI_API_ERROR', { model: GEMINI_MODEL, status: res.status, error: err });
     throw new Error(`Gemini API error: ${res.status}`);
   }
 
@@ -136,15 +139,14 @@ export async function classify(request) {
   const result = parseResponse(data);
 
   if (!result) {
-    logger.warn('GEMINI_PARSE_FAILED', { text: request.text });
+    logger.warn('GEMINI_PARSE_FAILED', { model: GEMINI_MODEL, text: request.text });
     throw new Error('Failed to parse Gemini response');
   }
 
-  logger.debug('GEMINI_RESULT', {
+  logger.info('GEMINI_RESPONSE', {
+    model: GEMINI_MODEL,
     intent: result.intent,
     confidence: result.confidence,
-    entities: result.entities,
-    isCorrection: result.isCorrection,
   });
 
   return result;
