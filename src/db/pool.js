@@ -370,6 +370,26 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS post_visit_sent_at TIMESTAMPTZ;
     `;
 
+    // due_reminder_sent_at — tracks whether payment due reminder was sent
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS due_reminder_sent_at TIMESTAMPTZ;
+    `;
+
+    // due_reminder_log — history of due reminder triggers (manual + cron)
+    await db`
+      CREATE TABLE IF NOT EXISTS due_reminder_log (
+        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        triggered_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        triggered_by        VARCHAR(20) NOT NULL DEFAULT 'manual',
+        total_appointments  INTEGER NOT NULL DEFAULT 0,
+        sent_count          INTEGER NOT NULL DEFAULT 0,
+        template_sent_count INTEGER NOT NULL DEFAULT 0,
+        details             JSONB,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
     // Patient relationships table (explicit family links)
     await db`
       CREATE TABLE IF NOT EXISTS patient_relationships (

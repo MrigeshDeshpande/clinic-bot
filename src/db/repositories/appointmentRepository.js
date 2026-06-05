@@ -421,6 +421,46 @@ export async function markReminderSent(id) {
   }
 }
 
+// ───────────────────────────────────────────────
+// Fetch appointments with pending dues where due reminder not yet sent
+// Used by the due-reminder cron job
+// ───────────────────────────────────────────────
+export async function fetchAppointmentsForDueReminder() {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const rows = await sql`
+      SELECT DISTINCT ON (logical_id) id, logical_id, wa_id, patient_name, date, time,
+        consultation_fee, treatment_charges, medicine_charges,
+        paid_amount, payment_status
+      FROM appointments
+      WHERE status IN ('completed', 'confirmed')
+        AND payment_status IN ('pending', 'partial')
+        AND (consultation_fee + treatment_charges + medicine_charges) > COALESCE(paid_amount, 0)
+        AND due_reminder_sent_at IS NULL
+      ORDER BY logical_id, version DESC
+    `;
+    return rows;
+  } catch (error) {
+    logger.error('APPOINTMENT_FETCH_DUE_REMINDER_ERROR', { error: error.message });
+    return [];
+  }
+}
+
+// ───────────────────────────────────────────────
+// Mark due reminder as sent for a given appointment id
+// ───────────────────────────────────────────────
+export async function markDueReminderSent(id) {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`UPDATE appointments SET due_reminder_sent_at = NOW() WHERE id = ${id}`;
+  } catch (error) {
+    logger.error('APPOINTMENT_MARK_DUE_REMINDER_ERROR', { id, error: error.message });
+  }
+}
+
 // Alias used by daily-summary cron — same as fetchAppointmentsByDate(today)
 export async function fetchTodayAppointments() {
   const today = new Date().toISOString().slice(0, 10);

@@ -11,8 +11,14 @@ Generate GST-compliant invoices (PDF) with clinic GSTIN, patient details, HSN co
 ### 3. Cash Register / Day Close
 A "Day Close" button that shows: total cash collected, UPI, card, pending dues, and expected vs actual register balance. Exportable closing report for accounting.
 
-### 4. Patient Credit / Dues Tracking
+### 4. Patient Credit / Dues Tracking ✅
 Allow marking a visit as "credit" (pending payment). Show outstanding balance on patient profile. Send automated WhatsApp reminders for pending dues. Ageing report (7/15/30 days overdue).
+- ✅ **Partial payment tracking** — `paid_amount` column, three-way toggle (Paid/Partial/Pending), paid amount input with auto-computed due amount
+- ✅ **Due shown on patient profile** — Revenue card shows collected vs due, visit list shows (Paid ₹X) or (Unpaid) badges
+- ✅ **WhatsApp link sends due amount** — payment link uses `total - paid_amount` instead of full bill
+- ✅ **Dashboard stats** — `todayCollected` uses `paid_amount`, `todayPending` = total - paid
+- ❌ Automated WhatsApp reminders for pending dues
+- ❌ Ageing report
 
 ### 5. Discounts & Packages
 Apply discounts (%) or fixed amount on consultation/treatment/medicine charges. Prepaid treatment packages (e.g., "5 scaling sessions for ₹2000") with usage tracking and expiry.

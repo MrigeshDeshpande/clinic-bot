@@ -34,4 +34,11 @@ export const TEMPLATES = {
     category: 'utility',
     description: 'Post-visit summary with fees',
   },
+
+  due_reminder: {
+    name: 'due_reminder',
+    params: ['patient_name', 'clinic_name', 'due_amount', 'upi_id'],
+    category: 'utility',
+    description: 'Payment due reminder with outstanding amount',
+  },
 };

@@ -1,6 +1,6 @@
 # Current Enhancement Status — All Phases
 
-> **Last updated:** June 2, 2026
+> **Last updated:** June 4, 2026
 > **Status:** Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ⏳ Pending
 
 ## Completed
@@ -181,6 +181,16 @@ Comprehensive analytics across both bot and web dashboard:
 Add English/Hinglish toggle for patient-facing content on the web dashboard.
 Deferred — bot already supports bilingual mode.
 
+### 3.8 UPI Link Shortening & Partial Payment Tracking ✅
+UPI deep links shortened and partial payment support added across the system:
+- **UPI link shortening:** Removed `pn`, `cu=INR` params; `tr` now conditional and uses `Date.now().toString(36)` for shorter format
+- **DB:** Added `paid_amount INTEGER DEFAULT 0` column to `appointments` (`src/db/pool.js`)
+- **Visit API:** `src/app/api/dashboard/visit/route.js` — accepts `paidAmount`, auto-computes `payment_status` as `'partial'` when `0 < paidAmount < total`
+- **Visit UI:** `src/app/dashboard/visit/page.js` — three-way toggle (Paid/Partial/Pending), paid amount input with due display, UPI link uses due amount, draft save/restore includes `paidAmount`
+- **Dashboard:** `src/app/dashboard/page.js` — `todayCollected` uses `SUM(paid_amount)`, `todayPending` uses `SUM(total - paid_amount)`, payment methods count includes partial
+- **Patient detail:** `src/app/dashboard/patients/[id]/page.js` — Revenue card shows collected & due, visit list shows (Paid ₹X) or (Unpaid) badges
+- **WhatsApp summary:** `src/lib/handlers.js` — `sendPatientSummary()` shows Total Bill, Amount Paid, Outstanding separately
+
 ## Next Up — Remaining Features
 
 ### Pending
@@ -207,6 +217,7 @@ Deferred — bot already supports bilingual mode.
 | PDF prescriptions | Medium | Low | ✅ Done |
 | WhatsApp templates | Small | Medium | ✅ Done (needs Meta approval) |
 | Analytics | Large | Low | ✅ Done |
+| UPI link shortening & partial payment | Small | Medium | ✅ Done |
 | Language toggle (web) | Small | Small | ❌ |
 | Full Hindi bot | Large | Medium | ❌ |
 | Inventory | Large | Low | ❌ |

@@ -1,7 +1,7 @@
 # Enhancements & Future Flow — Roadmap
 
-> **Last updated:** May 31, 2026
-> **Status:** Phase 1 ✅ complete — actively implementing
+> **Last updated:** June 4, 2026
+> **Status:** Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ⏳ Pending
 
 ---
 
@@ -335,6 +335,7 @@ Built with existing Next.js stack — new route at `/dashboard`.
 | Family accounts | Medium | Medium | DB schema change |
 | Bulk actions (doctor) | Medium | High | None |
 | WhatsApp templates | Small | Medium | Meta business approval |
+| UPI link shortening & partial payment | Small | Medium | None |
 | Full Hindi bot | Large | Medium | Translation effort |
 | Dashboard (web) | Large | Medium | None |
 | Analytics | Large | Low | Dashboard first |
