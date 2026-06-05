@@ -38,7 +38,7 @@ export default function DueRemindersPage() {
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchLogs() {
     setLoading(true);
@@ -174,7 +174,7 @@ export default function DueRemindersPage() {
             <DollarSign className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
             <p className="text-sm text-gray-400 dark:text-gray-500">No reminder history yet</p>
             <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">
-              Click "Send Due Reminders" to trigger the first batch
+              Click &quot;Send Due Reminders&quot; to trigger the first batch
             </p>
           </div>
         ) : (

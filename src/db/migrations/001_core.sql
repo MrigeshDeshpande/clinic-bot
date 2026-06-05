@@ -33,6 +33,29 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_wa_id ON messages(wa_id);
 CREATE INDEX IF NOT EXISTS idx_messages_msg_id ON messages(msg_id);
 
+-- Appointments table
+CREATE TABLE IF NOT EXISTS appointments (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    logical_id          UUID NOT NULL DEFAULT gen_random_uuid(),
+    version             INTEGER NOT NULL DEFAULT 1,
+    replaces_version    INTEGER,
+    superseded_at       TIMESTAMPTZ,
+    session_id          UUID REFERENCES sessions(id),
+    wa_id               VARCHAR(20) NOT NULL,
+    patient_name        VARCHAR(100),
+    date                DATE NOT NULL,
+    time                TIME,
+    treatment           VARCHAR(100),
+    treatments          JSONB DEFAULT '[]',
+    status              VARCHAR(20) NOT NULL DEFAULT 'confirmed',
+    reminder_sent_at    TIMESTAMPTZ,
+    cancelled_at        TIMESTAMPTZ,
+    cancellation_reason VARCHAR(255),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT valid_appt_status CHECK (status IN ('confirmed','cancelled','completed','no_show'))
+);
+
 -- Allow NULL time for walk-in visits (no scheduled time slot)
 ALTER TABLE appointments ALTER COLUMN time DROP NOT NULL;
 

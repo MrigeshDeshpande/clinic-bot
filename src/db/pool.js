@@ -235,6 +235,12 @@ export async function runMigrations() {
       ON appointments (date, time) WHERE status = 'confirmed';
     `;
 
+    // Treatments array column (plural, supports multiple treatments per appointment)
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS treatments JSONB DEFAULT '[]';
+    `;
+
     // Ensure appointments CREATE TABLE includes new columns for fresh installations
     // (table is created with IF NOT EXISTS, so new installs get the base columns first)
     // The ALTER TABLE above adds them for existing installations.

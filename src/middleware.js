@@ -8,7 +8,7 @@ export async function middleware(req) {
     return new NextResponse('DASHBOARD_PASSWORD environment variable is not set', { status: 500 });
   }
 
-  if (pathname.startsWith('/dashboard')) {
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/api/dashboard')) {
     if (pathname === '/dashboard/login') {
       return NextResponse.next();
     }
@@ -27,5 +27,5 @@ export async function middleware(req) {
 }
 
 export const config = {
-  matcher: '/dashboard/:path*',
+  matcher: ['/dashboard/:path*', '/api/dashboard/:path*'],
 };

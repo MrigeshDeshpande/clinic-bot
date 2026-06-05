@@ -342,7 +342,7 @@ function VisitPageInner() {
       } catch {}
     }, 1000);
     return () => clearTimeout(timer);
-  }, [form, treatmentFees, consultationFee, medicalHistory, mediaFiles, submitting, appointmentId]);
+  }, [form, treatmentFees, consultationFee, medicalHistory, mediaFiles, submitting, appointmentId, paymentStatus, paymentMethod, transactionId, paidAmount]);
 
   // Restore draft on mount
   useEffect(() => {
@@ -1617,7 +1617,7 @@ function VisitPageInner() {
                 );
               })}
               {filteredSalts.length === 0 && saltSearch && (
-                <p className="text-xs text-gray-400 dark:text-gray-500 py-2">No salts match "{saltSearch}"</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 py-2">No salts match &quot;{saltSearch}&quot;</p>
               )}
             </div>
 

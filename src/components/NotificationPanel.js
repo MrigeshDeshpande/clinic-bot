@@ -17,15 +17,18 @@ export default function NotificationPanel() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    fetch('/api/dashboard/notifications')
-      .then(r => r.json())
-      .then(d => setNotifications(d))
-      .catch(() => setNotifications(null))
-      .finally(() => setLoading(false));
-  }, [open]);
+  function handleToggle() {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      setLoading(true);
+      fetch('/api/dashboard/notifications')
+        .then(r => r.json())
+        .then(d => setNotifications(d))
+        .catch(() => setNotifications(null))
+        .finally(() => setLoading(false));
+    }
+  }
 
   const totalAlerts = notifications
     ? (notifications.pendingCallbacks?.length || 0) + (notifications.recentCancellations?.length || 0)
@@ -34,7 +37,7 @@ export default function NotificationPanel() {
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={handleToggle}
         className="relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 transition-all w-full"
         title="Notifications"
       >
@@ -81,7 +84,7 @@ export default function NotificationPanel() {
                       <Calendar className="w-4 h-4 text-blue-500" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Today's Appointments</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Today&apos;s Appointments</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{notifications.todayAppointments} today · {notifications.newPatients} new patients</p>
                     </div>
                   </div>
@@ -115,7 +118,7 @@ export default function NotificationPanel() {
                           <div key={cb.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800">
                             <Users className="w-3 h-3 text-red-400 shrink-0" />
                             <span className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{cb.patient_name || 'Anonymous'}</span>
-                            {cb.comment && <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">"{cb.comment.slice(0, 30)}"</span>}
+                            {cb.comment && <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">&quot;{cb.comment.slice(0, 30)}&quot;</span>}
                           </div>
                         ))}
                       </div>
