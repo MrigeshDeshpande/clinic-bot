@@ -59,8 +59,6 @@ export async function generatePrescription({ patient, visit, appointment }) {
   const borderEnabled = pick(settings, 'prescription', 'border_enabled', true);
   const fontSize = pick(settings, 'prescription', 'font_size', 10);
 
-  const adviceList = settings.checklists?.advice || [];
-
   const doc = new PDFDocument({
     size: 'A4',
     layout: 'portrait',
@@ -194,6 +192,21 @@ export async function generatePrescription({ patient, visit, appointment }) {
     y += doc.heightOfString(visit.diagnosis, { width: RW }) + 16;
   }
 
+  // ─── DIAGNOSIS SELECTED (checklist items) ───
+  const selectedDiagnoses = visit?.diagnosis_selected || [];
+  if (selectedDiagnoses.length > 0) {
+    doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
+    doc.text('Diagnosis:', LM, y);
+    y += 16;
+    doc.fontSize(fontSize).font('Regular');
+    for (const item of selectedDiagnoses) {
+      const line = `\u2713  ${item}`;
+      doc.text(line, LM, y);
+      y += doc.heightOfString(line, { width: RW }) + 4;
+    }
+    y += 8;
+  }
+
   // ─── Rx + Generic Substitution ───
   if (showRx) {
     doc.fontSize(32).font('Bold');
@@ -252,15 +265,16 @@ export async function generatePrescription({ patient, visit, appointment }) {
     y += 10;
   }
 
-  // ─── ADVICE CHECKBOXES ───
-  if (adviceList.length > 0) {
+  // ─── ADVICE (only selected items) ───
+  const selectedAdvice = visit?.advice_selected || [];
+  if (selectedAdvice.length > 0) {
     doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
     doc.text('Diet & Advice:', LM, y);
     y += 16;
     doc.fontSize(Math.max(7.5, fontSize - 1)).font('Regular');
-    for (const item of adviceList) {
+    for (const item of selectedAdvice) {
       if (!item) continue;
-      doc.text(`\u25A1  ${item}`, LM, y);
+      doc.text(`\u2713  ${item}`, LM, y);
       y += doc.currentLineHeight() + 2;
     }
     y += 8;

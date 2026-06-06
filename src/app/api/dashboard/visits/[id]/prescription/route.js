@@ -19,7 +19,7 @@ export async function POST(req, { params }) {
       SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone,
              a.patient_id, a.date, a.treatment, a.treatments,
              a.consultation_fee, a.treatment_charges, a.medicine_charges,
-             a.diagnosis, a.medicines, a.notes,
+             a.diagnosis, a.medicines, a.notes, a.advice_selected, a.diagnosis_selected,
              a.follow_up_date, a.follow_up_instructions,
              a.prescription_key,
              p.name AS p_name, p.age AS p_age, p.sex AS p_sex
@@ -47,6 +47,8 @@ export async function POST(req, { params }) {
       treatment: a.treatment,
       diagnosis: a.diagnosis,
       medicines: Array.isArray(a.medicines) ? a.medicines : [],
+      advice_selected: Array.isArray(a.advice_selected) ? a.advice_selected : [],
+      diagnosis_selected: Array.isArray(a.diagnosis_selected) ? a.diagnosis_selected : [],
       consultationFee: a.consultation_fee || 0,
       treatmentCharges: a.treatment_charges || 0,
       medicineCharges: a.medicine_charges || 0,

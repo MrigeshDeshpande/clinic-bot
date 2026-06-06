@@ -474,6 +474,18 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS location VARCHAR(100) DEFAULT '';
     `;
 
+    // Advice selected per patient
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS advice_selected TEXT[] DEFAULT '{}';
+    `;
+
+    // Diagnosis selected per patient
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS diagnosis_selected TEXT[] DEFAULT '{}';
+    `;
+
     // Location column on patients (city/area the patient is from)
     await db`
       ALTER TABLE patients

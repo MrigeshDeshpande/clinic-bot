@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, jsonError } from '@/lib/apiAuth';
 
 const DISALLOWED_KEYS = new Set(['database', 'password', 'secret', 'key']);
+let ensured = false;
 
 const DEFAULTS = {
   clinic: { subtitle: 'Advanced Dental Care & Implant Center', email: 'shribalajiadc@gmail.com', instagram: 'shribalaji_adc', timing_mon_sat: '10:00 AM \u2013 8:00 PM', timing_sun: '10:00 AM \u2013 2:00 PM' },
@@ -16,6 +17,8 @@ const DEFAULTS = {
 };
 
 async function ensureTable() {
+  if (ensured) return;
+  ensured = true;
   const sql = getSql();
   await sql`
     CREATE TABLE IF NOT EXISTS settings (
