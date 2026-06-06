@@ -18,7 +18,8 @@ const REPLAY_MODE = process.env.REPLAY_MODE === 'true';
 const SHADOW_MODE = process.env.SHADOW_MODE === 'true';
 
 // Sample 5% of messages in shadow mode to stay within free tier quota (20 RPD)
-const SHADOW_SAMPLE_RATE = 0.05;
+// Override via SHADOW_SAMPLE_RATE env var for batch data collection
+const SHADOW_SAMPLE_RATE = parseFloat(process.env.SHADOW_SAMPLE_RATE) || 0.05;
 
 let classifier;
 

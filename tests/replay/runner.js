@@ -219,7 +219,10 @@ async function main() {
 
   // Pre-clean all fixture waIds to avoid stale session state
   const activeFixtures = fixturesToRun.filter(f => !f.skip);
-  await cleanupStaleSessions(activeFixtures.map((_, i) => `r_${1000 + i}`));
+  const allWaIds = activeFixtures.map((_, i) => `r_${1000 + i}`);
+  const doctorWaId = process.env.DOCTOR_WA_ID || 'r_doctor';
+  if (!allWaIds.includes(doctorWaId)) allWaIds.push(doctorWaId);
+  await cleanupStaleSessions(allWaIds);
 
   console.log('\n\x1b[1mReplay Conversation Tests\x1b[0m\n');
   console.log('-'.repeat(58));
@@ -246,6 +249,21 @@ async function main() {
       console.log(`  ${icon}  FAIL  ${result.name}`);
       console.log(`       ${evaluation.details}`);
       failures.push({ name: result.name, details: evaluation.details });
+    }
+
+    // Clean shared doctor session between fixtures to prevent state leakage
+    if (fixture.role === 'doctor') {
+      const sql = getSql();
+      if (sql) {
+        try {
+          const doctorWaId = process.env.DOCTOR_WA_ID || 'r_doctor';
+          await sql`DELETE FROM sessions WHERE wa_id = ${doctorWaId}`;
+          await sql`DELETE FROM messages WHERE wa_id = ${doctorWaId}`;
+          await sql`DELETE FROM appointments WHERE wa_id = ${doctorWaId}`;
+        } catch (e) {
+          // Non-fatal cleanup
+        }
+      }
     }
   }
 
