@@ -132,7 +132,7 @@ function PatientsPageInner() {
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 mb-6">
               <Users className="w-10 h-10 text-gray-400 dark:text-gray-500" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">No patients found</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">No patients found</h3>
             <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm mx-auto">
               {search ? 'Try a different search term or clear the search filter' : 'Patients will appear here once they book appointments through WhatsApp'}
             </p>
@@ -155,17 +155,17 @@ function PatientsPageInner() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {patient.name === '?' ? 'Unknown Patient' : patient.name}
                       </h3>
                       {patient.visit_count > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                           <Activity className="w-3 h-3" />
                           {patient.visit_count} visit{patient.visit_count !== 1 ? 's' : ''}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-4 text-base text-gray-500 dark:text-gray-400">
                       <span className="flex items-center gap-1.5">
                         <Phone className="w-3.5 h-3.5" />
                         {patient.phone || 'N/A'}

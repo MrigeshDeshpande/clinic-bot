@@ -736,7 +736,7 @@ function VisitPageInner() {
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
           <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{isEdit ? 'Edit Visit' : 'Log Visit'}</h1>              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{isEdit ? 'Edit Visit' : 'Log Visit'}</h1>              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               {isEdit ? `Editing visit for ${prefillName || 'patient'}` : appointmentId ? `Completing appointment for ${prefillName}` : 'Record a patient consultation'}
             </p>
           </div>
@@ -774,8 +774,8 @@ function VisitPageInner() {
           )}
 
           {/* Keyboard shortcut hint */}
-          <div className="text-right text-[10px] text-gray-400 dark:text-gray-500">
-            <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-[10px]">Ctrl+Enter</kbd> to submit
+          <div className="text-right text-xs text-gray-400 dark:text-gray-500">
+            <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-xs">Ctrl+Enter</kbd> to submit
           </div>
 
           {/* ── Patient Profile + Appointment Context ── */}
@@ -787,12 +787,12 @@ function VisitPageInner() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">{patientProfile?.name || appointmentMeta?.patient_name || 'Patient'}</h2>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     {appointmentMeta?.date?.slice(0, 10)}{appointmentMeta?.time ? ` at ${appointmentMeta.time?.slice(0, 5)}` : ''}
                     {appointmentMeta?.location ? ` · ${appointmentMeta.location}` : ''}
                   </p>
                 </div>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
                   appointmentMeta?.status === 'completed' ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' :
                   appointmentMeta?.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' :
                   appointmentMeta?.arrival_status === 'called' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800' :
@@ -807,42 +807,42 @@ function VisitPageInner() {
               </div>
               <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</span>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.patient_phone || '—'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Age</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Age</span>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{patientProfile?.age ? `${patientProfile.age} yrs` : '—'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sex</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sex</span>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{patientProfile?.sex ? (patientProfile.sex.charAt(0).toUpperCase() + patientProfile.sex.slice(1)) : '—'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</span>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.location || '—'}</p>
                 </div>
                 {patientProfile?.visit_count !== undefined && (
                   <div>
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Visits</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Visits</span>
                     <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{patientProfile.visit_count}</p>
                   </div>
                 )}
                 {patientProfile?.total_spent !== undefined && (
                   <div>
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Spent</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Spent</span>
                     <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">₹{Number(patientProfile.total_spent).toLocaleString('en-IN')}</p>
                   </div>
                 )}
                 {appointmentMeta?.chit_media?.length > 0 && (
                   <div className="col-span-full">
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">Media Shared ({appointmentMeta.chit_media.length})</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">Media Shared ({appointmentMeta.chit_media.length})</span>
                     <MediaViewer mediaKeys={appointmentMeta.chit_media} getSignedUrl={getSignedUrl} />
                   </div>
                 )}
                 {appointmentMeta?.status === 'completed' && (
                   <div>
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription</span>
                     {appointmentMeta?.prescription_key ? (
                       <a href={getSignedUrl(appointmentMeta.prescription_key)} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 mt-0.5 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
@@ -880,46 +880,46 @@ function VisitPageInner() {
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Visits</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Visits</span>
                 </div>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{patientProfile.visit_count || 0}</p>                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                <p className="text-2xl font-bold leading-tight text-gray-900 dark:text-gray-100">{patientProfile.visit_count || 0}</p>                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {patientVisits.length > 0 ? `Last: ${patientVisits[0]?.date?.slice(0, 10) || 'N/A'}` : 'First visit'}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Spent</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Spent</span>
                 </div>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">₹{Number(patientProfile.total_spent || 0).toLocaleString('en-IN')}</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                <p className="text-2xl font-bold leading-tight text-gray-900 dark:text-gray-100">₹{Number(patientProfile.total_spent || 0).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                   {patientProfile.visit_count > 0 ? `Avg: ₹${Math.round(Number(patientProfile.total_spent || 0) / (patientProfile.visit_count || 1)).toLocaleString('en-IN')}` : '—'}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Patient Since</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Patient Since</span>
                 </div>
                 <p className="text-xl font-bold text-gray-900 dark:text-gray-100 text-sm leading-tight">{patientProfile.created_at?.slice(0, 10) || '—'}</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                   {patientProfile.created_at ? `${Math.floor((Date.now() - new Date(patientProfile.created_at).getTime()) / (1000 * 60 * 60 * 24 * 30))} months ago` : ''}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-violet-500" />
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Follow-up</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Follow-up</span>
                 </div>
                 {(() => {
                   const lastVisit = patientVisits.find(v => v.follow_up_date);
                   const fupDate = lastVisit?.follow_up_date;
                   const isOverdue = fupDate && new Date(fupDate) < new Date();
                   const hasReturned = fupDate && patientVisits.some(v => v.date === fupDate || (v.date > fupDate && v.date < new Date(Date.now() + 86400000).toISOString().slice(0, 10)));
-                  if (!fupDate) return <><p className="text-xl font-bold text-gray-400 dark:text-gray-500">—</p><p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">No follow-up set</p></>;
-                  if (hasReturned) return <><p className="text-xl font-bold text-emerald-500">✓</p><p className="text-[10px] text-emerald-500 mt-0.5">Completed</p></>;
-                  if (isOverdue) return <><p className="text-xl font-bold text-red-500">{Math.floor((Date.now() - new Date(fupDate).getTime()) / (1000 * 60 * 60 * 24))}d</p><p className="text-[10px] text-red-500 mt-0.5">Overdue since {fupDate}</p></>;
-                  return <><p className="text-xl font-bold text-amber-500">⏳</p><p className="text-[10px] text-amber-500 mt-0.5">Due {fupDate}</p></>;
+                  if (!fupDate) return <><p className="text-xl font-bold text-gray-400 dark:text-gray-500">—</p><p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">No follow-up set</p></>;
+                  if (hasReturned) return <><p className="text-xl font-bold text-emerald-500">✓</p><p className="text-xs text-emerald-500 mt-0.5">Completed</p></>;
+                  if (isOverdue) return <><p className="text-xl font-bold text-red-500">{Math.floor((Date.now() - new Date(fupDate).getTime()) / (1000 * 60 * 60 * 24))}d</p><p className="text-xs text-red-500 mt-0.5">Overdue since {fupDate}</p></>;
+                  return <><p className="text-xl font-bold text-amber-500">⏳</p><p className="text-xs text-amber-500 mt-0.5">Due {fupDate}</p></>;
                 })()}
               </div>
             </div>
@@ -932,8 +932,8 @@ function VisitPageInner() {
               <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
                 <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
                   <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><Clock className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Visit History</h2>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal">Past {Math.min(patientVisits.length, 5)} visits</span>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Visit History</h2>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Past {Math.min(patientVisits.length, 5)} visits</span>
                 </div>
                 <div className="px-5 py-3 space-y-0 max-h-[300px] overflow-y-auto">
                   {patientVisits.length === 0 ? (
@@ -948,15 +948,15 @@ function VisitPageInner() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-medium text-gray-900 dark:text-gray-100">{v.date?.slice(0, 10)}{v.time ? ` ${v.time?.slice(0, 5)}` : ''}</p>
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
                               v.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
                               v.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
                               'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                             }`}>{v.status === 'completed' ? 'Done' : v.status === 'no_show' ? 'Missed' : 'Scheduled'}</span>
                           </div>
-                          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{v.treatment || 'Visit'}{v.diagnosis ? ` — ${v.diagnosis.slice(0, 60)}${v.diagnosis.length > 60 ? '...' : ''}` : ''}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{v.treatment || 'Visit'}{v.diagnosis ? ` — ${v.diagnosis.slice(0, 60)}${v.diagnosis.length > 60 ? '...' : ''}` : ''}</p>
                           {(v.consultation_fee || v.treatment_charges || v.medicine_charges) ? (
-                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">₹{((v.consultation_fee || 0) + (v.treatment_charges || 0) + (v.medicine_charges || 0)).toLocaleString('en-IN')}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">₹{((v.consultation_fee || 0) + (v.treatment_charges || 0) + (v.medicine_charges || 0)).toLocaleString('en-IN')}</p>
                           ) : null}
                         </div>
                       </div>
@@ -969,8 +969,8 @@ function VisitPageInner() {
               <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
                 <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
                   <div className="p-1.5 rounded-lg bg-green-50 dark:bg-green-900/30"><MessageSquare className="w-3.5 h-3.5 text-green-500 dark:text-green-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">WhatsApp Conversation</h2>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal">Recent messages</span>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">WhatsApp Conversation</h2>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Recent messages</span>
                 </div>
                 <div className="px-5 py-3 max-h-[300px] overflow-y-auto">
                   {loadingExtra ? (
@@ -1010,29 +1010,29 @@ function VisitPageInner() {
               <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
                 <div className="flex items-center gap-2.5 mb-4">
                   <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30"><Heart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Medical History</h2>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Medical History</h2>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Allergies</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Allergies</label>
                     <input type="text" value={medicalHistory.allergies} onChange={e => setMedicalHistory(h => ({ ...h, allergies: e.target.value }))}
                       className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200 dark:focus:ring-red-800 focus:border-red-400 dark:focus:border-red-500 transition-all placeholder-gray-400"
                       placeholder="e.g. Penicillin, Latex" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Chronic Conditions</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chronic Conditions</label>
                     <input type="text" value={medicalHistory.chronicConditions} onChange={e => setMedicalHistory(h => ({ ...h, chronicConditions: e.target.value }))}
                       className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all placeholder-gray-400"
                       placeholder="e.g. Diabetes, Hypertension" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Blood Group</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Blood Group</label>
                     <input type="text" value={medicalHistory.bloodGroup} onChange={e => setMedicalHistory(h => ({ ...h, bloodGroup: e.target.value }))}
                       className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
                       placeholder="e.g. O+" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">BP / Weight</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">BP / Weight</label>
                     <div className="flex gap-2">
                       <input type="text" value={medicalHistory.bp} onChange={e => setMedicalHistory(h => ({ ...h, bp: e.target.value }))}
                         className="w-1/2 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
@@ -1044,7 +1044,7 @@ function VisitPageInner() {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Current Medications</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Current Medications</label>
                   <input type="text" value={medicalHistory.medications} onChange={e => setMedicalHistory(h => ({ ...h, medications: e.target.value }))}
                     className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-400 dark:focus:border-violet-500 transition-all placeholder-gray-400"
                     placeholder="e.g. Metformin 500mg, Amlodipine 5mg" />
@@ -1055,8 +1055,8 @@ function VisitPageInner() {
               <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
                 <div className="flex items-center gap-2.5 mb-4">
                   <div className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/30"><Users className="w-3.5 h-3.5 text-teal-500 dark:text-teal-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Family Members</h2>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal">{patientFamily.length > 0 ? `${patientFamily.length} linked` : ''}</span>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Family Members</h2>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{patientFamily.length > 0 ? `${patientFamily.length} linked` : ''}</span>
                 </div>
                 {loadingExtra ? (
                   <div className="flex items-center justify-center py-6">
@@ -1073,14 +1073,14 @@ function VisitPageInner() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">{f.name}</p>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
                             {f.relationship_type ? f.relationship_type.charAt(0).toUpperCase() + f.relationship_type.slice(1) : 'Family'}
                             {f.age ? ` · ${f.age} yrs` : ''}{f.sex ? ` · ${f.sex.charAt(0).toUpperCase() + f.sex.slice(1)}` : ''}
                           </p>
                         </div>
                         {f.id && (
                           <button type="button" onClick={() => router.push(`/dashboard/patients/${f.id}`)}
-                            className="px-2.5 py-1 text-[10px] font-medium rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-teal-300 dark:hover:border-teal-600 transition-all shrink-0">
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-teal-300 dark:hover:border-teal-600 transition-all shrink-0">
                             View
                           </button>
                         )}
@@ -1097,7 +1097,7 @@ function VisitPageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm relative">
               <div className="flex items-center gap-2.5 mb-5">
                 <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><Search className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Patient Information</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Patient Information</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="relative">
@@ -1164,7 +1164,7 @@ function VisitPageInner() {
 
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30"><Stethoscope className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Treatments</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Treatments</h2>
                 <div className="ml-auto flex items-center gap-1">
                   <button type="button" onClick={() => setShowTemplateLoad(true)} title="Load template"
                     className="p-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-emerald-500 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-700 transition-all">
@@ -1214,7 +1214,7 @@ function VisitPageInner() {
                           <span className="text-xs text-gray-700 dark:text-gray-300">{t.name}</span>
                           <div className="flex gap-1">
                             <button type="button" onClick={() => loadTemplate(t)}
-                              className="px-2 py-0.5 text-[10px] font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">Apply</button>
+                              className="px-2 py-0.5 text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">Apply</button>
                             <button type="button" onClick={() => deleteTemplate(t.id)}
                               className="p-0.5 text-gray-400 hover:text-red-500 transition-all">
                               <Trash2 className="w-3 h-3" />
@@ -1249,7 +1249,7 @@ function VisitPageInner() {
                           </span>
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-gray-900 dark:text-gray-100">{s.name}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500">{s.symptom}</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500">{s.symptom}</p>
                           </div>
                         </button>
                       ))}
@@ -1258,7 +1258,7 @@ function VisitPageInner() {
                 </div>
               </div>
 
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2.5">Tap treatments to add — select all that apply</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5">Tap treatments to add — select all that apply</p>
 
               <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
                 {TREATMENT_NAMES.map(name => {
@@ -1274,7 +1274,7 @@ function VisitPageInner() {
                       <span className="text-base shrink-0 w-5 text-center">{preset?.icon || '🩺'}</span>
                       <span className="text-left truncate">{name}</span>
                       {preset && (
-                        <span className={`ml-auto text-[11px] font-semibold shrink-0 ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                        <span className={`ml-auto text-xs font-semibold shrink-0 ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
                           ₹{preset.fee}
                         </span>
                       )}
@@ -1296,11 +1296,11 @@ function VisitPageInner() {
               </div>
 
               {errors.treatment && (
-                <p className="text-[10px] text-red-500 dark:text-red-400 mt-2">⚠ {errors.treatment}</p>
+                <p className="text-xs text-red-500 dark:text-red-400 mt-2">⚠ {errors.treatment}</p>
               )}
               {selectedTreatments.length > 0 && (
                 <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800">
-                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                     {selectedTreatments.length} treatment{selectedTreatments.length > 1 ? 's' : ''} selected
                   </p>
                 </div>
@@ -1421,14 +1421,14 @@ function VisitPageInner() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="flex-1">
-                          <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Amount Paid</label>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">Amount Paid</label>
                           <input type="number" value={paidAmount} onChange={e => setPaidAmount(Number(e.target.value) || 0)}
                             min={0} max={totalFees}
-                            className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[11px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
+                            className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
                         </div>
                         {paidAmount < totalFees && (
                           <div className="flex-shrink-0 text-right">
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500">Due</div>
+                            <div className="text-xs text-gray-400 dark:text-gray-500">Due</div>
                             <div className="text-xs font-semibold text-red-500 dark:text-red-400">₹{(totalFees - paidAmount).toLocaleString('en-IN')}</div>
                           </div>
                         )}
@@ -1436,7 +1436,7 @@ function VisitPageInner() {
                       <div className="flex gap-1.5 flex-wrap">
                         {PAYMENT_METHODS.map(m => (
                           <button key={m.value} type="button" onClick={() => setPaymentMethod(m.value)}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                               paymentMethod === m.value
                                 ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-300'
                                 : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'
@@ -1448,13 +1448,13 @@ function VisitPageInner() {
                       <div className="relative">
                         <input type="text" value={transactionId} onChange={e => setTransactionId(e.target.value)}
                           placeholder="Transaction ID / ref (optional)"
-                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[11px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
                       </div>
                       {paymentMethod === 'upi' && (
                         <div className="flex items-center gap-2">
                           <a href={upiDeepLink(paidAmount || totalFees, transactionId || Date.now().toString(36), `${form.patientName} ${form.diagnosis?.slice(0, 30) || ''}`)}
                             target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-medium rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                             UPI Link
                           </a>
@@ -1467,7 +1467,7 @@ function VisitPageInner() {
                   {(paymentStatus === 'pending' || paymentStatus === 'partial') && paidAmount < totalFees && (patientProfile?.phone || appointmentMeta?.patient_phone || form.patientPhone) && (
                     <div className="mb-2">
                       <button type="button" onClick={sendPaymentLink} disabled={sendingPaymentLink}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-medium rounded-lg border border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 transition-all disabled:opacity-50">
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-medium rounded-lg border border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 transition-all disabled:opacity-50">
                         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                         {sendingPaymentLink ? 'Sending...' : `Send UPI Link on WhatsApp${paymentStatus === 'partial' ? ' (Due ₹' + (totalFees - paidAmount).toLocaleString('en-IN') + ')' : ''}`}
                       </button>
@@ -1481,7 +1481,7 @@ function VisitPageInner() {
           {/* Diagnosis */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><FileText className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Diagnosis / Observations</h2>
+              <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><FileText className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Diagnosis / Observations</h2>
             </div>
             <textarea value={form.diagnosis} onChange={e => setForm(f => ({ ...f, diagnosis: e.target.value }))}
               rows={3} className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
@@ -1494,7 +1494,7 @@ function VisitPageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
                 <div className="flex items-center gap-2.5 mb-4">
                   <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30"><Upload className="w-4 h-4 text-purple-500 dark:text-purple-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Attachments</h2>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Attachments</h2>
                   <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">(optional)</span>
                 </div>
                 <input
@@ -1515,7 +1515,7 @@ function VisitPageInner() {
                   <span className="text-xs font-medium">
                     {uploadingMedia ? 'Uploading...' : 'Click to upload'}
                   </span>
-                  <span className="text-[10px]">Photos, documents, audio</span>
+                  <span className="text-xs">Photos, documents, audio</span>
                 </button>
                 {mediaFiles.length > 0 && (
                   <div className="mt-2.5 space-y-1.5">
@@ -1541,7 +1541,7 @@ function VisitPageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><Calendar className="w-4 h-4 text-amber-500 dark:text-amber-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Follow-up</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Follow-up</h2>
               </div>
               <div className="space-y-3">
                 <div>
@@ -1562,7 +1562,7 @@ function VisitPageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800"><FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Additional Notes</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Additional Notes</h2>
               </div>
               <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                 rows={3} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
@@ -1574,7 +1574,7 @@ function VisitPageInner() {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-4">
               <div className="p-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30"><Pill className="w-4 h-4 text-violet-500 dark:text-violet-400" /></div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Prescribed Medicines</h2>
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Prescribed Medicines</h2>
               <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Tap a salt to add</span>
             </div>
 
@@ -1598,7 +1598,7 @@ function VisitPageInner() {
                 const isSelected = form.medicines.some(m => m.name === salt);
                 return (
                   <button key={salt} type="button" onClick={() => toggleSalt(salt)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all active:scale-95 ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
                       isSelected
                         ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-600 text-violet-800 dark:text-violet-200 ring-1 ring-violet-200 dark:ring-violet-700'
                         : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-violet-200 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20'
@@ -1634,25 +1634,25 @@ function VisitPageInner() {
                     </button>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Medicine</label>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Medicine</label>
                         <input type="text" value={med.name} onChange={e => updateMedicine(idx, 'name', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
                           placeholder="e.g. Amoxicillin" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Dosage</label>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Dosage</label>
                         <input type="text" value={med.dosage} onChange={e => updateMedicine(idx, 'dosage', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
                           placeholder="e.g. 500mg" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Frequency</label>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Frequency</label>
                         <input type="text" value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
                           placeholder="e.g. Twice daily" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Duration</label>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Duration</label>
                         <input type="text" value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
                           placeholder="e.g. 5 days" />

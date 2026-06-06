@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useContext } from 'react';
+import { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Activity, DollarSign, Calendar, Clock, Phone,
@@ -9,7 +9,68 @@ import {
   ClipboardList, Edit3, Save, X, MessageSquare
 } from 'lucide-react';
 import { formatDate as fmtDate } from '@/lib/date';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 import { ToastContext } from '../../layout';
+
+function formatDate(d) {
+  if (!d) return 'N/A';
+  const dateStr = typeof d === 'string' ? d.slice(0, 10) : String(d).slice(0, 10);
+  return fmtDate(dateStr, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatCurrency(amount) {
+  return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+}
+
+function getInitials(name) {
+  if (!name || name === '?') return '?';
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function getSignedUrl(key) {
+  return `/api/dashboard/media/signed?key=${encodeURIComponent(key)}`;
+}
+
+function ratingEmoji(rating) {
+  if (rating === 'great') return { emoji: '😊', label: 'Great', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30' };
+  if (rating === 'okay') return { emoji: '🙂', label: 'Okay', color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30' };
+  if (rating === 'poor') return { emoji: '😞', label: 'Poor', color: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30' };
+  return { emoji: '—', label: rating, color: 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800' };
+}
+
+function ratingIcon(rating) {
+  switch (rating) {
+    case 'great': return '😊';
+    case 'okay': return '🙂';
+    case 'poor': return '😞';
+    default: return '—';
+  }
+}
+
+function ratingBadge(rating) {
+  switch (rating) {
+    case 'great': return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
+    case 'okay': return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
+    case 'poor': return 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
+    default: return 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700';
+  }
+}
+
+const avatarColors = [
+  'from-blue-500 to-blue-600',
+  'from-emerald-500 to-teal-600',
+  'from-violet-500 to-purple-600',
+  'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+];
+
+function getAvatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return avatarColors[Math.abs(hash) % avatarColors.length];
+}
 
 export default function PatientDetailPage() {
   const { id } = useParams();
@@ -50,9 +111,8 @@ export default function PatientDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/dashboard/patients/${id}`);
-        const data = await res.json();
-        if (!res.ok || !data.patient) {
+        const data = await fetchCached(`/api/dashboard/patients/${id}`, {}, 60_000);
+        if (!data.patient) {
           setPatient(null);
           setLoading(false);
           return;
@@ -66,46 +126,45 @@ export default function PatientDetailPage() {
           phone: data.patient?.phone || '',
           location: data.patient?.location || '',
         });
+        setLoading(false);
+
+        // Fetch secondary data in background after showing content
+        const secondaryPromises = [];
         if (data.patient?.wa_id) {
-          const fbRes = await fetch(`/api/dashboard/feedback?limit=20&waId=${encodeURIComponent(data.patient.wa_id)}`);
-          const fbData = await fbRes.json();
-          setFeedback(fbData?.entries || []);
+          secondaryPromises.push(
+            fetchCached(`/api/dashboard/feedback?limit=20&waId=${encodeURIComponent(data.patient.wa_id)}`, {}, 60_000)
+              .then(fbData => setFeedback(fbData?.entries || []))
+              .catch(() => {})
+          );
         }
-        // Fetch chat mode status
-        try {
-          const cmRes = await fetch(`/api/dashboard/patients/${id}/chat-mode`);
-          if (cmRes.ok) {
-            const cmData = await cmRes.json();
-            setManualMode(cmData.manualMode);
-            setManualModeStartedAt(cmData.manualModeStartedAt);
-          }
-        } catch (cmErr) {
-          // non-critical
-        }
-        // Fetch family members
-        try {
-          const famRes = await fetch(`/api/dashboard/patients/${id}/family`);
-          if (famRes.ok) {
-            const famData = await famRes.json();
-            setFamily(famData.family || []);
-          }
-        } catch (famErr) {
-          // non-critical
-        }
+        secondaryPromises.push(
+          fetchCached(`/api/dashboard/patients/${id}/chat-mode`, {}, 30_000)
+            .then(cmData => {
+              setManualMode(cmData.manualMode);
+              setManualModeStartedAt(cmData.manualModeStartedAt);
+            })
+            .catch(() => {})
+        );
+        secondaryPromises.push(
+          fetchCached(`/api/dashboard/patients/${id}/family`, {}, 30_000)
+            .then(famData => setFamily(famData.family || []))
+            .catch(() => {})
+        );
+
+        Promise.all(secondaryPromises).catch(() => {});
       } catch (e) {
         console.error('Failed to load patient', e);
-      } finally {
         setLoading(false);
       }
     }
     load();
   }, [id]);
 
-  async function loadMessages() {
+  async function loadMessages(force = false) {
     setMessagesLoading(true);
     try {
-      const res = await fetch(`/api/dashboard/patients/${id}/messages`);
-      const data = await res.json();
+      if (force) invalidateFetchCache(`/api/dashboard/patients/${id}/messages`);
+      const data = await fetchCached(`/api/dashboard/patients/${id}/messages`, {}, 30_000);
       setMessages(data.messages || []);
     } catch (e) {
       console.error('Failed to load messages', e);
@@ -126,8 +185,8 @@ export default function PatientDetailPage() {
     if (activeTab !== 'messages') return;
     const eventSource = new EventSource(`/api/dashboard/patients/${id}/messages/stream`);
     eventSource.onmessage = (event) => {
-      if (event.data === 'new_message') {
-        loadMessages();
+      if (event.data === 'new_message' && document.visibilityState === 'visible') {
+        loadMessages(true);
       }
     };
     eventSource.onerror = () => eventSource.close();
@@ -143,8 +202,7 @@ export default function PatientDetailPage() {
     }
     setLinkSearching(true);
     const timer = setTimeout(() => {
-      fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(linkSearch)}`)
-        .then(r => r.json())
+      fetchCached(`/api/dashboard/patients/search?q=${encodeURIComponent(linkSearch)}`, {}, 30_000)
         .then(d => {
           const filtered = (d.patients || []).filter(p => p.id !== id && !family.some(f => f.id === p.id));
           setLinkSearchResults(filtered);
@@ -165,9 +223,9 @@ export default function PatientDetailPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        const reload = await fetch(`/api/dashboard/patients/${id}/family`);
-        const reloadData = await reload.json();
-        setFamily(reloadData.family || []);
+        const created = data.family;
+        setFamily(prev => created ? [...prev, created] : prev);
+        invalidateFetchCache(`/api/dashboard/patients/${id}/family`);
         setShowLinkFamily(false);
         setLinkSearch('');
         setLinkSearchResults([]);
@@ -253,76 +311,17 @@ export default function PatientDetailPage() {
     }
   }
 
-  const tabs = [
+  const tabs = useMemo(() => [
     { id: 'visits', label: 'Visit History', count: visits.length },
     { id: 'feedback', label: 'Feedback', count: feedback.filter(f => f.rating).length },
     { id: 'messages', label: 'Messages', count: null },
-  ];
+  ], [visits.length, feedback]);
 
-  function formatDate(d) {
-    if (!d) return 'N/A';
-    const dateStr = typeof d === 'string' ? d.slice(0, 10) : String(d).slice(0, 10);
-    return fmtDate(dateStr, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-  }
-
-  function formatCurrency(amount) {
-    return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
-  }
-
-  function getInitials(name) {
-    if (!name || name === '?') return '?';
-    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-  }
-
-  function getSignedUrl(key) {
-    return `/api/dashboard/media/signed?key=${encodeURIComponent(key)}`;
-  }
-
-  function ratingEmoji(rating) {
-    if (rating === 'great') return { emoji: '😊', label: 'Great', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30' };
-    if (rating === 'okay') return { emoji: '🙂', label: 'Okay', color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30' };
-    if (rating === 'poor') return { emoji: '😞', label: 'Poor', color: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30' };
-    return { emoji: '—', label: rating, color: 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800' };
-  }
-
-  function ratingIcon(rating) {
-    switch (rating) {
-      case 'great': return '😊';
-      case 'okay': return '🙂';
-      case 'poor': return '😞';
-      default: return '—';
-    }
-  }
-
-  function ratingBadge(rating) {
-    switch (rating) {
-      case 'great': return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
-      case 'okay': return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
-      case 'poor': return 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
-      default: return 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700';
-    }
-  }
-
-  function getAvatarColor(name) {
-    const colors = [
-      'from-blue-500 to-blue-600',
-      'from-emerald-500 to-teal-600',
-      'from-violet-500 to-purple-600',
-      'from-rose-500 to-pink-600',
-      'from-amber-500 to-orange-600',
-    ];
-    let hash = 0;
-    for (let i = 0; i < (name || '').length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
-  }
-
-  const completedVisits = visits.filter(v => v.status === 'completed');
-  const totalRevenue = completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0);
-  const totalCollected = completedVisits.reduce((sum, v) => sum + Number(v.paid_amount || 0), 0);
-  const totalDue = totalRevenue - totalCollected;
-  const upcomingFollowUp = completedVisits.find(v => v.follow_up_date && v.follow_up_date >= new Date().toISOString().slice(0, 10));
+  const completedVisits = useMemo(() => visits.filter(v => v.status === 'completed'), [visits]);
+  const totalRevenue = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0), [completedVisits]);
+  const totalCollected = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.paid_amount || 0), 0), [completedVisits]);
+  const totalDue = useMemo(() => totalRevenue - totalCollected, [totalRevenue, totalCollected]);
+  const upcomingFollowUp = useMemo(() => completedVisits.find(v => v.follow_up_date && v.follow_up_date >= new Date().toISOString().slice(0, 10)), [completedVisits]);
 
   if (loading) {
     return (
@@ -395,7 +394,7 @@ export default function PatientDetailPage() {
                       {patient.name === '?' ? 'Unknown Patient' : patient.name}
                     </h1>
                   )}
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-sm sm:text-base text-gray-500 dark:text-gray-400">
                     <span className="flex items-center gap-1.5">
                       <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       {editing ? (
@@ -530,14 +529,14 @@ export default function PatientDetailPage() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {family.map(m => (
-                  <div key={m.id} className="group relative inline-flex items-center gap-2 px-2.5 sm:px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-all text-xs sm:text-sm">
+                  <div key={m.id} className="group relative inline-flex items-center gap-2 px-2.5 sm:px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-all text-sm sm:text-base">
                     <button onClick={() => router.push(`/dashboard/patients/${m.id}`)} className="inline-flex items-center gap-2">
-                      <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-violet-300 dark:bg-violet-600 flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-white shrink-0">
+                      <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-violet-300 dark:bg-violet-600 flex items-center justify-center text-xs sm:text-xs font-bold text-white shrink-0">
                         {(m.name || '?')[0].toUpperCase()}
                       </span>
                       <span className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[100px]">{m.name}</span>
-                      {m.age && <span className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500">{m.age}y</span>}
-                      <span className="text-[10px] text-violet-400 dark:text-violet-500 capitalize">({m.relationship_type})</span>
+                      {m.age && <span className="text-sm sm:text-base text-gray-400 dark:text-gray-500">{m.age}y</span>}
+                      <span className="text-xs text-violet-400 dark:text-violet-500 capitalize">({m.relationship_type})</span>
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleUnlinkPatient(m.relationship_id, m.name); }}
@@ -558,7 +557,7 @@ export default function PatientDetailPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-4 sm:mt-6">
               <button onClick={() => setActiveTab('visits')}
                 className="text-left bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/20 rounded-2xl p-3 sm:p-4 border border-blue-200/50 dark:border-blue-800 hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-[0.98]">
-                <div className="flex items-center gap-1.5 sm:gap-2 text-blue-600 dark:text-blue-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-blue-600 dark:text-blue-400 text-sm sm:text-base font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
                   <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   Visits
                 </div>
@@ -566,43 +565,43 @@ export default function PatientDetailPage() {
               </button>
               <button onClick={() => setActiveTab('visits')}
                 className="text-left bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-2xl p-3 sm:p-4 border border-emerald-200/50 dark:border-emerald-800 hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-[0.98]">
-                <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-600 dark:text-emerald-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-600 dark:text-emerald-400 text-sm sm:text-base font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
                   <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   Revenue
                 </div>
                 <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{formatCurrency(totalRevenue)}</div>
                 {totalDue > 0 && (
-                  <div className="text-[10px] sm:text-xs text-amber-500 dark:text-amber-400 mt-0.5">Collected {formatCurrency(totalCollected)} · Due {formatCurrency(totalDue)}</div>
+                  <div className="text-sm sm:text-base text-amber-500 dark:text-amber-400 mt-0.5">Collected {formatCurrency(totalCollected)} · Due {formatCurrency(totalDue)}</div>
                 )}
               </button>
               <button onClick={() => setActiveTab('visits')}
                 className="text-left bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-900/20 dark:to-violet-800/20 rounded-2xl p-3 sm:p-4 border border-violet-200/50 dark:border-violet-800 hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-[0.98]">
-                <div className="flex items-center gap-1.5 sm:gap-2 text-violet-600 dark:text-violet-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-violet-600 dark:text-violet-400 text-sm sm:text-base font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
                   <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   Last Visit
                 </div>
-                <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">
+                <div className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">
                   {completedVisits[0] ? formatDate(completedVisits[0].date) : 'N/A'}
                 </div>
               </button>
               {upcomingFollowUp ? (
                 <button onClick={() => setActiveTab('visits')}
                   className="text-left bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/20 rounded-2xl p-3 sm:p-4 border border-amber-200/50 dark:border-amber-800 hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-[0.98]">
-                  <div className="flex items-center gap-1.5 sm:gap-2 text-amber-600 dark:text-amber-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-amber-600 dark:text-amber-400 text-sm sm:text-base font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
                     <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     Follow-up
                   </div>
-                  <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">
+                  <div className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">
                     {formatDate(upcomingFollowUp.follow_up_date)}
                   </div>
                 </button>
               ) : (
                 <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/20 rounded-2xl p-3 sm:p-4 border border-amber-200/50 dark:border-amber-800 opacity-70">
-                  <div className="flex items-center gap-1.5 sm:gap-2 text-amber-600 dark:text-amber-400 text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 text-amber-600 dark:text-amber-400 text-sm sm:text-base font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
                     <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     Follow-up
                   </div>
-                  <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">None</div>
+                  <div className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">None</div>
                 </div>
               )}
             </div>
@@ -615,7 +614,7 @@ export default function PatientDetailPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 py-2.5 px-2 md:px-4 rounded-xl text-xs md:text-sm font-medium transition-all whitespace-nowrap ${
+                className={`flex-1 py-2.5 px-2 md:px-4 rounded-xl text-sm md:text-base font-medium transition-all whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
@@ -680,13 +679,13 @@ export default function PatientDetailPage() {
                           {(visit.treatment || visit.consultation_fee || visit.treatment_charges || visit.medicine_charges) && (
                             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
                               {visit.treatment && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-sm sm:text-base font-medium text-gray-700 dark:text-gray-300 shadow-sm">
                                   <Stethoscope className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" />
                                   {visit.treatment}
                                 </span>
                               )}
                               {(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0)) > 0 && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-sm sm:text-base font-medium text-gray-700 dark:text-gray-300 shadow-sm">
                                   <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500" />
                                   {formatCurrency(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0))}
                                   {visit.payment_status === 'partial' && (
@@ -788,7 +787,7 @@ export default function PatientDetailPage() {
                       <div key={rating} className={`rounded-xl p-3 sm:p-4 text-center ${r.color} border border-current/20`}>
                         <div className="text-xl sm:text-2xl mb-1">{r.emoji}</div>
                         <div className="text-base sm:text-lg font-bold">{entries.length}</div>
-                        <div className="text-[10px] sm:text-xs font-medium opacity-70">{r.label}</div>
+                        <div className="text-sm sm:text-base font-medium opacity-70">{r.label}</div>
                       </div>
                     );
                   })}
@@ -801,7 +800,7 @@ export default function PatientDetailPage() {
                           {ratingIcon(f.rating)}
                           {f.rating}
                         </span>
-                        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
                           {new Date(f.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </span>
                       </div>
@@ -869,7 +868,7 @@ export default function PatientDetailPage() {
                 {messages.map((msg, i) => (
                   <div key={msg.id || i} className={`flex gap-3 ${msg.role === 'bot' ? 'justify-start' : 'justify-end'}`}>
                     {msg.role === 'bot' && (
-                      <div className="w-7 h-7 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center text-[10px] font-bold shrink-0 mt-1">
+                      <div className="w-7 h-7 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center text-xs font-bold shrink-0 mt-1">
                         B
                       </div>
                     )}
@@ -881,14 +880,14 @@ export default function PatientDetailPage() {
                       }`}>
                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                       </div>
-                      <div className={`flex items-center gap-2 mt-1 text-[10px] text-gray-400 dark:text-gray-500 ${msg.role === 'user' ? 'text-right' : ''}`}>
+                      <div className={`flex items-center gap-2 mt-1 text-xs text-gray-400 dark:text-gray-500 ${msg.role === 'user' ? 'text-right' : ''}`}>
                         <span>{new Date(msg.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                         {msg.intent && <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">{msg.intent}</span>}
                         {msg.state && <span className="text-gray-300 dark:text-gray-600">({msg.state})</span>}
                       </div>
                     </div>
                     {msg.role === 'user' && (
-                      <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-[10px] font-bold shrink-0 mt-1">
+                      <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-xs font-bold shrink-0 mt-1">
                         P
                       </div>
                     )}
@@ -982,7 +981,7 @@ export default function PatientDetailPage() {
                     >
                       Cancel
                     </button>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center flex-1">Select a patient and relationship above</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 text-center flex-1">Select a patient and relationship above</p>
                   </div>
                 </div>
               </div>
@@ -1059,7 +1058,7 @@ export default function PatientDetailPage() {
                         }
                       }}
                     />
-                    <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500 text-right">
+                    <p className="mt-2 text-xs text-gray-400 dark:text-gray-500 text-right">
                       {patient.phone ? `Via WhatsApp — ${patient.phone}` : 'No phone number on file'}
                     </p>
                   </div>

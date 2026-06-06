@@ -11,11 +11,11 @@ import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
 import { fetchCached } from '@/lib/clientFetchCache';
 
 function StatusBadge({ status, arrivalStatus }) {
-  if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
-  if (status === 'no_show') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">No Show</span>;
-  if (arrivalStatus === 'called') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">In Session</span>;
-  if (arrivalStatus === 'arrived') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">Waiting</span>;
-  return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
+  if (status === 'completed') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
+  if (status === 'no_show') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">No Show</span>;
+  if (arrivalStatus === 'called') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">In Session</span>;
+  if (arrivalStatus === 'arrived') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">Waiting</span>;
+  return <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
 }
 
 const STAT_CARDS = [
@@ -373,7 +373,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400 mb-3">
+      <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> {totalBooked} booked</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400" /> {available} open</span>
         <span className="ml-auto text-gray-400 dark:text-gray-500">{Math.round((totalBooked / slots.length) * 100)}% full</span>
@@ -381,7 +381,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
 
       {morningSlots.length > 0 && (
         <div className="mb-3">
-          <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Morning</p>
+          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Morning</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
             {morningSlots.map(slotTime => {
               const isBooked = !!bookedByTime[slotTime];
@@ -403,20 +403,20 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
                     }
                   }}
                 >
-                    <div className="px-2.5 py-2.5">
+                    <div className="px-3 py-3">
                     <div className="flex items-center justify-center gap-1">
                       <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
-                      <span className={`text-xs font-semibold ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
+                      <span className={`text-sm font-semibold leading-tight ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate leading-tight">{bookedAppt.patient_name || 'Booked'}</p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium truncate leading-tight">{bookedAppt.patient_name || 'Booked'}</p>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <Plus className="w-2.5 h-2.5 text-green-500 dark:text-green-400" />
-                        <p className="text-[10px] text-green-600 dark:text-green-400 font-medium leading-tight">Book</p>
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium leading-tight">Book</p>
                       </div>
                     )}
                   </div>
@@ -435,7 +435,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
 
       {afternoonSlots.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Afternoon</p>
+          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Afternoon</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
             {afternoonSlots.map(slotTime => {
               const isBooked = !!bookedByTime[slotTime];
@@ -457,20 +457,20 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
                     }
                   }}
                 >
-                    <div className="px-2.5 py-2.5">
+                    <div className="px-3 py-3">
                     <div className="flex items-center justify-center gap-1">
                       <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
-                      <span className={`text-xs font-semibold ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
+                      <span className={`text-sm font-semibold leading-tight ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate leading-tight">{bookedAppt.patient_name || 'Booked'}</p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium truncate leading-tight">{bookedAppt.patient_name || 'Booked'}</p>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <Plus className="w-2.5 h-2.5 text-green-500 dark:text-green-400" />
-                        <p className="text-[10px] text-green-600 dark:text-green-400 font-medium leading-tight">Book</p>
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium leading-tight">Book</p>
                       </div>
                     )}
                   </div>
@@ -707,31 +707,31 @@ export default function DashboardPage() {
             <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30">
               <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
             </div>
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Today&apos;s Collection</span>
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">{completed.length} completed visits</span>
+              <span className="text-base font-semibold text-gray-700 dark:text-gray-300">Today&apos;s Collection</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{completed.length} completed visits</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div>
-              <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Collected</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 uppercase">Collected</span>
               <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(todayCollected)}</p>
             </div>
             <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
             <div>
-              <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Pending</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 uppercase">Pending</span>
               <p className="text-lg font-bold text-amber-500 dark:text-amber-400">{formatCurrency(todayPending)}</p>
             </div>
             <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
             <div className="flex gap-3">
               {Object.entries(paymentMethods).map(([method, count]) => (
                 <div key={method} className="text-center">
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase block">{method}</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 uppercase block">{method}</span>
                   <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{count}</span>
                 </div>
               ))}
             </div>
             {todayPending > 0 && (
               <button onClick={() => router.push('/dashboard/appointments?status=completed')}
-                className="ml-auto px-3 py-1.5 text-[11px] font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all">
+                className="ml-auto px-3 py-1.5 text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all">
                 Collect Pending
               </button>
             )}
@@ -745,7 +745,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-blue-500 animate-dot-pulse" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Upcoming</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Upcoming</h2>
             </div>
             <Link href="/dashboard/appointments" className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors">
               View all →
@@ -762,7 +762,7 @@ export default function DashboardPage() {
                       {(a.patient_name || 'P')[0].toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
                         {a.is_priority ? '⭐ ' : ''}
                         {a.patient_id ? (
                           <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
@@ -772,10 +772,10 @@ export default function DashboardPage() {
                           a.patient_name || 'Patient'
                         )}
                         {recentBookings.some(b => b.id === a.id) && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 animate-scale-in">New</span>
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 animate-scale-in">New</span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{a.time?.slice(0, 5)} — {Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'}</p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 truncate">{a.time?.slice(0, 5)} — {Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'}</p>
                     </div>
                   </div>
                   <StatusBadge status={a.status} arrivalStatus={a.arrival_status} />
@@ -788,7 +788,7 @@ export default function DashboardPage() {
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 transition-colors duration-200">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-dot-pulse" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Activity</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Activity</h2>
           </div>
           {completed.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-500 text-sm py-8 text-center">No completed visits for this date.</p>
@@ -801,7 +801,7 @@ export default function DashboardPage() {
                       {(a.patient_name || 'P')[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
                         {a.patient_id ? (
                           <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
                             {a.patient_name || 'Patient'}
@@ -810,7 +810,7 @@ export default function DashboardPage() {
                           a.patient_name || 'Patient'
                         )}
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'} — ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}</p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 truncate">{Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'} — ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}</p>
                     </div>
                   </div>
                   <StatusBadge status={a.status} />

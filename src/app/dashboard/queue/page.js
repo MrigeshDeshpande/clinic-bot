@@ -140,7 +140,7 @@ export default function QueuePage() {
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-500" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Waiting</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Waiting</h2>
             </div>
             <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">{waiting.length}</span>
           </div>
@@ -153,15 +153,15 @@ export default function QueuePage() {
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       {a.is_priority && <Star className="w-3 h-3 text-amber-400 fill-amber-400" />}
-                      <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{a.patient_name || 'Patient'}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100 text-base">{a.patient_name || 'Patient'}</span>
                     </div>
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">{a.time?.slice(0, 5)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{a.time?.slice(0, 5)}</span>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                   <button
                     onClick={() => handleArrival(a.id, 'arrived')}
                     disabled={actionLoading === a.id}
-                    className="w-full py-3 text-xs font-medium rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                    className="w-full py-3 text-sm font-medium rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
                   >
                     <UserCheck className="w-4 h-4" /> Mark Arrived
                   </button>
@@ -176,7 +176,7 @@ export default function QueuePage() {
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <UserCheck className="w-4 h-4 text-blue-500" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">In Session</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">In Session</h2>
             </div>
             <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
               {arrived.length + inSession.length}
@@ -190,14 +190,14 @@ export default function QueuePage() {
                 {arrived.map(a => (
                   <div key={a.id} className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 border border-amber-200 dark:border-amber-800">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{a.patient_name || 'Patient'}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400">Arrived {a.arrived_at ? new Date(a.arrived_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100 text-base">{a.patient_name || 'Patient'}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Arrived {a.arrived_at ? new Date(a.arrived_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
                     onClick={() => handleArrival(a.id, 'called')}
                     disabled={actionLoading === a.id}
-                    className="w-full py-3 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                    className="w-full py-3 text-sm font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
                   >
                     <Phone className="w-4 h-4" /> Call Patient
                   </button>
@@ -206,13 +206,13 @@ export default function QueuePage() {
                 {inSession.map(a => (
                   <div key={a.id} className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800 ring-1 ring-blue-300 dark:ring-blue-700">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{a.patient_name || 'Patient'}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400">{a.time?.slice(0, 5)}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100 text-base">{a.patient_name || 'Patient'}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{a.time?.slice(0, 5)}</span>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
                     onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=queue`)}
-                    className="w-full py-3 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all flex items-center justify-center gap-1"
+                    className="w-full py-3 text-sm font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all flex items-center justify-center gap-1"
                   >
                     <ArrowRight className="w-4 h-4" /> Start Visit
                     </button>
@@ -228,7 +228,7 @@ export default function QueuePage() {
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <UserCheck className="w-4 h-4 text-green-500" />
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Completed</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Completed</h2>
             </div>
             <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">{completed.length}</span>
           </div>
@@ -240,7 +240,7 @@ export default function QueuePage() {
                 <div key={a.id} className="bg-green-50/50 dark:bg-green-900/10 rounded-lg p-3 border border-green-100 dark:border-green-800">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{a.patient_name || 'Patient'}</span>
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">{a.time?.slice(0, 5)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{a.time?.slice(0, 5)}</span>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{a.treatment || 'Visit'}</p>
                 </div>

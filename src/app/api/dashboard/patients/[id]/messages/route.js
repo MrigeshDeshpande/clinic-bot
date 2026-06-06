@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
+import { getCached, setCache } from '@/lib/dataCache';
 
 export async function GET(req, { params }) {
   const rateErr = checkRateLimit(req);
@@ -12,6 +13,10 @@ export async function GET(req, { params }) {
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '200', 10), 500);
     const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10), 0);
+
+    const cacheKey = `patient_messages:${id}:${limit}:${offset}`;
+    const cached = getCached(cacheKey, 30_000);
+    if (cached) return NextResponse.json(cached);
 
     // Get patient's wa_id first
     const patientRows = await sql`
@@ -41,7 +46,9 @@ export async function GET(req, { params }) {
       LIMIT ${limit} OFFSET ${offset}
     `;
 
-    return NextResponse.json({ messages: sanitizeResponse(messages || []) });
+    const responseData = { messages: sanitizeResponse(messages || []) };
+    setCache(cacheKey, responseData, 30_000);
+    return NextResponse.json(responseData);
   } catch (error) {
     logger.error('PATIENT_MESSAGES_ERROR', { params, error: error.message });
     return jsonError(error);

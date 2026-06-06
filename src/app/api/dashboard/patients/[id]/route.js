@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSql, runMigrations } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
+import { getCached, setCache, invalidateCache } from '@/lib/dataCache';
 
 export async function GET(req, { params }) {
   const rateErr = checkRateLimit(req);
@@ -13,6 +14,10 @@ export async function GET(req, { params }) {
     if (!id) {
       return NextResponse.json({ error: 'Patient ID required' }, { status: 400 });
     }
+
+    const cacheKey = `patient_detail:${id}`;
+    const cached = getCached(cacheKey, 60_000);
+    if (cached) return NextResponse.json(cached);
 
     const [patientRows, visits] = await Promise.all([
       sql`
@@ -45,7 +50,9 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ patient: sanitizeResponse(patient), visits: sanitizeResponse(visits || []) });
+    const responseData = { patient: sanitizeResponse(patient), visits: sanitizeResponse(visits || []) };
+    setCache(cacheKey, responseData, 60_000);
+    return NextResponse.json(responseData);
   } catch (error) {
     logger.error('PATIENT_DETAIL_ERROR', { params, error: error.message });
     return jsonError(error);
@@ -119,6 +126,7 @@ export async function PATCH(req, { params }) {
       `;
     }
 
+    invalidateCache(`patient_detail:${id}`);
     logger.info('PATIENT_UPDATED', { id, fields: setClauses.map(c => c.split(' =')[0]) });
     return NextResponse.json({ patient: rows[0] });
   } catch (error) {

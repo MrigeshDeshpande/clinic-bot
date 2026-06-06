@@ -88,7 +88,7 @@ function GlobalSearch() {
           onChange={e => { setQuery(e.target.value); if (e.target.value.length < 2) { setResults([]); } }}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder="Search patients..."
-          className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 outline-none text-xs text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"
+          className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 outline-none text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -137,7 +137,7 @@ function SidebarContent({ pathname, onNavClick }) {
           </div>
           <div>
             <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500">Dental Clinic</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
           </div>
         </Link>
       </div>
@@ -290,7 +290,7 @@ export default function DashboardLayout({ children }) {
             </button>
             <Link href="/dashboard" className="flex items-center gap-2">
               <div className="w-7 h-7 bg-gray-900 dark:bg-white rounded-md flex items-center justify-center">
-                <span className="text-white dark:text-gray-900 text-[10px] font-bold">SB</span>
+                <span className="text-white dark:text-gray-900 text-xs font-bold">SB</span>
               </div>
               <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shri Balaji</span>
             </Link>

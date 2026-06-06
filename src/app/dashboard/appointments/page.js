@@ -14,12 +14,12 @@ import { DateContext, ToastContext } from '../layout';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 
 function StatusBadge({ status, arrivalStatus }) {
-  if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
-  if (status === 'no_show') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">No Show</span>;
-  if (status === 'cancelled') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 line-through">Cancelled</span>;
-  if (arrivalStatus === 'called') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">In Session</span>;
-  if (arrivalStatus === 'arrived') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">Waiting</span>;
-  return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
+  if (status === 'completed') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
+  if (status === 'no_show') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">No Show</span>;
+  if (status === 'cancelled') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 line-through">Cancelled</span>;
+  if (arrivalStatus === 'called') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">In Session</span>;
+  if (arrivalStatus === 'arrived') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">Waiting</span>;
+  return <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
 }
 
 function getTreatments(a) {
@@ -35,11 +35,11 @@ function TreatmentPills({ appointment }) {
   return (
     <div className="flex flex-wrap gap-1">
       {treatments.map((t, i) => (
-        <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+        <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
           {t}
         </span>
       ))}
-      <span className="text-[10px] text-gray-400 dark:text-gray-500 self-center">×{treatments.length}</span>
+      <span className="text-xs text-gray-400 dark:text-gray-500 self-center">×{treatments.length}</span>
     </div>
   );
 }
@@ -394,12 +394,12 @@ function AppointmentsContentInner() {
                 <button key={cfg.key} onClick={() => setFilterKey(isActive ? null : cfg.key)}
                   className={`w-full text-left bg-white dark:bg-gray-900 rounded-xl border shadow-sm p-4 transition-all duration-200 group cursor-pointer active:scale-[0.98] ${isActive ? 'border-blue-500 dark:border-blue-400 ring-1 ring-blue-500/20 dark:ring-blue-400/20 -translate-y-0.5 shadow-md' : 'border-gray-100 dark:border-gray-800 hover:shadow-md dark:hover:shadow-gray-900/50 hover:-translate-y-0.5'}`}>
                   <div className="flex items-center justify-between mb-2">
-                    <p className={`text-xs font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>{cfg.label}</p>
+                    <p className={`text-sm font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>{cfg.label}</p>
                     <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center ring-1 ${cfg.ring} group-hover:scale-110 transition-transform`}>
                       <svg className={`w-4 h-4 ${cfg.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">{cfg.icon}</svg>
                     </div>
                   </div>
-                  <p className={`text-2xl font-bold ${cfg.color}`}>{Number(data.totals[cfg.key] || 0)}</p>
+                  <p className={`text-3xl font-bold leading-tight ${cfg.color}`}>{Number(data.totals[cfg.key] || 0)}</p>
                 </button>
                 );
               })}
@@ -409,7 +409,7 @@ function AppointmentsContentInner() {
           {/* Bulk Actions */}
           {data?.totals?.confirmed > 1 && (
               <div className="flex items-center gap-2 px-1">
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Bulk:</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Bulk:</span>
               <button
                 onClick={async () => {
                   if (!confirm(`Mark all ${data.totals.confirmed} confirmed appointments as completed?`)) return;
@@ -421,7 +421,7 @@ function AppointmentsContentInner() {
                     setData(d);
                   }
                 }}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all hover:shadow-sm"
+                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all hover:shadow-sm"
               >
                 ✓ Complete All
               </button>
@@ -436,7 +436,7 @@ function AppointmentsContentInner() {
                     setData(d);
                   }
                 }}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition-all hover:shadow-sm"
+                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition-all hover:shadow-sm"
               >
                 ✕ Cancel All
               </button>
@@ -449,14 +449,14 @@ function AppointmentsContentInner() {
               <table className="w-full min-w-[640px]">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/80">
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Patient</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Treatment</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                    <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
-                    <th className="text-right px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                    <th className="text-left px-5 py-3.5 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</th>
+                    <th className="text-left px-5 py-3.5 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Patient</th>
+                    <th className="text-left px-5 py-3.5 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</th>
+                    <th className="text-left px-5 py-3.5 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</th>
+                    <th className="text-left px-5 py-3.5 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Treatment</th>
+                    <th className="text-left px-5 py-3.5 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="text-left px-5 py-3.5 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                    <th className="text-right px-5 py-3.5 text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -477,7 +477,7 @@ function AppointmentsContentInner() {
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
                             <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'completed' ? 'bg-green-400' : a.status === 'no_show' ? 'bg-red-400' : 'bg-blue-400'}`} />
-                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{a.time?.slice(0, 5)}</span>
+                            <span className="text-base font-medium text-gray-900 dark:text-gray-100">{a.time?.slice(0, 5)}</span>
                             {a.is_priority && <span className="text-xs">⭐</span>}
                           </div>
                         </td>
@@ -487,15 +487,15 @@ function AppointmentsContentInner() {
                               {(a.patient_name || 'P')[0].toUpperCase()}
                             </span>
                             {a.patient_id ? (
-                              <Link href={`/dashboard/patients/${a.patient_id}`} className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate max-w-[160px]">
+                              <Link href={`/dashboard/patients/${a.patient_id}`} className="text-base text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate max-w-[160px]">
                                 {a.patient_name || '—'}
                               </Link>
                             ) : (
-                              <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[160px]">{a.patient_name || '—'}</span>
+                              <span className="text-base text-gray-700 dark:text-gray-300 truncate max-w-[160px]">{a.patient_name || '—'}</span>
                             )}
                           </div>
                         </td>
-                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        <td className="px-5 py-4 text-base text-gray-500 dark:text-gray-400">
                           <InlineEdit
                             appointmentId={a.id}
                             field="patient_phone"
@@ -508,7 +508,7 @@ function AppointmentsContentInner() {
                             ) : '—'}
                           />
                         </td>
-                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        <td className="px-5 py-4 text-base text-gray-500 dark:text-gray-400">
                           <InlineEdit
                             appointmentId={a.id}
                             field="location"
@@ -539,7 +539,7 @@ function AppointmentsContentInner() {
                           </div>
                         </td>
                         <td className="px-5 py-4"><StatusBadge status={a.status} arrivalStatus={a.arrival_status} /></td>
-                        <td className="px-5 py-4 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <td className="px-5 py-4 text-base font-medium text-gray-700 dark:text-gray-300">
                           {editing === `${a.id}::fees` ? (
                             <div className="flex gap-1 items-center min-w-[200px]">
                               <input type="number" value={editValue.split(',')[0] || ''} onChange={e => setEditValue(`${e.target.value},${editValue.split(',')[1] || ''},${editValue.split(',')[2] || ''}`)}
@@ -568,42 +568,42 @@ function AppointmentsContentInner() {
                           <div className="flex gap-1 justify-end">
                             {a.status === 'confirmed' && a.arrival_status === 'scheduled' && (
                               <button onClick={() => handleArrivalChange(a.id, 'arrived')} disabled={!!arrivalUpdating}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition-all disabled:opacity-50">
+                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition-all disabled:opacity-50">
                                 📍 Arrived
                               </button>
                             )}
                             {a.status === 'confirmed' && a.arrival_status === 'arrived' && (
                               <button onClick={() => handleArrivalChange(a.id, 'called')} disabled={!!arrivalUpdating}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50">
+                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50">
                                 📞 Call
                               </button>
                             )}
                             {a.status === 'confirmed' && (
                               <button onClick={() => setCompleteModal(a)}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all">
+                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all">
                                 ✓ {a.arrival_status === 'called' ? 'Complete' : 'Done'}
                               </button>
                             )}
                             {a.status === 'confirmed' && (
                               <button onClick={() => handleStatusChange(a.id, 'no_show')} disabled={!!updating}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition-all disabled:opacity-50">
+                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition-all disabled:opacity-50">
                                 ✕ No Show
                               </button>
                             )}
                             {a.status === 'confirmed' && (
                               <button onClick={() => setRescheduleModal(a)} disabled={!!cancelUpdating}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50">
+                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50">
                                 ↻ Reschedule
                               </button>
                             )}
                             {a.status === 'confirmed' && (
                               <button onClick={() => handleCancel(a.id)} disabled={!!cancelUpdating}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 transition-all disabled:opacity-50">
+                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 border border-gray-200 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800 transition-all disabled:opacity-50">
                                 ✕ Cancel
                               </button>
                             )}
                             {a.status === 'completed' && (
-                              <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
+                              <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400 font-medium">
                                 ✓ Completed
                                 {!a.prescription_key && (
                                   <button onClick={async (e) => {
@@ -614,17 +614,17 @@ function AppointmentsContentInner() {
                                       if (res.ok && data.url) window.open(data.url, '_blank');
                                     } catch {}
                                   }}
-                                    className="px-1 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-[10px]">
+                                    className="px-1 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-xs">
                                     Rx
                                   </button>
                                 )}
                               </span>
                             )}
                             {a.status === 'no_show' && (
-                              <span className="text-xs text-red-600 dark:text-red-400 font-medium">✕ No Show</span>
+                              <span className="text-sm text-red-600 dark:text-red-400 font-medium">✕ No Show</span>
                             )}
                             {a.status === 'cancelled' && (
-                              <span className="text-xs text-gray-400 dark:text-gray-500 font-medium line-through">Cancelled</span>
+                              <span className="text-sm text-gray-400 dark:text-gray-500 font-medium line-through">Cancelled</span>
                             )}
                           </div>
                         </td>

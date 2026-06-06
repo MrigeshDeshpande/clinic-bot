@@ -189,7 +189,7 @@ export default function StatsPage() {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2.5 mb-6">
               <DollarSign className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Revenue Breakdown</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Revenue Breakdown</h2>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="space-y-4">
@@ -200,13 +200,13 @@ export default function StatsPage() {
                 ].map(item => (
                   <div key={item.label}>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
+                        <span className="text-base font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
                       <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(item.value)}</span>
                     </div>
                     <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${item.color} transition-all duration-700`} style={{ width: `${Math.max(item.pct, 2)}%` }} />
                     </div>
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{item.pct.toFixed(0)}% of total</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{item.pct.toFixed(0)}% of total</span>
                   </div>
                 ))}
               </div>
@@ -228,7 +228,7 @@ export default function StatsPage() {
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center flex-col">
                       <span className="text-xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(stats.totalRevenue)}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400">Total</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Total</span>
                     </div>
                   </div>
                 </div>
@@ -242,7 +242,7 @@ export default function StatsPage() {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2.5 mb-6">
               <Users className="w-5 h-5 text-amber-500 dark:text-amber-400" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Top Patients by Revenue</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Top Patients by Revenue</h2>
               <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">({periodLabel})</span>
             </div>
             <div className="space-y-3">
@@ -267,7 +267,7 @@ export default function StatsPage() {
                         <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                           <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-700" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">{p.visitCount} visit{p.visitCount !== 1 ? 's' : ''}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{p.visitCount} visit{p.visitCount !== 1 ? 's' : ''}</span>
                       </div>
                     </div>
                   </div>
@@ -281,7 +281,7 @@ export default function StatsPage() {
         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
           <div className="flex items-center gap-2.5 mb-6">
             <TrendingUp className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Daily Trend</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Daily Trend</h2>
           </div>
           {daily.length === 0 ? (
             <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data for this period</div>
@@ -336,7 +336,7 @@ export default function StatsPage() {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2.5 mb-6">
               <Clock className="w-5 h-5 text-amber-500 dark:text-amber-400" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Peak Hours</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Peak Hours</h2>
             </div>
             {peakHours.length === 0 ? (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
@@ -357,7 +357,7 @@ export default function StatsPage() {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2.5 mb-6">
               <Calendar className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">By Day of Week</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">By Day of Week</h2>
             </div>
             {dayOfWeek.length === 0 ? (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
@@ -379,7 +379,7 @@ export default function StatsPage() {
         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
           <div className="flex items-center gap-2.5 mb-6">
             <Stethoscope className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Treatment Breakdown</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Treatment Breakdown</h2>
           </div>
           {treatments.length === 0 ? (
             <div className="text-center py-12">
@@ -406,7 +406,7 @@ export default function StatsPage() {
                   return (
                     <div key={t.treatment || i} className="group">
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.treatment}</span>
+                        <span className="text-base font-medium text-gray-700 dark:text-gray-300">{t.treatment}</span>
                         <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{t.count} visit{t.count !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
@@ -438,7 +438,7 @@ export default function StatsPage() {
         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
           <div className="flex items-center gap-2.5 mb-6">
             <Users className="w-5 h-5 text-violet-500 dark:text-violet-400" />
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Patient Growth</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Patient Growth</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div>
@@ -462,7 +462,7 @@ export default function StatsPage() {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2.5 mb-6">
               <Users className="w-5 h-5 text-rose-500 dark:text-rose-400" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Patients by Sex</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Patients by Sex</h2>
             </div>
             {bySex.length === 0 ? (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
@@ -502,7 +502,7 @@ export default function StatsPage() {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2.5 mb-6">
               <Activity className="w-5 h-5 text-amber-500 dark:text-amber-400" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Patients by Age Group</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Patients by Age Group</h2>
             </div>
             {byAgeGroup.length === 0 ? (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
