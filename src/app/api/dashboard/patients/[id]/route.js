@@ -6,7 +6,6 @@ import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse
 export async function GET(req, { params }) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
-  await runMigrations();
   try {
     const sql = getSql();
     const { id } = await params;

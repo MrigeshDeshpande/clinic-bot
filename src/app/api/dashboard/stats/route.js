@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSql, runMigrations } from '@/db/pool';
+import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 import { getCached, setCache } from '@/lib/dataCache';
@@ -8,8 +8,6 @@ export async function GET(req) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
   try {
-    await runMigrations();
-
     const { searchParams } = new URL(req.url);
     const period = searchParams.get('period') || 'week';
     const cacheKey = `stats:${period}`;

@@ -99,7 +99,6 @@ export async function GET(req) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
   try {
-    await runMigrations();
     const sql = getSql();
 
     const { searchParams } = new URL(req.url);
