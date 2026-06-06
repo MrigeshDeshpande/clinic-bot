@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import dynamic from 'next/dynamic';
-import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Bell, Sun, Moon, X, Menu } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Bell, Settings, Sun, Moon, X, Menu } from 'lucide-react';
 
 const NotificationPanel = dynamic(() => import('@/components/NotificationPanel'), { ssr: false });
 
@@ -22,6 +22,7 @@ const NAV = [
   { href: '/dashboard/feedback', label: 'Feedback', icon: Star },
   { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
   { href: '/dashboard/due-reminders', label: 'Due Reminders', icon: Bell },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 function ThemeToggle({ compact }) {

@@ -491,6 +491,24 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS medications TEXT DEFAULT '';
     `;
 
+    // Settings table — key-value store for admin dashboard customization
+    await db`
+      CREATE TABLE IF NOT EXISTS settings (
+        key         TEXT PRIMARY KEY,
+        value       JSONB NOT NULL DEFAULT '{}',
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`
+      INSERT INTO settings (key, value) VALUES
+        ('clinic', '{"subtitle":"Advanced Dental Care & Implant Center","email":"shribalajiadc@gmail.com","instagram":"shribalaji_adc","timing_mon_sat":"10:00 AM – 8:00 PM","timing_sun":"10:00 AM – 2:00 PM"}'),
+        ('doctor', '{"qualifications":"BDS, MOI","registration":"CGDC/G/24/4198","designation":"Dental Surgeon | Oral Implantologist"}'),
+        ('prescription', '{"primary_color":"#0d1b2a","accent_color":"#3a86c8","watermark_text":"Shri Balaji","show_watermark":true,"font_size":10,"show_rx":true,"show_hindi":false,"generic_substitution":true,"border_enabled":true}'),
+        ('checklists', '{"diagnosis":["Gingivitis","Halitosis","Caries","Deep caries","Periapical Abscess","Grossly Decayed","Missing","Pocket","Periodontitis","Mobility","Lesion","Pericoronitis","Impacted","Fractured Tooth / Cusp","Abrasion / Attrition / Erosion","Irregular Teeth","Calculus","Stains"],"advice":["Avoid hot/cold foods for 24 hours","Take prescribed medicines on time","Maintain oral hygiene","Use soft-bristled toothbrush","Rinse with warm salt water","Avoid hard/sticky foods"]}')
+      ON CONFLICT (key) DO NOTHING;
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {

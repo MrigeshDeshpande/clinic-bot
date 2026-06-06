@@ -9,6 +9,9 @@ import { MEDICINE_SALTS } from '@/lib/medicines';
 import MediaViewer from '@/components/MediaViewer';
 import { fetchCached } from '@/lib/clientFetchCache';
 
+const DRAFT_KEY = 'visit_draft';
+const TEMPLATES_KEY = 'visit_templates';
+
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash', icon: '\u{1F4B5}' },
   { value: 'upi', label: 'UPI', icon: '\u{1F4F1}' },
@@ -189,7 +192,6 @@ function VisitPageInner() {
   useEffect(() => {
     if (!appointmentId) return;
     fetchCached(`/api/dashboard/appointments?id=${appointmentId}`)
-      .then(r => r.json())
       .then(data => {
         const a = data.appointment || data;
         if (a) {
@@ -843,14 +845,7 @@ function VisitPageInner() {
                 {appointmentMeta?.status === 'completed' && (
                   <div>
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription</span>
-                    {appointmentMeta?.prescription_key ? (
-                      <a href={getSignedUrl(appointmentMeta.prescription_key)} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 mt-0.5 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
-                        <Download className="w-3.5 h-3.5" />
-                        Download PDF
-                      </a>
-                    ) : (
-                      <button onClick={async () => {
+                    <button onClick={async () => {
                         try {
                           const res = await fetch(`/api/dashboard/visits/${appointmentMeta.id}/prescription`, { method: 'POST' });
                           const data = await res.json();
@@ -867,7 +862,6 @@ function VisitPageInner() {
                         <Download className="w-3.5 h-3.5" />
                         Generate
                       </button>
-                    )}
                   </div>
                 )}
               </div>

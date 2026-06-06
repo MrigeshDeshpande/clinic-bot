@@ -35,14 +35,7 @@ export async function POST(req, { params }) {
 
     const a = rows[0];
 
-    // If prescription already exists, return the signed URL
-    if (a.prescription_key) {
-      const url = await getR2SignedUrl(a.prescription_key, 604800);
-      if (url) {
-        return NextResponse.json({ key: a.prescription_key, url, existing: true });
-      }
-    }
-
+    // Always regenerate — don't return cached prescription
     const patient = {
       name: a.p_name || a.patient_name,
       phone: a.patient_phone,
@@ -83,7 +76,14 @@ export async function POST(req, { params }) {
     logger.info('PRESCRIPTION_GENERATED_DASHBOARD', { appointmentId: id, key: result.key });
     return NextResponse.json({ key: result.key, url: result.url, existing: false });
   } catch (error) {
-    logger.error('PRESCRIPTION_GENERATE_DASHBOARD_ERROR', { error: error.message });
-    return jsonError(error);
+    logger.error('PRESCRIPTION_GENERATE_DASHBOARD_ERROR', {
+      error: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
+    return NextResponse.json(
+      { error: error.message || 'Prescription generation failed' },
+      { status: 500 },
+    );
   }
 }
