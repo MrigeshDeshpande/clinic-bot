@@ -27,7 +27,7 @@ export default function StatsPage() {
   const fetchStats = useCallback(async (p) => {
     setLoading(true);
     try {
-      const d = await fetchCached(`/api/dashboard/stats?period=${p}`);
+      const d = await fetchCached(`/api/dashboard/stats?period=${p}`, null, 300000);
       setStats(d);
     } catch (err) {
       console.error(err);

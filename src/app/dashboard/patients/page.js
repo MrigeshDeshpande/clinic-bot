@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Users, ChevronRight, Phone, Calendar, Activity } from 'lucide-react';
 import { formatDate } from '@/lib/date';
+import { fetchCached } from '@/lib/clientFetchCache';
 
 function PatientsPageFallback() {
   return <div className="p-8 text-center text-gray-400">Loading...</div>;
@@ -23,11 +24,7 @@ function PatientsPageInner() {
       setLoading(true);
       setError(null);
       const params = new URLSearchParams(q ? { q } : {});
-      const res = await fetch(`/api/dashboard/patients?${params}`);
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || `API error ${res.status}`);
-      }
+      const data = await fetchCached(`/api/dashboard/patients?${params}`);
       const list = data?.patients ?? data;
       setPatients(Array.isArray(list) ? list : []);
     } catch (e) {

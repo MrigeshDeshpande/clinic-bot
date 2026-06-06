@@ -11,7 +11,7 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const period = searchParams.get('period') || 'week';
     const cacheKey = `stats:${period}`;
-    const cached = getCached(cacheKey);
+    const cached = getCached(cacheKey, 120_000);
     if (cached) return NextResponse.json(cached);
 
     const sql = getSql();
@@ -279,7 +279,7 @@ export async function GET(req) {
       startDate: startStr,
       endDate: endStr,
     };
-    setCache(cacheKey, response);
+    setCache(cacheKey, response, 120_000);
     return NextResponse.json(response);
   } catch (error) {
     logger.error('DASHBOARD_STATS_ERROR', { error: error.message });

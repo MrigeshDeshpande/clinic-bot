@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Star, Phone, ThumbsUp, Meh, Frown, CheckCircle } from 'lucide-react';
+import { fetchCached } from '@/lib/clientFetchCache';
 
 export default function FeedbackPage() {
   const [feedback, setFeedback] = useState(null);
@@ -10,8 +11,7 @@ export default function FeedbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    fetch('/api/dashboard/feedback?limit=50')
-      .then(r => r.json())
+    fetchCached('/api/dashboard/feedback?limit=50')
       .then(d => setFeedback(d))
       .catch(console.error)
       .finally(() => setLoading(false));

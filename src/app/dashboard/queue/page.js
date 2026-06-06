@@ -31,12 +31,12 @@ export default function QueuePage() {
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
 
-  // Auto-refresh every 15 seconds (paused when tab is backgrounded)
+  // Auto-refresh every 30 seconds (paused when tab is backgrounded)
   useEffect(() => {
     let visible = !document.hidden;
     const handler = () => { visible = !document.hidden; };
     document.addEventListener('visibilitychange', handler);
-    const interval = setInterval(() => { if (visible) fetchQueue(); }, 15000);
+    const interval = setInterval(() => { if (visible) fetchQueue(); }, 30000);
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', handler); };
   }, [fetchQueue]);
 
