@@ -1,0 +1,1224 @@
+Backend Interview Report
+
+Code was analyzed from the current repository state, with code treated as source of truth and docs used only to reconstruct debugging history. Verified behavior: npm test passes (30/30 tests). The replay suite is currently broken because the custom loader cannot resolve directory imports like @/lib/ai to index.js.
+
+# Topic
+
+## What was built?
+A modular monolith on Next.js App Router: HTTP entrypoints under src/app/api, orchestration in src/lib, persistence in src/db/repositories, and external adapters for WhatsApp, Gemini, OpenAI Whisper, and Cloudflare R2.
+
+## Business Problem
+A single-clinic backend needed to automate patient communication, staff operations, reminders, visit closure, and payment follow-up without introducing distributed-systems-level operational overhead too early.
+
+## Technical Problem
+Avoiding a "fat route" codebase while still shipping quickly in a serverless environment.
+
+## Solution Implemented
+The project uses clear layer boundaries:
+API routes -> engine/handlers -> repositories -> Neon/Postgres.
+It also separates deterministic control flow from infrastructure adapters and from mutable operational state.
+
+## Files Involved
+src/lib/engine.js
+src/lib/handlers.js
+src/db/repositories/appointmentRepository.js
+src/db/pool.js
+src/app/api/webhook/whatsapp/route.js
+
+## Tradeoffs
+This is easier to ship than microservices, but the monolithic handlers.js has become a maintenance hotspot.
+
+## Failure Modes
+Boundary erosion: route handlers start embedding business logic, and the large handler module becomes a single blast radius for regressions.
+
+## Scalability Considerations
+The architecture is good for single-tenant or low-multi-tenant scale, but in-memory coordination pieces prevent clean horizontal scaling.
+
+## Reliability Considerations
+Layering helps isolate failures. Repository return values are mostly null-safe and log failures instead of throwing across the whole stack.
+
+## Security Considerations
+A modular boundary exists, but security is manually enforced route-by-route rather than via a shared secure platform layer.
+
+## How to Explain in an Interview (2 minute version)
+"I built this as a modular monolith. Routes handle HTTP concerns, the engine owns workflow orchestration, repositories isolate SQL, and adapters isolate external APIs. That gave me service-like boundaries without paying the complexity cost of separate deployables. The main lesson is that this pattern scales well organizationally until one orchestration module becomes too large, at which point I'd split workflow domains while keeping the same architectural contract."
+
+## Possible Interview Follow-up Questions
+- Why not microservices?
+- Where would you split first?
+- How would you enforce boundaries more strongly?
+
+## Senior-Level Discussion Points
+- This is a pragmatic modular monolith, not an accidental monolith.
+- Repository and adapter boundaries are deliberate senior signals.
+- The next refactor is domain decomposition, not platform explosion.
+
+---
+
+# Topic
+
+## What was built?
+A synchronous WhatsApp webhook ingestion pipeline with explicit steps: classify event, deduplicate, normalize, load session, classify intent, extract entities, handle, send reply, persist messages.
+
+## Business Problem
+Inbound patient messages must be processed exactly once or close to it, because duplicate bookings, missed replies, or out-of-order state transitions damage trust immediately.
+
+## Technical Problem
+Meta webhooks can retry, send status updates alongside messages, and run in a serverless request lifecycle that can terminate early.
+
+## Solution Implemented
+POST /api/webhook/whatsapp parses JSON once, runs migrations on cold start, and awaits processEvent(). The engine filters non-message events, skips self-messages, sorts inbound messages by timestamp, deduplicates by msg_id, and persists both user and bot messages.
+
+## Files Involved
+src/app/api/webhook/whatsapp/route.js
+src/lib/engine.js
+src/lib/deduplicate.js
+src/db/repositories/messageRepository.js
+
+## Tradeoffs
+Processing synchronously avoids serverless background-loss issues, but increases webhook latency and couples Meta responsiveness to downstream DB/API calls.
+
+## Failure Modes
+DB outage, WhatsApp send failure, or session-save failure can still partially process a message. There is no queue or DLQ.
+
+## Scalability Considerations
+Current design is request-bound. At scale, webhook acknowledgment should be decoupled from processing through a queue.
+
+## Reliability Considerations
+The pipeline is explicit and inspectable. Deduplication is two-layered: in-memory fast path plus DB existence check.
+
+## Security Considerations
+Webhook verification token is validated on GET. POST rate limiting exists, but request authenticity is not HMAC-signed by Meta in this code.
+
+## How to Explain in an Interview (2 minute version)
+"I made the webhook pipeline explicit instead of burying logic in the route. Each stage has one responsibility: filter, dedupe, normalize, classify, mutate state, reply, persist. In serverless, I intentionally await processing before returning 200 because returning early can lose work if the platform freezes background execution. The next step for scale would be enqueue-on-ingest with at-least-once consumers."
+
+## Possible Interview Follow-up Questions
+- Why didn't you ack immediately?
+- How would you add at-least-once guarantees?
+- How do you handle duplicate delivery?
+
+## Senior-Level Discussion Points
+- Clean pipeline design is a strong interview story.
+- Synchronous ack is a deliberate serverless tradeoff.
+- The missing queue is the main reliability boundary today.
+
+---
+
+# Topic
+
+## What was built?
+A session management layer with mutable operational state, optimistic locking, in-memory cache fallback, expiration semantics, and manual-mode timeout.
+
+## Business Problem
+Conversation continuity matters more than raw message history. The system needs to remember where the patient is in the workflow and recover gracefully from transient persistence failures.
+
+## Technical Problem
+Concurrent webhook deliveries can race; DB can be unavailable; serverless instances can be cold and stateless.
+
+## Solution Implemented
+Sessions live in Postgres with a version column. saveSession() updates with WHERE version = expectedVersion, which is optimistic concurrency control. session.js also keeps a 30-minute in-memory cache for continuity and auto-flips expired sessions to ABANDONED on load. Manual mode auto-releases after 24 hours.
+
+## Files Involved
+src/lib/session.js
+src/db/repositories/sessionRepository.js
+src/db/migrations/001_core.sql
+
+## Tradeoffs
+Eventual consistency improves latency, but .catch(() => {}) on saves can hide persistence loss. Cache continuity helps UX but is not cross-instance.
+
+## Failure Modes
+Silent DB write failure, stale version conflicts, cache loss on restart, and inconsistent state across instances.
+
+## Scalability Considerations
+The in-memory cache does not scale horizontally. A shared cache or queue-based state machine would be needed for multi-instance correctness.
+
+## Reliability Considerations
+Optimistic locking is the key protection against clobbering concurrent session writes.
+
+## Security Considerations
+Session data is operational, not identity-bearing, but it includes patient context and should still be treated as sensitive.
+
+## How to Explain in an Interview (2 minute version)
+"I modeled sessions as mutable operational truth and message history as immutable truth. Sessions use optimistic locking because the failure mode I cared about was concurrent webhooks overwriting each other. I also added an in-memory continuity cache so transient DB failures don't immediately break the conversation, but I'd replace that with Redis if I needed true horizontal scale."
+
+## Possible Interview Follow-up Questions
+- Why optimistic locking over DB locks?
+- What happens on version conflict?
+- How would you make session state cross-instance?
+
+## Senior-Level Discussion Points
+- Separating mutable session truth from immutable message truth is a strong systems design signal.
+- This is concurrency-aware state management, not naive chat history storage.
+- The save path still has reliability debt because failures are swallowed.
+
+---
+
+# Topic
+
+## What was built?
+A deterministic state machine for patient, doctor, and receptionist workflows with explicit transition validation.
+
+## Business Problem
+Clinic workflows must be predictable. Silent state drift is worse than limited capability.
+
+## Technical Problem
+Natural-language inputs are noisy, but backend state changes must still be deterministic and auditable.
+
+## Solution Implemented
+Allowed states and transitions are declared in config, validated by isValidTransition(), and mapped by getNextState(). The handler can override or refine next-state logic where domain-specific mutation is needed.
+
+## Files Involved
+src/config/states.js
+src/lib/transitions.js
+src/lib/router.js
+src/lib/handlers.js
+
+## Tradeoffs
+A deterministic state machine is safer than a free-form LLM agent, but it grows complex as roles and workflows expand.
+
+## Failure Modes
+State/config drift, missing transitions, or DB constraints that don’t match runtime states.
+
+## Scalability Considerations
+State-machine complexity scales poorly in one file, but operational correctness scales well because behavior stays explicit.
+
+## Reliability Considerations
+Deterministic transitions reduce surprise and make replay-based regression testing practical.
+
+## Security Considerations
+State guards reduce accidental privileged flow access, especially for doctor/receptionist paths tied to configured WA IDs.
+
+## How to Explain in an Interview (2 minute version)
+"I used a state machine because the clinic workflow is effectively a finite process with side effects. I'd rather reject or reprompt than let a probabilistic agent mutate state ambiguously. The machine also lets me test conversations as deterministic replay fixtures, which is much stronger than UI-only testing."
+
+## Possible Interview Follow-up Questions
+- How do you keep config and code aligned?
+- When should handlers override transitions?
+- Would you ever replace this with an LLM agent?
+
+## Senior-Level Discussion Points
+- Deterministic orchestration is a backend design choice, not just product logic.
+- Replayability is a direct outcome of explicit states.
+- The current system shows the benefits and limits of rule-first workflow engines.
+
+---
+
+# Topic
+
+## What was built?
+A correction-aware "state repair" layer that detects "actually", "no, evening", "X instead", fragmented messages, and safe overwrite conditions.
+
+## Business Problem
+Users do not type linearly. They change their minds, send partial information, and contradict themselves mid-flow.
+
+## Technical Problem
+A simple slot-filling flow breaks when updates arrive out of order or as corrections.
+
+## Solution Implemented
+The backend adds three layers: correction-detector.js, overwrite-policy.js, and entity accumulation in entities.js. This allows progressive filling, last-write-wins during collection, explicit edit enforcement after confirmation, and correction audit metadata in session context.
+
+## Files Involved
+src/lib/correction-detector.js
+src/lib/overwrite-policy.js
+src/lib/entities.js
+src/lib/handlers.js
+docs/robustness-layer-changes.md
+
+## Tradeoffs
+This keeps the deterministic engine robust, but adds stateful mutation rules that are easy to break if not well-tested.
+
+## Failure Modes
+False-positive corrections, stale entity carryover, or allowing mutation after confirmation when edit flow should be required.
+
+## Scalability Considerations
+The design scales behaviorally better than a naive state machine because it handles chaotic input without branching explosion.
+
+## Reliability Considerations
+Mutation safety is explicit. Confirmed bookings do not silently change.
+
+## Security Considerations
+This is business-integrity security: preventing silent state corruption is effectively protecting operational correctness.
+
+## How to Explain in an Interview (2 minute version)
+"One of the strongest backend patterns here is that I separated progression from repair. Forward progression handles happy-path slot filling. Repair logic handles corrections, contradictions, and fragmented input. I then added an overwrite policy so mutation rules depend on state: in-progress fields can change, confirmed ones require explicit edit flow. That's a very interviewable example of designing for real human behavior without giving up determinism."
+
+## Possible Interview Follow-up Questions
+- Why not always let latest input win?
+- How do you avoid accidental overwrites?
+- How would you audit corrections?
+
+## Senior-Level Discussion Points
+- This is workflow mutation control, not just input parsing.
+- The overwrite policy is a senior signal because it encodes consistency semantics by state.
+- The design cleanly separates parsing, correction detection, and authorization-to-mutate.
+
+---
+
+# Topic
+
+## What was built?
+An AI intent-classification adapter with rule fallback, confidence thresholds by risk, and shadow mode for offline comparison.
+
+## Business Problem
+The clinic wants better natural-language understanding without letting an LLM directly control production side effects.
+
+## Technical Problem
+AI outputs are non-deterministic, can timeout, return malformed data, or fail under quota/rate limits.
+
+## Solution Implemented
+classifyWithFallback() first honors deterministic interactive inputs, then calls Gemini with a timeout, validates the returned intent against an allowlist, applies risk-based thresholds, and falls back to the rule router. In SHADOW_MODE, AI never drives production behavior; it only gets compared and logged.
+
+## Files Involved
+src/lib/ai/index.js
+src/lib/ai/provider.js
+src/lib/ai/gemini.js
+src/db/repositories/shadowLogRepository.js
+docs/shadow-mode-debug-findings-2026-06-05.md
+
+## Tradeoffs
+The fallback chain is safe, but shadow mode can create false confidence if AI failures are not logged as shadow failures.
+
+## Failure Modes
+Quota 429s, timeout, malformed JSON, invalid intents, and low-confidence outputs.
+
+## Scalability Considerations
+Provider abstraction supports future model switching. Sampling in shadow mode controls cost.
+
+## Reliability Considerations
+High-risk intents like confirm and emergency need higher confidence thresholds, which is exactly what the code does.
+
+## Security Considerations
+The most important security boundary is decision authority: AI is advisory unless explicitly accepted.
+
+## How to Explain in an Interview (2 minute version)
+"I did not let AI directly control production behavior by default. I wrapped it behind a provider interface, timeboxed it, validated the schema, used different thresholds for high-risk intents, and added shadow mode so I could compare AI against deterministic routing without changing user-visible behavior. That separation between interpretation and side effects is a strong backend safety pattern."
+
+## Possible Interview Follow-up Questions
+- Why use different confidence thresholds by risk?
+- How would you evaluate model quality?
+- What would you log on AI failure?
+
+## Senior-Level Discussion Points
+- Deterministic vs AI decision boundaries are explicit.
+- Shadow mode is a mature rollout pattern.
+- Current blind spot: AI failures do not currently write shadow failure records.
+
+---
+
+# Topic
+
+## What was built?
+A versioned appointment model that treats rescheduling as supersession rather than in-place mutation.
+
+## Business Problem
+Appointments are operational records. Rescheduling should preserve history and support auditability.
+
+## Technical Problem
+In-place updates destroy historical truth and make it harder to reason about concurrency and debugging.
+
+## Solution Implemented
+Appointments have logical_id, version, replaces_version, and superseded_at. Reschedules insert a new row and mark the prior version superseded. Current views use DISTINCT ON (logical_id) ordered by latest version.
+
+## Files Involved
+src/db/repositories/appointmentRepository.js
+src/db/pool.js
+src/db/migrations/001_core.sql
+docs/truth-and-mutation-model.md
+
+## Tradeoffs
+Querying becomes more complex because every read must understand "latest version" semantics.
+
+## Failure Modes
+If readers forget DISTINCT ON (logical_id), stale rows appear. If supersession and insert are not coordinated, chains can become inconsistent.
+
+## Scalability Considerations
+Append-only version chains are usually better for audit than update-in-place, but can require archival or partitioning later.
+
+## Reliability Considerations
+This model preserves prior state even when reschedules happen under contention.
+
+## Security Considerations
+Auditability matters in healthcare-adjacent systems because mutable records can create trust and compliance issues.
+
+## How to Explain in an Interview (2 minute version)
+"I modeled appointments as immutable versions grouped by a stable logical ID. Rescheduling creates a new version instead of mutating the old one. That gave me auditability, easier reasoning about concurrency, and a clear current-vs-history query pattern. It's similar to event-sourced thinking, but implemented pragmatically with relational tables."
+
+## Possible Interview Follow-up Questions
+- Why not soft delete or a change log table?
+- How do reads avoid stale versions?
+- How would you archive old versions?
+
+## Senior-Level Discussion Points
+- This is a strong data-modeling story for interviews.
+- It shows conscious separation of current operational state from historical truth.
+- It is one of the clearest senior signals in the repository.
+
+---
+
+# Topic
+
+## What was built?
+Booking consistency controls using both application-level checks and database-enforced uniqueness.
+
+## Business Problem
+Double-booking the same slot is unacceptable in a clinic schedule.
+
+## Technical Problem
+Two requests can race: both see a slot as free, both attempt to insert.
+
+## Solution Implemented
+The database creates a partial unique index on (date, time) for status='confirmed'. The application also performs pre-checks like countAppointmentsBySlot() and "slot already booked" queries, but the DB is the real source of truth.
+
+## Files Involved
+src/db/pool.js
+src/db/repositories/appointmentRepository.js
+src/app/api/dashboard/appointments/route.js
+
+## Tradeoffs
+The read-before-write check improves UX, but only the unique index actually prevents races.
+
+## Failure Modes
+The dashboard quick-book route can still race between its pre-check and insert; if the DB raises a unique violation, the current route may surface a generic 500 instead of a clean conflict response.
+
+## Scalability Considerations
+DB-enforced uniqueness scales better than app-only locking in a stateless fleet.
+
+## Reliability Considerations
+Conflict prevention is delegated to the strongest layer: the database.
+
+## Security Considerations
+This is integrity, not confidentiality: preventing conflicting writes is part of system safety.
+
+## How to Explain in an Interview (2 minute version)
+"I use the database as the final arbiter of booking consistency. The app does optimistic availability checks for a good UX, but I never trust them for correctness. The partial unique index is what actually prevents double-booking. In an interview, I'd explicitly call out the gap between user-friendly checks and correctness-enforcing constraints."
+
+## Possible Interview Follow-up Questions
+- Would you use transactions or advisory locks?
+- How do you map unique violations back to 409s?
+- How would you support multiple chairs or providers?
+
+## Senior-Level Discussion Points
+- DB constraints are the real consistency mechanism.
+- App-layer checks are advisory.
+- Graceful conflict handling is the next improvement.
+
+---
+
+# Topic
+
+## What was built?
+Multiple async workflow endpoints for reminders, feedback requests, due reminders, daily summaries, and evening check-ins.
+
+## Business Problem
+A clinic backend must perform scheduled outreach and internal operational notifications without manual effort.
+
+## Technical Problem
+Scheduled workflows need auth, idempotency, delivery fallback, and auditing.
+
+## Solution Implemented
+Cron routes are secured with CRON_SECRET, rate limited, and use reminder stamps like reminder_sent_at, feedback_sent_at, and due_reminder_sent_at to prevent duplicate sends. Template sends fall back to free-form WhatsApp text.
+
+## Files Involved
+src/app/api/cron/reminders/route.js
+src/app/api/cron/feedback/route.js
+src/app/api/cron/due-reminders/route.js
+src/app/api/cron/daily-summary/route.js
+src/app/api/cron/evening-checkin/route.js
+vercel.json
+
+## Tradeoffs
+These are simple and easy to reason about, but they are still inline loops without a queue, retry ledger, or DLQ.
+
+## Failure Modes
+A partial batch can send some messages and skip others. There is no per-item durable retry state beyond the sent stamp.
+
+## Scalability Considerations
+At larger volume, each cron should enqueue per-recipient jobs rather than send inline.
+
+## Reliability Considerations
+Idempotent stamps are a good first layer. Manual and cron due-reminder runs also write an audit log.
+
+## Security Considerations
+Cron auth is shared-secret based. Rotation and secret exposure procedures matter.
+
+## How to Explain in an Interview (2 minute version)
+"I treated each scheduled workflow as an idempotent batch process. Each message type has its own sent marker to prevent duplicate delivery. I also separated proactive-template sends from fallback text sends because WhatsApp's 24-hour window changes what's legal to send. The system is not queue-backed yet, but the idempotent markers make it safe to retry the batch itself."
+
+## Possible Interview Follow-up Questions
+- How would you make cron jobs horizontally safe?
+- How do you retry partial failures?
+- Would you use one big cron or multiple small ones?
+
+## Senior-Level Discussion Points
+- Delivery idempotency is designed into the schema.
+- This is a good "workflow orchestration in a monolith" story.
+- The absence of a queue is the main evolution point.
+
+---
+
+# Topic
+
+## What was built?
+An operational queue model layered on top of appointments with arrival and call status, priority flags, and doctor/receptionist views.
+
+## Business Problem
+Scheduled appointments are not enough; the clinic needs a same-day operational queue for walk-ins and arrivals.
+
+## Technical Problem
+The backend must track operational state separately from appointment status without losing schedule semantics.
+
+## Solution Implemented
+Appointments carry arrival_status, arrived_at, called_at, and is_priority. Queue queries order by priority, then scheduled-time presence, then time, then arrival time.
+
+## Files Involved
+src/db/repositories/appointmentRepository.js
+src/app/api/dashboard/arrival/route.js
+src/lib/handlers.js
+
+## Tradeoffs
+The queue lives in the appointments table, which simplifies data access but mixes scheduling truth and operational truth into one record.
+
+## Failure Modes
+Priority toggles and arrival updates are not transactionally grouped with other visit actions. Queue correctness depends on consistent status transitions by operators.
+
+## Scalability Considerations
+This scales fine for one clinic. Multi-location scale would likely need provider/location dimensions and better indexing.
+
+## Reliability Considerations
+State is explicit, queryable, and timestamped.
+
+## Security Considerations
+These endpoints are staff-facing operational controls and should stay behind authenticated dashboard APIs.
+
+## How to Explain in an Interview (2 minute version)
+"I modeled the queue as operational state on the appointment itself rather than inventing a separate queue table too early. That kept same-day operational queries simple: one row already knows whether the patient is scheduled, arrived, called, prioritized, or completed. If I needed multiple providers or rooms later, I'd normalize those dimensions rather than redesign the state model."
+
+## Possible Interview Follow-up Questions
+- Why not a separate queue table?
+- How would you support multiple doctors?
+- How do you prevent invalid operational transitions?
+
+## Senior-Level Discussion Points
+- Good example of pragmatism in data modeling.
+- Operational state is distinct from booking history.
+- This is a backend operations workflow, not just CRUD.
+
+---
+
+# Topic
+
+## What was built?
+Manual doctor chat mode with real-time dashboard updates over SSE and WhatsApp-side forwarding suppression.
+
+## Business Problem
+Automation must yield to humans when needed, without the bot replying over the operator.
+
+## Technical Problem
+Need a consistent handoff flag, real-time operator notifications, and a safe auto-release policy.
+
+## Solution Implemented
+When a dashboard user sends a patient message, the patient session enters manualMode; inbound patient messages bypass bot handling, are stored as manual_chat, pushed over SSE, and optionally preview-forwarded to the doctor’s WhatsApp. SSE streams use ReadableStream, EventEmitter, and 15-second keepalives.
+
+## Files Involved
+src/app/api/dashboard/patients/[id]/send-message/route.js
+src/app/api/dashboard/patients/[id]/chat-mode/route.js
+src/app/api/dashboard/patients/[id]/messages/stream/route.js
+src/app/api/dashboard/notifications/stream/route.js
+src/lib/messageEvents.js
+src/lib/session.js
+
+## Tradeoffs
+This is lightweight and fast to build, but EventEmitter plus in-memory session flags is single-instance only.
+
+## Failure Modes
+Lost SSE subscriptions on deploy/restart, stale manual mode, no cross-instance fanout, no push when the tab is closed.
+
+## Scalability Considerations
+At scale this becomes Redis Pub/Sub, WebSockets, or a broker-backed notification service.
+
+## Reliability Considerations
+Keepalives were shortened to 15s to avoid serverless stream idle timeouts, which is an operationally meaningful fix.
+
+## Security Considerations
+Manual mode is a privileged override path and depends on dashboard auth being solid.
+
+## How to Explain in an Interview (2 minute version)
+"I separated human handoff from bot logic by storing a manual-mode flag in session state. Once that flag is set, inbound messages bypass the bot and get routed to human-facing notification streams instead. That's important architecturally because it keeps the handoff explicit and reversible. The current implementation uses SSE plus in-memory events, which is fine for one instance but the obvious scaling path is broker-backed fanout."
+
+## Possible Interview Follow-up Questions
+- Why SSE instead of WebSockets?
+- How would you make notifications cross-instance?
+- How would you avoid manual mode getting stuck?
+
+## Senior-Level Discussion Points
+- Human handoff is implemented as state, not a side-channel hack.
+- SSE keepalive tuning shows production-awareness.
+- This is a good example of separating automation from side effects.
+
+---
+
+# Topic
+
+## What was built?
+A media ingestion pipeline that fetches WhatsApp media from Meta, uploads it to R2, stores object keys in Postgres, and serves assets via signed URLs.
+
+## Business Problem
+Clinical visit records often require images, audio, or documents without permanently exposing raw storage URLs.
+
+## Technical Problem
+Meta media retrieval is two-step, object storage requires credentials, and files must be attached to appointment records safely.
+
+## Solution Implemented
+media.js fetches media metadata, downloads the binary, infers media type and extension, uploads to R2, and appends the object key into appointments.chit_media. Dashboard uploads go directly to R2, and reads are mediated through signed URL generation.
+
+## Files Involved
+src/lib/media.js
+src/lib/r2.js
+src/app/api/dashboard/media/route.js
+src/app/api/dashboard/media/signed/route.js
+
+## Tradeoffs
+Object keys are stored directly in the appointment row, which is simple but less normalized than a separate media table.
+
+## Failure Modes
+Upload succeeds but DB append fails; DB append succeeds after duplicate upload; R2 misconfiguration causes silent feature degradation.
+
+## Scalability Considerations
+R2 is the right direction. A future design would separate metadata into its own table and add async virus scanning or media processing.
+
+## Reliability Considerations
+The pipeline logs both Meta download failures and R2 failures. Media is optional, so business flow can continue even if storage is unavailable.
+
+## Security Considerations
+Signed URLs reduce permanent exposure, but the dashboard upload route has verbose console logging and should avoid leaking object keys or file metadata in production logs.
+
+## How to Explain in an Interview (2 minute version)
+"I built media handling as a classic adapter pipeline: fetch from Meta, normalize metadata, upload to object storage, persist only the storage key, and generate signed URLs for access. That keeps the database small and avoids exposing public storage paths. The next maturity step would be a separate media metadata table and stronger background processing."
+
+## Possible Interview Follow-up Questions
+- Why store keys instead of public URLs?
+- How would you handle failed DB update after upload?
+- Would you deduplicate media assets?
+
+## Senior-Level Discussion Points
+- Clear separation between blob storage and relational metadata.
+- Signed URLs are the right security posture.
+- This is a pragmatic storage abstraction, not file-handling in application memory forever.
+
+---
+
+# Topic
+
+## What was built?
+Prescription generation as a derived document artifact with caching-by-key in object storage.
+
+## Business Problem
+Once a visit is logged, the clinic needs a reproducible prescription artifact that can be re-served without regenerating every time.
+
+## Technical Problem
+Derived documents are expensive enough to cache, but must still be tied to visit data and securely distributed.
+
+## Solution Implemented
+The backend generates a PDF with pdfkit, uploads it to R2, stores prescription_key on the appointment, and returns a long-lived signed URL. If the key already exists, it skips regeneration.
+
+## Files Involved
+src/lib/prescription.js
+src/app/api/dashboard/visits/[id]/prescription/route.js
+src/app/api/dashboard/visit/route.js
+
+## Tradeoffs
+Caching avoids repeated generation, but cached prescriptions can become stale if visit data changes after generation.
+
+## Failure Modes
+PDF generation failure, upload failure, stale cached key, missing patient metadata, partial success where PDF exists but DB key update fails.
+
+## Scalability Considerations
+Artifact caching is already a scale-friendly pattern. A stronger version would include content-hash-based invalidation.
+
+## Reliability Considerations
+The route checks for existing keys first, which avoids repeat work and reduces latency.
+
+## Security Considerations
+Signed URLs are time-bounded, but prescription content is sensitive and should be audited if shared externally.
+
+## How to Explain in an Interview (2 minute version)
+"I treated prescriptions as derived artifacts, not raw DB rows. The system composes visit data into a PDF, stores the blob externally, and keeps only the storage key in Postgres. That lets me cache the artifact and re-serve it cheaply. The main tradeoff is invalidation: if visit data changes after generation, I need a policy for regenerating or versioning the prescription."
+
+## Possible Interview Follow-up Questions
+- How would you invalidate stale prescriptions?
+- Why not store PDFs directly in Postgres?
+- How would you audit document access?
+
+## Senior-Level Discussion Points
+- This is a clean artifact-generation pattern.
+- It shows derived-data caching awareness.
+- Staleness policy is the real senior discussion.
+
+---
+
+# Topic
+
+## What was built?
+A dashboard security model using HMAC-signed custom tokens, cookie auth, middleware enforcement, CSRF protection, rate limiting, body-size limits, and basic security headers.
+
+## Business Problem
+The admin dashboard mutates sensitive operational data and must be protected from brute-force, cross-site, and accidental request abuse.
+
+## Technical Problem
+Need authentication and request integrity in a lightweight deployment without a full identity platform.
+
+## Solution Implemented
+Login issues a custom HMAC token signed from DASHBOARD_PASSWORD, sets dashboard_token and csrf_token cookies, and middleware protects /dashboard and /api/dashboard. apiAuth.js adds CSRF checks for cross-origin mutations, rate limiting, and body-size guards. next.config.mjs sets CSP and other headers.
+
+## Files Involved
+src/middleware.js
+src/lib/auth.js
+src/lib/apiAuth.js
+src/app/api/dashboard/login/route.js
+next.config.mjs
+src/app/api/dashboard/patients/[id]/family/route.js
+
+## Tradeoffs
+This is lighter than integrating Auth0/NextAuth, but it pushes crypto and token lifecycle responsibility into app code.
+
+## Failure Modes
+Password rotation invalidates all sessions. No key rotation or token revocation list. The family-link POST/DELETE route currently mutates data without CSRF protection, which is a real security gap.
+
+## Scalability Considerations
+Custom auth works for one admin surface, but not for multi-user RBAC, audit-friendly identity, or SSO.
+
+## Reliability Considerations
+Middleware centralizes auth checks. Rate limiting is in-memory only, so it is not reliable across instances.
+
+## Security Considerations
+Important positives: httpOnly auth cookie, SameSite, CSRF token, route middleware, CSP. Important negatives: custom JWT-like scheme, in-memory rate limiting, and missing CSRF on at least one mutating route.
+
+## How to Explain in an Interview (2 minute version)
+"I implemented a lightweight but layered security model: cookie auth in middleware, CSRF on mutations, body-size limits, and per-route rate limiting. The design is acceptable for a small private admin tool, but I would be explicit in an interview that I would not scale this custom token scheme into a multi-tenant or compliance-heavy product. The interesting part is the layered request-defense approach, not the custom crypto itself."
+
+## Possible Interview Follow-up Questions
+- Why not use a standard auth provider?
+- What are the weaknesses of this token design?
+- How would you add RBAC and audit logs?
+
+## Senior-Level Discussion Points
+- Security layering is decent.
+- Custom auth is an expedient tradeoff, not an ideal endpoint.
+- The missing CSRF on family mutations is the kind of thing a senior reviewer should catch quickly.
+
+---
+
+# Topic
+
+## What was built?
+A database access layer with retry, circuit breaker, lazy connection creation, and runtime migrations.
+
+## Business Problem
+Neon serverless and serverless runtimes can fail transiently on cold starts or network fetches.
+
+## Technical Problem
+DB calls can fail due to transport issues rather than query logic. Migrations must also happen safely across cold starts.
+
+## Solution Implemented
+pool.js wraps Neon queries with retry-on-network-failure, a circuit breaker after repeated failures, and a migrationsPromise guard so migrations run once per process. Many routes call runMigrations() defensively.
+
+## Files Involved
+src/db/pool.js
+src/app/api/webhook/whatsapp/route.js
+src/app/api/dashboard/appointments/route.js
+src/app/api/cron/feedback/route.js
+
+## Tradeoffs
+Runtime migrations reduce operational friction but push schema management into hot paths and can increase cold-start latency.
+
+## Failure Modes
+Circuit opens and returns hard failures; migrations drift into a giant append-only script; routes call getSql() without always handling a null DB handle.
+
+## Scalability Considerations
+At larger scale, migrations should move to CI/CD or a release step, not request time.
+
+## Reliability Considerations
+Retry + circuit breaker is a serious reliability pattern for a small codebase.
+
+## Security Considerations
+Schema-at-runtime is not a direct security risk, but misconfigured env handling can create undefined behavior.
+
+## How to Explain in an Interview (2 minute version)
+"I added resilience where the real failure mode existed: serverless network/database instability. Queries retry only on network-ish failures, and after repeated failures the circuit opens to fail fast instead of thrashing. I also guarded migrations with a process-level promise to prevent repeated execution. The tradeoff is that runtime migrations are convenient but not ideal for long-term operational maturity."
+
+## Possible Interview Follow-up Questions
+- Why retry only some DB errors?
+- When should the circuit open?
+- When would you move migrations out of runtime?
+
+## Senior-Level Discussion Points
+- This is a real resilience mechanism, not just try/catch.
+- The migration strategy is functional but fragile.
+- Good interview angle: "small system with production-minded DB hardening."
+
+---
+
+# Topic
+
+## What was built?
+A deterministic validation and extraction layer for dates, times, treatments, and phone numbers, with India-specific Hinglish and Devanagari hardening.
+
+## Business Problem
+Real WhatsApp users do not type controlled English. A booking engine that only parses "2026-06-10 14:00" is useless.
+
+## Technical Problem
+Need flexible natural-language parsing without turning validation into an LLM-only black box.
+
+## Solution Implemented
+validators.js parses relative dates, weekdays, "kal/parso", "5 baje", saade 5, Indic digits, and Indian mobile formats. router.js falls back to safer includes() matching for non-ASCII keyword detection. Extractors preserve parsed-but-invalid values so handlers can produce targeted validation responses.
+
+## Files Involved
+src/lib/validators.js
+src/lib/router.js
+src/config/intents.js
+docs/india-edge-cases-hardening-2026-05-31.md
+
+## Tradeoffs
+Rules are maintainable and testable, but parsing logic becomes long and region-specific.
+
+## Failure Modes
+Ambiguous language, timezone assumptions, locale drift, or overfitting to observed phrases.
+
+## Scalability Considerations
+This scales to similar user populations well. Global expansion would likely need locale-specific validation modules.
+
+## Reliability Considerations
+Keeping parsing deterministic makes failure handling explicit and replay-testable.
+
+## Security Considerations
+Strict Indian phone validation avoids accepting garbage or obviously invalid mobile numbers.
+
+## How to Explain in an Interview (2 minute version)
+"I treated extraction as deterministic infrastructure, not fuzzy AI magic. The parser handles the actual message patterns users send in India, including Hinglish and Indic digits. One subtle design decision I like is that extraction can return parsed-but-invalid values, so validation and user feedback stay separate. That gives much better operational visibility than collapsing everything into 'unknown input'."
+
+## Possible Interview Follow-up Questions
+- Why not use AI for all parsing?
+- How do you handle ambiguous words like kal?
+- How would you internationalize this?
+
+## Senior-Level Discussion Points
+- Real-world input normalization is a backend robustness problem.
+- The separation of extraction and validation is strong engineering.
+- Locale-specific hardening is a good production-readiness signal.
+
+---
+
+# Topic
+
+## What was built?
+Structured logging, targeted unit tests, and replay-style conversation tests for backend behavior.
+
+## Business Problem
+Without reproducibility, conversation bugs are hard to debug and easy to reintroduce.
+
+## Technical Problem
+State-machine systems fail across sequences, not just single functions.
+
+## Solution Implemented
+logger.js emits structured JSON logs. Unit tests cover auth, rate limiting, sanitization, env validation, and AI failure paths. Replay tests simulate full conversations through the engine and compare expected intents/states. There are also deep-debug runners for step-by-step state tracing.
+
+## Files Involved
+src/lib/logger.js
+tests/unit/failure-paths.test.js
+tests/unit/auth.test.js
+tests/unit/rateLimit.test.js
+tests/replay/runner.js
+tests/replay/path-loader.js
+
+## Tradeoffs
+Replay coverage is stronger than route-unit tests for workflows, but the loader is brittle and currently broken.
+
+## Failure Modes
+The replay harness currently fails with ERR_MODULE_NOT_FOUND because the alias loader maps @/lib/ai to src/lib/ai.js instead of src/lib/ai/index.js.
+
+## Scalability Considerations
+Replay fixtures scale well as a regression net for workflow-heavy backends.
+
+## Reliability Considerations
+AI failure-path tests are especially good because they verify graceful fallback under timeout, bad key, malformed response, and 429 conditions.
+
+## Security Considerations
+Auth and CSRF token generation are directly unit tested, which is the right class of test for custom auth.
+
+## How to Explain in an Interview (2 minute version)
+"I used two test styles because the system has two failure surfaces. For pure helpers and adapters, I wrote unit tests. For workflow behavior, I wrote replay tests that push full synthetic message sequences through the engine and assert state progression. That's a much better match for a conversational backend. The current broken loader is itself a useful lesson: test harnesses are part of production engineering quality."
+
+## Possible Interview Follow-up Questions
+- Why are replay tests valuable here?
+- How would you fix the loader issue?
+- What metrics would you add beyond logs?
+
+## Senior-Level Discussion Points
+- The testing strategy matches the domain.
+- Broken test infrastructure is still useful interview material if you can explain root cause and fix.
+- Observability is decent at the log level but weak on metrics/tracing.
+
+---
+
+# Topic
+
+## What was built?
+A reporting and dashboard aggregation layer for operational stats, notifications, retention, demographics, and revenue breakdowns.
+
+## Business Problem
+The clinic needs operational visibility without running external BI tooling.
+
+## Technical Problem
+Need reasonably efficient aggregations over operational data while keeping route logic readable.
+
+## Solution Implemented
+The stats and notifications routes use SQL aggregation queries with filtered counts, grouped daily/treatment views, day-of-week breakdowns, fee composition, top patients, and upcoming event windows.
+
+## Files Involved
+src/app/api/dashboard/stats/route.js
+src/app/api/dashboard/notifications/route.js
+src/app/api/dashboard/appointments/route.js
+
+## Tradeoffs
+SQL is embedded directly in routes rather than extracted to reporting repositories, which is fast to build but weaker for reuse and testability.
+
+## Failure Modes
+Heavy dashboard queries can become slow as data grows. Some time comparisons use locale-formatted strings, which is fragile.
+
+## Scalability Considerations
+Eventually these become materialized views, precomputed reports, or analytics tables.
+
+## Reliability Considerations
+Most aggregations are read-only and low-risk, which makes route-level SQL acceptable early on.
+
+## Security Considerations
+Responses are sanitized before returning, which matters because comments, notes, and diagnosis fields can contain user-entered data.
+
+## How to Explain in an Interview (2 minute version)
+"I used direct SQL aggregations for operational dashboards because the data volume is small and the value is immediate. The queries are mostly filtered counts, grouped revenue, and retention slices. In an interview I'd be honest that this is the right early-stage tradeoff, but once the dashboard becomes business-critical I'd extract reporting logic and probably precompute some metrics."
+
+## Possible Interview Follow-up Questions
+- Which queries would you materialize first?
+- How would you paginate or cache reports?
+- What indexes matter most here?
+
+## Senior-Level Discussion Points
+- Good example of pragmatic reporting inside an operational backend.
+- Direct SQL is acceptable when you understand the future migration path.
+- Time/string comparison fragility is something a senior engineer should notice.
+
+---
+
+# Topic
+
+## What was built?
+A payment-status and due-reminder model attached to appointments, including partial-payment handling and audit logs.
+
+## Business Problem
+The clinic needs to track collected vs outstanding amounts and follow up on dues automatically.
+
+## Technical Problem
+Visit fees span consultation, treatment, and medicine charges; payment status cannot just be a boolean.
+
+## Solution Implemented
+Appointments store consultation_fee, treatment_charges, medicine_charges, paid_amount, payment_status, payment_method, transaction_id, paid_at, and due_reminder_sent_at. The visit route derives partial vs paid status, and due-reminder runs log their execution into due_reminder_log.
+
+## Files Involved
+src/app/api/dashboard/visit/route.js
+src/app/api/dashboard/due-reminders/route.js
+src/db/repositories/dueReminderRepository.js
+src/db/repositories/appointmentRepository.js
+src/db/pool.js
+
+## Tradeoffs
+Payment logic is co-located with visit logging rather than isolated into a billing domain.
+
+## Failure Modes
+If fee edits happen after reminders, due calculations can drift. There is no immutable billing ledger.
+
+## Scalability Considerations
+For one clinic this is enough. At scale, billing should become its own domain model with ledger entries.
+
+## Reliability Considerations
+Derived due amount is recomputed from fee columns and paid_amount, which is simple and hard to corrupt accidentally.
+
+## Security Considerations
+Payment metadata is sensitive and should eventually be audited separately from general appointment edits.
+
+## How to Explain in an Interview (2 minute version)
+"I modeled payment state as derived from fee components plus paid amount rather than trying to build a full billing system. That let me support pending, partial, and paid flows quickly, and it enabled due reminders off the same appointment row. I'd call out in an interview that this is intentionally not a ledger; if financial controls became important, I'd split billing into immutable entries."
+
+## Possible Interview Follow-up Questions
+- Why not a separate payments table?
+- How do you handle refunds or adjustments?
+- How would you make billing auditable?
+
+## Senior-Level Discussion Points
+- Strong example of pragmatic domain scoping.
+- Good distinction between operational payment status and accounting truth.
+- Due-reminder logging is a useful audit signal.
+
+---
+
+# Topic
+
+## What was built?
+A hardening and gap-discovery layer through audits, docs, and code changes that expose current backend weaknesses.
+
+## Business Problem
+Systems used in production accumulate hidden failure points that are not visible from happy-path demos.
+
+## Technical Problem
+Config drift, missing safeguards, brittle test harnesses, and silent failures undermine operational trust.
+
+## Solution Implemented
+The repo includes audits and fixes, but several current high-value findings remain:
+the sessions.valid_state DB check in runMigrations() omits live states like DOCTOR_LOG_VISIT_NAME, DOCTOR_EDIT_PATIENT, DOCTOR_FEEDBACK, and FAMILY_SELECTION;
+the family-link POST/DELETE route lacks CSRF protection;
+the replay loader cannot resolve directory imports;
+env validation logs instead of failing startup;
+session persistence still uses fire-and-forget .catch(() => {}).
+
+## Files Involved
+src/db/pool.js
+src/config/states.js
+src/app/api/dashboard/patients/[id]/family/route.js
+tests/replay/path-loader.js
+src/app/layout.js
+src/lib/engine.js
+
+## Tradeoffs
+These shortcuts kept delivery velocity high, but they are now the highest-leverage cleanup points.
+
+## Failure Modes
+Session saves can fail when entering a state not allowed by the DB constraint; CSRF can be bypassed on family mutations; replay tests give false confidence because the harness itself is broken.
+
+## Scalability Considerations
+These are the kinds of problems that get amplified under growth because they create non-deterministic operational behavior.
+
+## Reliability Considerations
+Constraint drift between runtime state config and DB schema is especially dangerous because it fails only on specific paths.
+
+## Security Considerations
+Missing CSRF on mutating endpoints is a concrete exploitable gap, not just architectural debt.
+
+## How to Explain in an Interview (2 minute version)
+"One senior-level habit I try to show is that I don't stop at the implemented pattern; I also hunt for drift between intended architecture and actual runtime behavior. In this codebase, the best examples are a session-state DB constraint that no longer matches configured states, a mutating route missing CSRF, and a broken replay harness. Those are exactly the kinds of issues that separate feature delivery from production engineering."
+
+## Possible Interview Follow-up Questions
+- Which issue would you fix first and why?
+- How would you prevent state/config drift in future?
+- How would you gate merges on replay tests?
+
+## Senior-Level Discussion Points
+- Hidden integrity bugs are often more important than visible feature gaps.
+- Schema/runtime drift is a classic production failure pattern.
+- This topic is excellent for "what would you improve first?" interview questions.
+
+---
+
+Top 20 Backend Interview Stories
+
+1. Modular monolith with repository/adapter boundaries.
+2. WhatsApp webhook pipeline designed for idempotent synchronous processing.
+3. Session persistence with optimistic locking and fallback cache.
+4. Deterministic state machine instead of agentic orchestration.
+5. Correction-repair engine for chaotic user input.
+6. AI shadow mode with confidence gating and deterministic fallback.
+7. Versioned appointments with reschedule-as-supersession.
+8. Slot booking correctness enforced by DB uniqueness.
+9. Idempotent cron workflows with sent markers.
+10. Queue management as operational state on appointments.
+11. Manual chat mode that suppresses bot auto-replies.
+12. SSE real-time updates with keepalive tuning for serverless.
+13. Media ingestion from Meta to R2 with signed URL access.
+14. Prescription generation as cached derived artifact.
+15. Lightweight auth + CSRF + rate limiting for private admin APIs.
+16. DB retry + circuit breaker for Neon/serverless instability.
+17. Locale-aware validation for India/Hinglish/Devanagari.
+18. Replay testing as workflow regression protection.
+19. Payment due tracking with partial-payment semantics.
+20. Senior hardening work: spotting schema drift, missing CSRF, and broken test infra.
+
+Top 20 System Design Discussion Topics
+
+1. At-least-once webhook processing.
+2. Idempotency keys vs DB uniqueness.
+3. Mutable session truth vs immutable message truth.
+4. State machine vs workflow engine vs event sourcing.
+5. LLM shadow rollout strategy.
+6. Confidence thresholds by business risk.
+7. Append-only reschedule chains.
+8. Concurrency control for slot booking.
+9. Queue-backed cron execution.
+10. Real-time notifications with SSE vs WebSockets.
+11. Cross-instance Pub/Sub design.
+12. Media metadata table vs array-of-keys on parent row.
+13. Artifact caching and invalidation.
+14. Auth architecture for internal tools.
+15. Runtime migrations vs release migrations.
+16. Multi-tenant clinic expansion path.
+17. Analytics read model vs OLTP database.
+18. Operational queue design for multi-doctor clinics.
+19. Billing ledger vs operational payment status.
+20. Failure budgeting and observability strategy.
+
+Top 20 Production Debugging Stories
+
+1. shadow_logs stayed empty because Gemini returned 429 quota errors and the code only logs shadow comparisons on AI success.
+2. Replay suite currently fails because tests/replay/path-loader.js resolves @/lib/ai to src/lib/ai.js instead of src/lib/ai/index.js.
+3. sessions.valid_state in runMigrations() is missing several runtime states, so some session saves can fail only on specific flows.
+4. Family-link POST/DELETE in patients/[id]/family/route.js mutate data without CSRF enforcement.
+5. Historical bug: bot replies were stored with the user msg_id, causing silent loss under the messages.msg_id unique constraint.
+6. Historical bug: overly broad confirm keywords hijacked intent routing.
+7. Historical bug: Hindi "no/back" in cancel-confirm could route to main menu instead of restoring booked summary.
+8. Historical bug: kal ambiguity could misbook dates until the ambiguity guard was added.
+9. Historical bug: initial booking prompts were counted as failures, reducing retry budget unfairly.
+10. Historical bug: slot rounding logic produced malformed suggestion text.
+11. Historical bug: no fallback when interactive send failed; user could receive nothing.
+12. Historical issue: migration retry logic previously had dead code around promise reset.
+13. Operational issue: SSE keepalive had to be tightened to 15s to survive serverless idle behavior.
+14. Operational issue: AI failure tests show router fallback is working for bad key, timeout, parse failure, and 429.
+15. Structural issue: session saves are still fire-and-forget, so persistence failures can hide behind a working cache.
+16. Structural issue: in-memory dedup resets on deploy/restart and is not shared across instances.
+17. Structural issue: in-memory rate limiting is per-instance only.
+18. Structural issue: env validation logs startup problems but does not fail fast.
+19. Route-level issue: dashboard health route is minimal and bypasses shared API auth/rate-limit helpers.
+20. Route-level issue: quick-book still does read-before-write slot checks that are race-prone unless unique violations are mapped cleanly.
+
+Top 20 Reliability Engineering Topics
+
+1. Deduplication strategy.
+2. Optimistic concurrency for sessions.
+3. Circuit breaker on DB access.
+4. Retry with backoff on network-ish DB failures.
+5. Retry with backoff on WhatsApp 429/5xx/network failures.
+6. Text fallback when interactive send fails.
+7. Idempotent reminder stamps.
+8. Due reminder audit log.
+9. Shadow mode for safe AI rollout.
+10. High-risk intent thresholds.
+11. Session expiry handling.
+12. Manual mode timeout auto-release.
+13. Structured logs for pipeline stages.
+14. Replay-based regression protection.
+15. Append-only appointment history.
+16. Unique constraints for correctness.
+17. Signed URL serving for stored artifacts.
+18. Body-size limiting on dashboard mutations.
+19. CSP + middleware enforcement on admin surface.
+20. Explicit acknowledgment that lack of queue/DLQ is current reliability debt.
+
+Top 20 Scalability Topics
+
+1. In-memory state as the main horizontal-scaling blocker.
+2. EventEmitter-based SSE is single-instance only.
+3. Request-bound webhook processing needs queue decoupling at higher volume.
+4. Runtime migrations increase cold-start cost.
+5. Monolithic handler file reduces team scaling.
+6. DISTINCT ON (logical_id) read patterns need careful indexing as history grows.
+7. Cron loops should become per-recipient jobs.
+8. Direct SQL analytics may need read models/materialized views.
+9. Media arrays on appointment rows may want normalization.
+10. Custom auth does not scale to RBAC/SSO needs.
+11. Per-instance rate limiting is not fleet-wide.
+12. Per-instance dedup is not fleet-wide.
+13. Session cache is not fleet-wide.
+14. Manual mode notification streams are not fleet-wide.
+15. Patient/appointment growth will stress same-table operational + historical patterns.
+16. Payment tracking may need a ledger service if financial complexity grows.
+17. Locale-specific validation needs modularization for multi-region rollout.
+18. Prescription artifact caching needs invalidation/versioning at scale.
+19. Queue state likely needs provider/location dimensions for multi-clinic scale.
+20. Observability needs metrics/tracing before multi-instance operation.
+
+Top 20 Senior Engineer Signals
+
+1. Clear modular-monolith boundaries.
+2. Deterministic workflow core.
+3. Explicit request pipeline.
+4. Optimistic locking on mutable session state.
+5. Immutable appointment version chains.
+6. AI isolated from side effects via shadow mode.
+7. Risk-based confidence thresholds.
+8. DB-enforced booking integrity.
+9. Delivery idempotency markers.
+10. Correction handling as a mutation policy problem.
+11. Separation of extraction and validation.
+12. Derived artifact caching for prescriptions.
+13. Signed URL access instead of public blobs.
+14. Circuit breaker and retry for serverless DB access.
+15. Replay tests that assert workflow semantics.
+16. Locale hardening based on actual user behavior.
+17. Human handoff implemented as state, not ad hoc flags.
+18. Explicit tradeoff acceptance around runtime migrations.
+19. Audit log for due-reminder runs.
+20. Ability to spot drift/gaps in the existing system, not just praise what exists.
+
+Resume Bullet Opportunities
+
+1. Built a deterministic WhatsApp workflow engine for clinic operations using Next.js, Neon Postgres, and Meta Cloud API, with explicit state-machine orchestration and idempotent webhook processing.
+2. Designed optimistic-locking session persistence with fallback cache continuity, preventing concurrent webhook writes from silently clobbering conversation state.
+3. Modeled appointment reschedules as append-only version chains (logical_id + version) to preserve auditability and simplify concurrency reasoning.
+4. Implemented AI shadow mode with provider abstraction, timeout control, confidence thresholds, and safe rule-based fallback for high-risk intents.
+5. Enforced booking consistency with database-level unique slot constraints and conflict-aware application flows.
+6. Built scheduled reminder, feedback, due-payment, and doctor-summary workflows secured by cron auth and protected with duplicate-send markers.
+7. Added real-time staff notifications over SSE with manual chat mode, bot suppression, and keepalive tuning for serverless environments.
+8. Integrated media/document pipelines from WhatsApp to Cloudflare R2 with signed URL delivery and appointment-linked storage metadata.
+9. Generated cached PDF prescriptions from visit data and served them securely via object-storage-backed signed links.
+10. Hardened parsing for India-specific Hinglish/Devanagari date/time and phone patterns, improving deterministic extraction on real WhatsApp traffic.
+
+Strongest Topics for 12-18 LPA Backend Interviews
+
+1. Webhook processing pipeline.
+2. Session persistence and optimistic locking.
+3. State machine design.
+4. Appointment schema and booking flow consistency.
+5. Cron jobs and idempotent reminders.
+6. Rate limiting and CSRF protection.
+7. R2 file upload/signed URL flow.
+8. Prescription PDF generation.
+9. AI fallback architecture.
+10. Replay testing and bug-fix storytelling.
+
+Strongest Topics for Senior Backend Interviews
+
+1. Mutable vs immutable truth modeling.
+2. Reschedule-as-supersession data design.
+3. Concurrency control for sessions and booking slots.
+4. Deterministic/AI boundary design.
+5. Reliability patterns in serverless DB access.
+6. Human handoff architecture.
+7. Operational workflow orchestration without queues, and how you'd evolve it.
+8. Hidden drift detection: schema constraint mismatch with runtime states.
+9. Security review findings: custom auth tradeoffs and missing CSRF edge cases.
+10. Test harness design and diagnosing broken infrastructure.
+
+Questions I should expect interviewers to ask based on this codebase
+
+1. Why did you choose a modular monolith instead of services?
+2. How do you prevent duplicate webhook processing?
+3. What happens if two webhook deliveries hit the same session concurrently?
+4. Why did you model reschedules as new appointment versions?
+5. How do you prevent double-booking?
+6. Why are some writes fire-and-forget, and what risks does that create?
+7. How would you move this webhook pipeline to a queue?
+8. How do you decide when AI is allowed to override rules?
+9. What does shadow mode buy you operationally?
+10. How would you make manual chat mode work across multiple instances?
+11. Why SSE over WebSockets here?
+12. What are the weaknesses of your custom auth setup?
+13. Where are the current security gaps?
+14. How would you fix the valid_state drift problem permanently?
+15. What's your migration strategy critique of pool.js + one big SQL file?
+16. How would you test the booking workflow end-to-end?
+17. Why separate extraction from validation?
+18. How would you scale analytics queries as data grows?
+19. What would you change first before taking this to multiple clinics?
+20. Tell me about a production bug you found from logs/docs/tests and how you reasoned it through.
+
+Verification Notes
+
+- npm test: passed, 30/30.
+- npm run test:replay: currently fails because the alias loader in tests/replay/path-loader.js does not resolve directory imports like @/lib/ai to index.js.
