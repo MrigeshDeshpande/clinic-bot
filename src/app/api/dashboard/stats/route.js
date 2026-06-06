@@ -2,16 +2,21 @@ import { NextResponse } from 'next/server';
 import { getSql, runMigrations } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
+import { getCached, setCache } from '@/lib/dataCache';
 
 export async function GET(req) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
   try {
     await runMigrations();
-    const sql = getSql();
 
     const { searchParams } = new URL(req.url);
     const period = searchParams.get('period') || 'week';
+    const cacheKey = `stats:${period}`;
+    const cached = getCached(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
+    const sql = getSql();
     const now = new Date();
     const startDate = new Date(now);
     const periodDays = period === 'month' ? 29 : period === 'quarter' ? 89 : 6;
@@ -235,7 +240,7 @@ export async function GET(req) {
       revenue: Number(p.revenue),
     }));
 
-    return NextResponse.json({
+    const response = {
       todayAppointments: Number(today.today_appointments),
       todayRevenue: Number(today.today_revenue),
       totalAppointments: totalAppts,
@@ -275,7 +280,9 @@ export async function GET(req) {
       period,
       startDate: startStr,
       endDate: endStr,
-    });
+    };
+    setCache(cacheKey, response);
+    return NextResponse.json(response);
   } catch (error) {
     logger.error('DASHBOARD_STATS_ERROR', { error: error.message });
     return jsonError(error);

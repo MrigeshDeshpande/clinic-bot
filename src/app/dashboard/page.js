@@ -8,6 +8,7 @@ import Calendar from '@/components/Calendar';
 import { DateContext } from './layout';
 import { TREATMENT_NAMES } from '@/lib/treatments';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
+import { fetchCached } from '@/lib/clientFetchCache';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
@@ -510,12 +511,11 @@ export default function DashboardPage() {
     const month = d.getMonth() + 1;
 
     Promise.all([
-      fetch(`/api/dashboard/appointments?date=${selectedDate}`).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch appointments'); return d; }),
-      fetch(`/api/dashboard/calendar?year=${year}&month=${month}`).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch calendar'); return d; }),
+      fetchCached(`/api/dashboard/appointments?date=${selectedDate}`),
+      fetchCached(`/api/dashboard/calendar?year=${year}&month=${month}`),
     ])
       .then(([apptData, calData]) => {
         if (cancelled) return;
-        if (apptData.error) throw new Error(apptData.error);
         setData(apptData);
         setDatesData(calData.dates || {});
         if (calData.slotDefinitions) setSlotDefinitions(calData.slotDefinitions);

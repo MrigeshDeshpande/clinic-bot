@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Clock, Phone, UserCheck, ArrowRight, Star } from 'lucide-react';
 import { DateContext, ToastContext } from '../layout';
 import { formatDateLong } from '@/lib/date';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 
 export default function QueuePage() {
   const { selectedDate, setSelectedDate } = useContext(DateContext);
@@ -18,8 +19,7 @@ export default function QueuePage() {
   const fetchQueue = useCallback(async (isManual) => {
     if (isManual) setRefreshing(true);
     try {
-      const res = await fetch('/api/dashboard/appointments?date=' + selectedDate);
-      const data = await res.json();
+      const data = await fetchCached('/api/dashboard/appointments?date=' + selectedDate);
       setQueue(data.appointments || []);
     } catch (e) {
       console.error('Failed to fetch queue', e);
@@ -58,6 +58,7 @@ export default function QueuePage() {
       showToast('Network error', 'error');
     }
     setActionLoading(null);
+    invalidateFetchCache('/api/dashboard/appointments?date=' + selectedDate);
     fetchQueue();
   }
 

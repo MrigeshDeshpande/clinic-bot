@@ -11,6 +11,7 @@ import Calendar from '@/components/Calendar';
 import VisitCompleteModal from './VisitCompleteModal';
 import RescheduleModal from './RescheduleModal';
 import { DateContext, ToastContext } from '../layout';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
@@ -104,16 +105,15 @@ function AppointmentsContentInner() {
     const d = parseDateOnly(date) || new Date();
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
-    try { const res = await fetch(`/api/dashboard/calendar?year=${year}&month=${month}`); const json = await res.json(); setDotDates(Object.keys(json.dates || {})); } catch {}
+    try { const json = await fetchCached(`/api/dashboard/calendar?year=${year}&month=${month}`); setDotDates(Object.keys(json.dates || {})); } catch {}
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
     const scopeParam = scope === 'future' ? 'scope=future' : `date=${selectedDate}`;
-    fetch(`/api/dashboard/appointments?${scopeParam}`, { signal })
-      .then(async r => { if (signal.aborted) return null; const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch appointments'); return d; })
-      .then(d => { if (!signal.aborted && d) { setData(d); setLoading(false); } })
+    fetchCached(`/api/dashboard/appointments?${scopeParam}`)
+      .then(d => { if (!signal.aborted) { setData(d); setLoading(false); } })
       .catch(e => { if (!signal.aborted) { setError(e.message); setLoading(false); } });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCalendarDots(selectedDate);
@@ -159,9 +159,9 @@ function AppointmentsContentInner() {
       showToast('Network error', 'error');
     }
     setUpdating(null);
-    fetch(`/api/dashboard/appointments?date=${selectedDate}`)
-      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
-      .then(d => { if (d && !d.error) setData(d); })
+    invalidateFetchCache(`/api/dashboard/appointments?date=${selectedDate}`);
+    fetchCached(`/api/dashboard/appointments?date=${selectedDate}`)
+      .then(d => { if (d) setData(d); })
       .catch(e => setError(e.message));
   }
 
@@ -181,9 +181,9 @@ function AppointmentsContentInner() {
       showToast('Failed to undo', 'error');
     }
     setUpdating(null);
-    fetch(`/api/dashboard/appointments?date=${selectedDate}`)
-      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
-      .then(d => { if (d && !d.error) setData(d); })
+    invalidateFetchCache(`/api/dashboard/appointments?date=${selectedDate}`);
+    fetchCached(`/api/dashboard/appointments?date=${selectedDate}`)
+      .then(d => { if (d) setData(d); })
       .catch(e => setError(e.message));
   }
 
@@ -206,9 +206,9 @@ function AppointmentsContentInner() {
       showToast('Network error', 'error');
     }
     setArrivalUpdating(null);
-    fetch(`/api/dashboard/appointments?date=${selectedDate}`)
-      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
-      .then(d => { if (d && !d.error) setData(d); })
+    invalidateFetchCache(`/api/dashboard/appointments?date=${selectedDate}`);
+    fetchCached(`/api/dashboard/appointments?date=${selectedDate}`)
+      .then(d => { if (d) setData(d); })
       .catch(e => setError(e.message));
   }
 
@@ -238,9 +238,9 @@ function AppointmentsContentInner() {
       showToast('Network error', 'error');
     }
     setCancelUpdating(null);
-    fetch(`/api/dashboard/appointments?date=${selectedDate}`)
-      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
-      .then(d => { if (d && !d.error) setData(d); })
+    invalidateFetchCache(`/api/dashboard/appointments?date=${selectedDate}`);
+    fetchCached(`/api/dashboard/appointments?date=${selectedDate}`)
+      .then(d => { if (d) setData(d); })
       .catch(e => setError(e.message));
   }
 
@@ -647,9 +647,9 @@ function AppointmentsContentInner() {
           onClose={() => setRescheduleModal(null)}
           onReschedule={() => {
             setRescheduleModal(null);
-            fetch(`/api/dashboard/appointments?date=${selectedDate}`)
-              .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
-              .then(d => { if (d && !d.error) setData(d); })
+            invalidateFetchCache(`/api/dashboard/appointments?date=${selectedDate}`);
+            fetchCached(`/api/dashboard/appointments?date=${selectedDate}`)
+              .then(d => { if (d) setData(d); })
               .catch(e => setError(e.message));
           }}
           showToast={showToast}
@@ -670,9 +670,9 @@ function AppointmentsContentInner() {
                 a.id === appointmentId ? { ...a, status: 'completed' } : a
               ),
             }));
-            fetch(`/api/dashboard/appointments?date=${selectedDate}`)
-              .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to reload'); return d; })
-              .then(d => { if (d && !d.error) setData(d); })
+            invalidateFetchCache(`/api/dashboard/appointments?date=${selectedDate}`);
+            fetchCached(`/api/dashboard/appointments?date=${selectedDate}`)
+              .then(d => { if (d) setData(d); })
               .catch(e => setError(e.message));
           }}
           showToast={showToast}

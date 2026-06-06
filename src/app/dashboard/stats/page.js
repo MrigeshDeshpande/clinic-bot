@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { fetchCached } from '@/lib/clientFetchCache';
 import {
   TrendingUp, DollarSign, Calendar, Activity, Stethoscope,
   Pill, Clock, Users, XCircle, Download, ArrowUp, ArrowDown, Mars, Venus,
@@ -26,8 +27,7 @@ export default function StatsPage() {
   const fetchStats = useCallback(async (p) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/dashboard/stats?period=${p}`);
-      const d = await res.json();
+      const d = await fetchCached(`/api/dashboard/stats?period=${p}`);
       setStats(d);
     } catch (err) {
       console.error(err);

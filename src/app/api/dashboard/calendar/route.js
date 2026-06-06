@@ -3,6 +3,7 @@ import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { CLINIC } from '@/config/clinic';
 import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
+import { getCached, setCache } from '@/lib/dataCache';
 
 export async function GET(req) {
   const rateErr = checkRateLimit(req);
@@ -11,6 +12,9 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const year = parseInt(searchParams.get('year'), 10);
     const month = parseInt(searchParams.get('month'), 10);
+    const cacheKey = `calendar:${year}-${month}`;
+    const cached = getCached(cacheKey);
+    if (cached) return NextResponse.json(cached);
 
     if (!year || !month || month < 1 || month > 12) {
       return NextResponse.json({ error: 'Invalid year/month' }, { status: 400 });
@@ -94,14 +98,16 @@ export async function GET(req) {
       cursor.setDate(cursor.getDate() + 1);
     }
 
-    return NextResponse.json({
+    const response = {
       dates: sanitizeResponse(dates),
       blockedDates: blockedRows.map(r => r.date),
       slotDefinitions: {
         weekday: CLINIC.slots.weekday,
         sunday: CLINIC.slots.sunday,
       },
-    });
+    };
+    setCache(cacheKey, response);
+    return NextResponse.json(response);
   } catch (error) {
     logger.error('CALENDAR_ERROR', { error: error.message });
     return jsonError(error);

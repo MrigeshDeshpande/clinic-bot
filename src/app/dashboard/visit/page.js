@@ -7,6 +7,7 @@ import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Ac
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import MediaViewer from '@/components/MediaViewer';
+import { fetchCached } from '@/lib/clientFetchCache';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash', icon: '\u{1F4B5}' },
@@ -187,7 +188,7 @@ function VisitPageInner() {
   // Load existing visit data (auto-fill all fields)
   useEffect(() => {
     if (!appointmentId) return;
-    fetch(`/api/dashboard/appointments?id=${appointmentId}`)
+    fetchCached(`/api/dashboard/appointments?id=${appointmentId}`)
       .then(r => r.json())
       .then(data => {
         const a = data.appointment || data;
@@ -237,47 +238,38 @@ function VisitPageInner() {
                 medications: p.medications || '',
               });
             }
-            setLoadingExtra(true);
-            // Fetch visits history (already returned by patient API)
-            if (p.visits) setPatientVisits(p.visits);
-            // Fetch messages
             if (p.id) {
-              fetch(`/api/dashboard/patients/${p.id}/messages?limit=10`)
-                .then(r => r.json())
-                .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
-                .catch(() => {});
-              // Fetch family
-              fetch(`/api/dashboard/patients/${p.id}/family`)
-                .then(r => r.json())
-                .then(fData => { if (fData.family) setPatientFamily(fData.family); })
-                .catch(() => {});
+              Promise.all([
+                fetchCached(`/api/dashboard/patients/${p.id}/messages?limit=10`)
+                  .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
+                  .catch(() => {}),
+                fetchCached(`/api/dashboard/patients/${p.id}/family`)
+                  .then(fData => { if (fData.family) setPatientFamily(fData.family); })
+                  .catch(() => {}),
+              ]);
             }
             setLoadingExtra(false);
           }
+          async function loadPatientProfile(id) {
+            const pData = await fetchCached(`/api/dashboard/patients/${id}`);
+            if (pData.patient) applyPatientProfile({ ...pData.patient, visits: pData.visits });
+          }
           if (a.patient_id) {
-            fetch(`/api/dashboard/patients/${a.patient_id}`)
-              .then(r => r.json())
-              .then(pData => { if (pData.patient) applyPatientProfile({ ...pData.patient, visits: pData.visits }); })
-              .catch(() => {});
+            loadPatientProfile(a.patient_id);
           } else if (a.patient_phone) {
-            fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(a.patient_phone)}`)
-              .then(r => r.json())
-              .then(pData => {
+            (async () => {
+              try {
+                const pData = await fetchCached(`/api/dashboard/patients/search?q=${encodeURIComponent(a.patient_phone)}`);
                 const match = (pData.patients || []).find(p => p.phone === a.patient_phone);
                 if (match) {
-                  // Also fetch visits for phone-search matches
                   applyPatientProfile(match);
                   if (match.id) {
-                    fetch(`/api/dashboard/patients/${match.id}`)
-                      .then(r => r.json())
-                      .then(pData => {
-                        if (pData.visits) setPatientVisits(pData.visits);
-                      })
-                      .catch(() => {});
+                    const full = await fetchCached(`/api/dashboard/patients/${match.id}`);
+                    if (full.visits) setPatientVisits(full.visits);
                   }
                 }
-              })
-              .catch(() => {});
+              } catch {}
+            })();
           }
         }
       })
