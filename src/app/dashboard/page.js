@@ -569,9 +569,29 @@ export default function DashboardPage() {
     setToast('Appointment booked successfully');
   }
 
+  const totals = data?.totals || {};
+  const appointments = data?.appointments || [];
+  const confirmed = appointments.filter(a => a.status === 'confirmed');
+  const completed = appointments.filter(a => a.status === 'completed');
+  const todayRevenue = completed.reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
+  const todayCollected = completed.reduce((sum, a) => sum + Number(a.paid_amount || 0), 0);
+  const todayPending = completed.reduce((sum, a) => sum + (Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0) - Number(a.paid_amount || 0)), 0);
+  const paymentMethods = completed.filter(a => a.payment_status === 'paid' || a.payment_status === 'partial').reduce((acc, a) => { const m = a.payment_method || 'cash'; acc[m] = (acc[m] || 0) + 1; return acc; }, {});
+
+  function formatCurrency(amount) {
+    return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+  }
+
   if (overviewError) {
     return (
       <div className="animate-fade-in">
+        {/* Header always rendered for LCP */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
+          </div>
+        </div>
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center max-w-lg mx-auto mt-12">
           <XCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-1">Something went wrong</h3>
@@ -587,51 +607,31 @@ export default function DashboardPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="shimmer h-8 w-64 rounded-lg" />
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 shimmer h-80 rounded-xl" />
-          <div className="shimmer h-80 rounded-xl" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="shimmer h-28 rounded-xl" />)}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="shimmer h-64 rounded-xl" />
-          <div className="shimmer h-64 rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
-  const totals = data?.totals || {};
-  const appointments = data?.appointments || [];
-  const confirmed = appointments.filter(a => a.status === 'confirmed');
-  const completed = appointments.filter(a => a.status === 'completed');
-  const todayRevenue = completed.reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
-  const todayCollected = completed.reduce((sum, a) => sum + Number(a.paid_amount || 0), 0);
-  const todayPending = completed.reduce((sum, a) => sum + (Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0) - Number(a.paid_amount || 0)), 0);
-  const paymentMethods = completed.filter(a => a.payment_status === 'paid' || a.payment_status === 'partial').reduce((acc, a) => { const m = a.payment_method || 'cash'; acc[m] = (acc[m] || 0) + 1; return acc; }, {});
-
-  function formatCurrency(amount) {
-    return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
-  }
-
   return (
     <div className="animate-fade-in">
-      {/* Header */}
+      {/* Header — always rendered, even during loading, to optimize LCP */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {formatDateLong(selectedDate)}
-          </p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
         </div>
       </div>
 
-      {/* Calendar + Slot Detail — side by side on large screens */}
+      {loading ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 shimmer h-80 rounded-xl" />
+            <div className="shimmer h-80 rounded-xl" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => <div key={i} className="shimmer h-28 rounded-xl" />)}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="shimmer h-64 rounded-xl" />
+            <div className="shimmer h-64 rounded-xl" />
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
         {/* Calendar */}
         <div className="xl:col-span-2">
@@ -662,6 +662,8 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+      )
+      }
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
