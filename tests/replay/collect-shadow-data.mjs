@@ -3,11 +3,12 @@
 
 process.env.LOG_LEVEL = 'error';
 process.env.SHADOW_MODE = 'true';
+process.env.SHADOW_SAMPLE_RATE = '1';
 
-import { processEvent } from '../../src/lib/engine.js';
-import { runMigrations, getSql } from '../../src/db/pool.js';
-import { clearSessionCache } from '../../src/lib/session.js';
-import { FIXTURES } from './fixtures.js';
+const { processEvent } = await import('../../src/lib/engine.js');
+const { runMigrations, getSql } = await import('../../src/db/pool.js');
+const { clearSessionCache } = await import('../../src/lib/session.js');
+const { FIXTURES } = await import('./fixtures.js');
 
 await runMigrations().catch(() => {});
 
