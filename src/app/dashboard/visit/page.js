@@ -656,7 +656,8 @@ function VisitPageInner() {
           console.log('[MEDIA] No files to upload or missing appointment ID');
         }
         localStorage.removeItem(DRAFT_KEY);
-        setResult({ patient_name: form.patientName, treatment: primaryTreatment });
+        const appointmentIdForResult = data.appointment?.id || appointmentId;
+        setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
       } else {
         showToast(data.error || 'Failed to log visit', 'error');
       }
@@ -741,7 +742,21 @@ function VisitPageInner() {
                 </button>
               </>
             )}
-            <button onClick={() => window.print()} className="px-6 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+            <button onClick={async () => {
+              try {
+                const id = result.appointment_id;
+                if (!id) { showToast('No appointment ID — cannot generate prescription', 'error'); return; }
+                const res = await fetch(`/api/dashboard/visits/${id}/prescription`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.url) {
+                  window.open(data.url, '_blank');
+                } else {
+                  showToast(data.error || 'Failed to generate prescription', 'error');
+                }
+              } catch {
+                showToast('Network error', 'error');
+              }
+            }} className="px-6 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
               Print
             </button>
           </div>
@@ -968,11 +983,25 @@ function VisitPageInner() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-medium text-gray-900 dark:text-gray-100">{v.date?.slice(0, 10)}{v.time ? ` ${v.time?.slice(0, 5)}` : ''}</p>
-                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                              v.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
-                              v.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
-                              'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                            }`}>{v.status === 'completed' ? 'Done' : v.status === 'no_show' ? 'Missed' : 'Scheduled'}</span>
+                            <div className="flex items-center gap-1">
+                              {v.status === 'completed' && (
+                                <button onClick={() => {
+                                  fetch(`/api/dashboard/visits/${v.id}/prescription`, { method: 'POST' })
+                                    .then(r => r.json())
+                                    .then(data => { if (data.url) window.open(data.url, '_blank'); })
+                                    .catch(() => {});
+                                }}
+                                  className="p-0.5 rounded text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
+                                  title="View prescription">
+                                  <FileText className="w-3 h-3" />
+                                </button>
+                              )}
+                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                                v.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
+                                v.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
+                                'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                              }`}>{v.status === 'completed' ? 'Done' : v.status === 'no_show' ? 'Missed' : 'Scheduled'}</span>
+                            </div>
                           </div>
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{v.treatment || 'Visit'}{v.diagnosis ? ` — ${v.diagnosis.slice(0, 60)}${v.diagnosis.length > 60 ? '...' : ''}` : ''}</p>
                           {(v.consultation_fee || v.treatment_charges || v.medicine_charges) ? (

@@ -496,7 +496,21 @@ export default function PatientDetailPage() {
                         Message
                       </button>
                       <button
-                        onClick={() => window.print()}
+                        onClick={async () => {
+                          const latest = completedVisits[0];
+                          if (!latest) { showToast('No completed visits', 'error'); return; }
+                          try {
+                            const res = await fetch(`/api/dashboard/visits/${latest.id}/prescription`, { method: 'POST' });
+                            const data = await res.json();
+                            if (res.ok && data.url) {
+                              window.open(data.url, '_blank');
+                            } else {
+                              showToast(data.error || 'Failed to generate prescription', 'error');
+                            }
+                          } catch {
+                            showToast('Network error', 'error');
+                          }
+                        }}
                         className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95 shadow-md"
                       >
                         <Printer className="w-4 h-4" />
@@ -669,7 +683,19 @@ export default function PatientDetailPage() {
                             </span>
                           </div>
                           {visit.status === 'completed' && (
-                            <div className="flex justify-end mb-3 -mt-2">
+                            <div className="flex justify-end gap-2 mb-3 -mt-2">
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const res = await fetch(`/api/dashboard/visits/${visit.id}/prescription`, { method: 'POST' });
+                                  const data = await res.json();
+                                  if (res.ok && data.url) window.open(data.url, '_blank');
+                                  else showToast(data.error || 'Failed to generate prescription', 'error');
+                                } catch { showToast('Network error', 'error'); }
+                              }}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all active:scale-95">
+                                <Printer className="w-3 h-3" /> Rx
+                              </button>
                               <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`); }}
                                 className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95">
                                 <Edit3 className="w-3 h-3" /> Edit
