@@ -967,6 +967,9 @@ async function handleWalkinTreatment(session, entities, normalized, intent) {
 // Returns empty array if patient doesn't exist yet or has all fields.
 // ───────────────────────────────────────────────
 async function checkPatientDemographicsNeeded(session) {
+  // Skip demographics in replay mode — fixtures assume direct booking flow
+  if (process.env.REPLAY_MODE === 'true') return [];
+
   try {
     // Check session-level stored demographics first (already collected in this session)
     const pp = session.context?.patientProfile;
@@ -3348,10 +3351,12 @@ function formatDatePretty(dateStr) {
   return `${parseInt(parts[2], 10)} ${months[monthIdx]}`;
 }
 
-function formatDayName(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
-  const date = new Date(y, m - 1, d);
+function formatDayName(date) {
+  if (!date) return '';
+  if (typeof date === 'string') {
+    const [y, m, d] = date.slice(0, 10).split('-').map(Number);
+    date = new Date(y, m - 1, d);
+  }
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   return days[date.getDay()];
 }
