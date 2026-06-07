@@ -111,15 +111,32 @@ export async function generatePrescription({ patient, visit, appointment }) {
   doc.fillColor('#ffffff').font('Bold').fontSize(32);
   doc.text('Shri Balaji', brandX, 30, { lineBreak: false });
 
-  // Subtitle — split on "&" so it breaks like the printed banner
-  doc.fillColor(accentColor).font('Regular').fontSize(8);
+  // Subtitle — split on "&"; line 2 gets a thin accent line on each side
+  const subFont = 8;
+  const subCS = 1.2;
+  doc.fillColor(accentColor).font('Regular').fontSize(subFont);
   const subRaw = (clinicSubtitle || 'Advanced Dental Care & Implant Center').toUpperCase();
   const ampIdx = subRaw.indexOf('&');
   const subLine1 = ampIdx > 0 ? subRaw.slice(0, ampIdx).trim() : subRaw;
   const subLine2 = ampIdx > 0 ? subRaw.slice(ampIdx).trim() : '';
   const subW = dividerX - brandX - 6;
-  doc.text(subLine1, brandX, 66, { width: subW, characterSpacing: 1.2, lineBreak: false });
-  if (subLine2) doc.text(subLine2, brandX, 77, { width: subW, characterSpacing: 1.2, lineBreak: false });
+
+  doc.text(subLine1, brandX, 66, { width: subW, characterSpacing: subCS, lineBreak: false });
+
+  if (subLine2) {
+    const l2y = 78;
+    const tW = doc.widthOfString(subLine2) + subLine2.length * subCS;
+    const tX = brandX + (subW - tW) / 2;
+    doc.text(subLine2, tX, l2y, { characterSpacing: subCS, lineBreak: false });
+    const lineY = l2y + subFont / 2;
+    const gap = 6;
+    doc.save();
+    doc.strokeColor(accentColor).lineWidth(0.8).opacity(0.6);
+    doc.moveTo(brandX, lineY).lineTo(tX - gap, lineY).stroke();
+    doc.moveTo(tX + tW + gap, lineY).lineTo(brandX + subW, lineY).stroke();
+    doc.restore();
+    doc.opacity(1);
+  }
 
   // Vertical divider
   doc.save();
