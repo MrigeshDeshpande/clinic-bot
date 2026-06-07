@@ -332,6 +332,13 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
     if (t) bookedByTime[t] = a;
   }
 
+  // Time-aware helpers for today's schedule
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  function addMins(t, m) { const [h, min] = t.split(':').map(Number); const total = h * 60 + min + m; return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`; }
+  const nextFreeSlot = isToday ? slots.find(s => s > currentHHMM && !bookedByTime[s]) : null;
+
   if (dateInfo?.isBlocked) {
     return (
       <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl p-6 text-center">
@@ -388,44 +395,65 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
             {morningSlots.map(slotTime => {
               const isBooked = !!bookedByTime[slotTime];
               const bookedAppt = bookedByTime[slotTime];
+              const isPast = isToday && addMins(slotTime, 30) <= currentHHMM;
+              const isCurrent = isToday && slotTime <= currentHHMM && addMins(slotTime, 30) > currentHHMM;
+              const isNextFree = slotTime === nextFreeSlot;
+              const showBook = !isBooked && !isPast;
               return (
                 <button
                   key={slotTime}
                   type="button"
+                  disabled={isPast && !isBooked}
                   className={`relative rounded-lg border text-center transition-all duration-150 ${
-                    isBooked
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 active:scale-95'
-                      : 'bg-green-50/60 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:shadow-sm active:scale-95'
+                    isPast && !isBooked
+                      ? 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60'
+                      : isBooked
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 active:scale-95'
+                        : isNextFree
+                          ? 'bg-green-50 dark:bg-green-900/20 border-emerald-400 dark:border-emerald-500 hover:bg-green-100 dark:hover:bg-green-900/30 active:scale-95 ring-2 ring-emerald-300/50 dark:ring-emerald-600/50 animate-pulse'
+                          : 'bg-green-50/60 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:shadow-sm active:scale-95'
                   }`}
                   onClick={() => {
                     if (isBooked && bookedAppt?.patient_id) {
                       router.push(`/dashboard/patients/${bookedAppt.patient_id}`);
-                    } else if (!isBooked) {
+                    } else if (showBook) {
                       onBookSlotRef?.current?.(slotTime);
                     }
                   }}
                 >
-                    <div className="px-3 py-3">
+                  <div className="px-3 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
-                      <span className={`text-sm font-semibold leading-tight ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
+                      {isCurrent ? (
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0" />
+                      ) : (
+                        <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
+                      )}
+                      <span className={`text-sm font-semibold leading-tight ${
+                        isPast && !isBooked ? 'text-gray-400 dark:text-gray-500'
+                        : isBooked ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-green-700 dark:text-green-300'
+                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-[10px] font-bold text-red-500 uppercase">Now</span>}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium truncate leading-tight">{bookedAppt.patient_name || 'Booked'}</p>
+                        <p className={`text-xs font-medium truncate leading-tight ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}`}>{bookedAppt.patient_name || 'Booked'}</p>
+                      </div>
+                    ) : showBook ? (
+                      <div className="flex items-center justify-center gap-1 mt-1">
+                        <Plus className={`w-2.5 h-2.5 ${isNextFree ? 'text-emerald-500' : 'text-green-500 dark:text-green-400'}`} />
+                        <p className={`text-xs font-medium leading-tight ${isNextFree ? 'text-emerald-600 dark:text-emerald-400' : 'text-green-600 dark:text-green-400'}`}>Book</p>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-1 mt-1">
-                        <Plus className="w-2.5 h-2.5 text-green-500 dark:text-green-400" />
-                        <p className="text-xs text-green-600 dark:text-green-400 font-medium leading-tight">Book</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium leading-tight">Passed</p>
                       </div>
                     )}
                   </div>
-                  {isBooked && bookedAppt.arrival_status === 'arrived' && (
+                  {isBooked && bookedAppt.arrival_status === 'arrived' && !isPast && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white dark:border-gray-900" title="Arrived" />
                   )}
-                  {isBooked && bookedAppt.arrival_status === 'called' && (
+                  {isBooked && bookedAppt.arrival_status === 'called' && !isPast && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white dark:border-gray-900" title="In Session" />
                   )}
                 </button>
@@ -442,44 +470,65 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
             {afternoonSlots.map(slotTime => {
               const isBooked = !!bookedByTime[slotTime];
               const bookedAppt = bookedByTime[slotTime];
+              const isPast = isToday && addMins(slotTime, 30) <= currentHHMM;
+              const isCurrent = isToday && slotTime <= currentHHMM && addMins(slotTime, 30) > currentHHMM;
+              const isNextFree = slotTime === nextFreeSlot;
+              const showBook = !isBooked && !isPast;
               return (
                 <button
                   key={slotTime}
                   type="button"
+                  disabled={isPast && !isBooked}
                   className={`relative rounded-lg border text-center transition-all duration-150 ${
-                    isBooked
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 active:scale-95'
-                      : 'bg-green-50/60 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:shadow-sm active:scale-95'
+                    isPast && !isBooked
+                      ? 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60'
+                      : isBooked
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 active:scale-95'
+                        : isNextFree
+                          ? 'bg-green-50 dark:bg-green-900/20 border-emerald-400 dark:border-emerald-500 hover:bg-green-100 dark:hover:bg-green-900/30 active:scale-95 ring-2 ring-emerald-300/50 dark:ring-emerald-600/50 animate-pulse'
+                          : 'bg-green-50/60 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:shadow-sm active:scale-95'
                   }`}
                   onClick={() => {
                     if (isBooked && bookedAppt?.patient_id) {
                       router.push(`/dashboard/patients/${bookedAppt.patient_id}`);
-                    } else if (!isBooked) {
+                    } else if (showBook) {
                       onBookSlotRef?.current?.(slotTime);
                     }
                   }}
                 >
-                    <div className="px-3 py-3">
+                  <div className="px-3 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
-                      <span className={`text-sm font-semibold leading-tight ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
+                      {isCurrent ? (
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0" />
+                      ) : (
+                        <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : isPast ? 'text-gray-300 dark:text-gray-600' : 'text-green-400'}`} />
+                      )}
+                      <span className={`text-sm font-semibold leading-tight ${
+                        isPast && !isBooked ? 'text-gray-400 dark:text-gray-500'
+                        : isBooked ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-green-700 dark:text-green-300'
+                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-[10px] font-bold text-red-500 uppercase">Now</span>}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium truncate leading-tight">{bookedAppt.patient_name || 'Booked'}</p>
+                        <p className={`text-xs font-medium truncate leading-tight ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}`}>{bookedAppt.patient_name || 'Booked'}</p>
+                      </div>
+                    ) : showBook ? (
+                      <div className="flex items-center justify-center gap-1 mt-1">
+                        <Plus className={`w-2.5 h-2.5 ${isNextFree ? 'text-emerald-500' : 'text-green-500 dark:text-green-400'}`} />
+                        <p className={`text-xs font-medium leading-tight ${isNextFree ? 'text-emerald-600 dark:text-emerald-400' : 'text-green-600 dark:text-green-400'}`}>Book</p>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-1 mt-1">
-                        <Plus className="w-2.5 h-2.5 text-green-500 dark:text-green-400" />
-                        <p className="text-xs text-green-600 dark:text-green-400 font-medium leading-tight">Book</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium leading-tight">Passed</p>
                       </div>
                     )}
                   </div>
-                  {isBooked && bookedAppt.arrival_status === 'arrived' && (
+                  {isBooked && bookedAppt.arrival_status === 'arrived' && !isPast && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white dark:border-gray-900" title="Arrived" />
                   )}
-                  {isBooked && bookedAppt.arrival_status === 'called' && (
+                  {isBooked && bookedAppt.arrival_status === 'called' && !isPast && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white dark:border-gray-900" title="In Session" />
                   )}
                 </button>

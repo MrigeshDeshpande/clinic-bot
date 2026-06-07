@@ -271,7 +271,7 @@ export default function DashboardLayout({ children }) {
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
 
-  if (pathname === '/dashboard/login') {
+  if (pathname === '/dashboard/login' || pathname === '/dashboard/prescription-preview') {
     return children;
   }
 

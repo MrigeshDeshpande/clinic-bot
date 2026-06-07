@@ -87,46 +87,98 @@ export async function generatePrescription({ patient, visit, appointment }) {
   }
 
   // ─── HEADER ───
-  doc.rect(0, y, PAGE_WIDTH, 130).fill(primaryColor);
-  doc.fillColor('#ffffff');
-  doc.fontSize(28).font('Bold');
-  doc.text('Shri Balaji', LM, 22);
-  doc.fontSize(8).font('Regular');
-  doc.fillColor(accentColor);
-  doc.text(clinicSubtitle.toUpperCase(), LM, 58);
+  const PM = 30;
+  const bannerH = 158;
+  const leftX = PM;
+  const dividerX = 300;
+  const rightX = dividerX + 16;            // 316
+  const rightW = PAGE_WIDTH - PM - rightX; // ~249
+  const logoW = 64;
+  const brandX = leftX + logoW + 12;       // 88
 
-  doc.fillColor('#ffffff');
-  doc.fontSize(11).font('Bold');
-  const doctorLabel = `DR. ${(CLINIC.doctor?.name || '').replace(/^Dr\.\s*/i, '').toUpperCase()}`;
-  doc.text(doctorLabel, LM + 280, 18, { width: 250, align: 'right' });
+  doc.rect(0, 0, PAGE_WIDTH, bannerH).fill(primaryColor);
 
-  doc.fontSize(8).font('Regular');
-  doc.fillColor(accentColor);
-  const qualParts = [docDesignation, docQual].filter(Boolean);
-  doc.text(qualParts.join(' | '), LM + 280, 34, { width: 250, align: 'right' });
-
-  doc.fillColor('#cccccc');
-  if (docReg) {
-    doc.text(docReg, LM + 280, 46, { width: 250, align: 'right' });
+  // Logo — fit-box scales any source dimensions without overflowing
+  const logoPath = path.join(process.cwd(), 'public', 'logo1.png');
+  try {
+    doc.image(logoPath, leftX, 24, { fit: [logoW, 116], align: 'center', valign: 'top' });
+  } catch {
+    doc.roundedRect(leftX, 24, logoW, logoW, 8).fill('#ffffff');
+    doc.fillColor(primaryColor).fontSize(14).font('Bold').text('SB', leftX, 40, { width: logoW, align: 'center' });
   }
-  doc.fillColor('#ffffff');
-  doc.fontSize(8.5);
-  const phoneLine = `Phone: ${CLINIC.phone || ''}` + (clinicInstagram ? `     Instagram: ${clinicInstagram}` : '');
-  doc.text(phoneLine, LM + 280, 62, { width: 250, align: 'right' });
-  doc.text(`Email: ${clinicEmail}`, LM + 280, 74, { width: 250, align: 'right' });
-  const addrShort = CLINIC.address ? CLINIC.address.split(', C')[0] || CLINIC.address : '';
-  doc.text(`Address: ${addrShort}`, LM + 280, 86, { width: 250, align: 'right' });
 
-  // ─── TIMING SEPARATOR ───
-  const timingY = 108;
-  doc.opacity(0.3);
-  doc.moveTo(LM, timingY).lineTo(LM + 495, timingY).stroke('#ffffff');
-  doc.opacity(1);
-  doc.fillColor('#b0c4de');
-  doc.fontSize(7.5).font('Regular');
-  doc.text(`MON \u2013 SAT : ${timingMonSat}`, LM, timingY + 6);
-  doc.text(`SUN : ${timingSun}`, LM + 350, timingY + 6);
+  // Brand wordmark — lineBreak:false so it can never bleed past the divider
+  doc.fillColor('#ffffff').font('Bold').fontSize(32);
+  doc.text('Shri Balaji', brandX, 30, { lineBreak: false });
+
+  // Subtitle — split on "&" so it breaks like the printed banner
+  doc.fillColor(accentColor).font('Regular').fontSize(8);
+  const subRaw = (clinicSubtitle || 'Advanced Dental Care & Implant Center').toUpperCase();
+  const ampIdx = subRaw.indexOf('&');
+  const subLine1 = ampIdx > 0 ? subRaw.slice(0, ampIdx).trim() : subRaw;
+  const subLine2 = ampIdx > 0 ? subRaw.slice(ampIdx).trim() : '';
+  const subW = dividerX - brandX - 6;
+  doc.text(subLine1, brandX, 66, { width: subW, characterSpacing: 1.2, lineBreak: false });
+  if (subLine2) doc.text(subLine2, brandX, 77, { width: subW, characterSpacing: 1.2, lineBreak: false });
+
+  // Vertical divider
+  doc.save();
+  doc.strokeColor(accentColor).lineWidth(1.5);
+  doc.moveTo(dividerX, 24).lineTo(dividerX, 118).stroke();
+  doc.restore();
+
+  // ── RIGHT: Doctor details ──
+  let ry = 22;
+  doc.fillColor('#ffffff').font('Bold').fontSize(12);
+  const doctorLabel = `DR. ${(CLINIC.doctor?.name || 'M. VISHNU VARDHAN').replace(/^Dr\.\s*/i, '').toUpperCase()}, BDS, MOI`;
+  doc.text(doctorLabel, rightX, ry, { width: rightW, lineBreak: false, ellipsis: true });
+
+  ry += 18;
+  doc.fillColor(accentColor).font('Regular').fontSize(8.5);
+  doc.text(`${docDesignation} (Hyderabad)`, rightX, ry, { width: rightW, lineBreak: false, ellipsis: true });
+
+  ry += 14;
+  doc.fillColor('#a0c0e0').fontSize(8.5);
+  doc.text(`Reg. No. - ${docReg || 'CGDC/G/24/4198'}`, rightX, ry, { width: rightW, lineBreak: false });
+
+  // Contacts
+  const dotR = 1.8;
+  const textX = rightX + 12;
+  // Normalize phone: keep digits only, drop a leading 91 if the result would be 12 digits → no double +91
+  const phoneDigits = String(CLINIC.phone || '9111594782').replace(/[^\d]/g, '').replace(/^91(?=\d{10}$)/, '');
+  const instaHandle = (clinicInstagram || 'shribalaji_adc').replace(/^@/, '');
+
+  ry += 20;
+  doc.font('Regular').fontSize(9.5);
+  doc.save(); doc.fillColor(accentColor).circle(rightX + dotR, ry + 5, dotR).fill(); doc.restore();
+  doc.fillColor('#e6eef7').text(`+91-${phoneDigits}`, textX, ry, { lineBreak: false });
+  const phoneW = doc.widthOfString(`+91-${phoneDigits}`);
+  doc.link(textX, ry, phoneW, 12, `tel:+91${phoneDigits}`);
+  const igDotX = textX + phoneW + 16;
+  doc.save(); doc.fillColor(accentColor).circle(igDotX + dotR, ry + 5, dotR).fill(); doc.restore();
+  doc.fillColor('#e6eef7').text(instaHandle, igDotX + 10, ry, { lineBreak: false });
+  doc.link(igDotX + 10, ry, doc.widthOfString(instaHandle), 12, `https://instagram.com/${instaHandle}`);
+
+  ry += 16;
+  doc.save(); doc.fillColor(accentColor).circle(rightX + dotR, ry + 5, dotR).fill(); doc.restore();
+  doc.fillColor('#e6eef7').text(clinicEmail, textX, ry, { lineBreak: false });
+  doc.link(textX, ry, doc.widthOfString(clinicEmail), 12, `mailto:${clinicEmail}`);
+
+  ry += 16;
+  doc.save(); doc.fillColor(accentColor).circle(rightX + dotR, ry + 5, dotR).fill(); doc.restore();
+  doc.fillColor('#e6eef7').text('MIG-1/321, Amdi Nagar, Hudco, Bhilai', textX, ry, { width: rightW - 12, lineBreak: false, ellipsis: true });
+
+  // ── Timing bar (bottom, full width) ──
+  const stripY = 132;
+  doc.save();
+  doc.opacity(0.22); doc.strokeColor('#ffffff').lineWidth(1);
+  doc.moveTo(PM, stripY).lineTo(PAGE_WIDTH - PM, stripY).stroke();
+  doc.restore();
+  doc.fillColor('#b0c4de').font('Regular').fontSize(9);
+  doc.text(`MON \u2013 SUN : ${timingMonSat}`, PM, stripY + 12, { lineBreak: false });
+  doc.text('SAT : Closed', PAGE_WIDTH - PM - 90, stripY + 12, { width: 90, align: 'right' });
   doc.fillColor('#000000');
+
 
   // ─── WATERMARK ───
   if (showWatermark && watermarkText) {
@@ -140,7 +192,7 @@ export async function generatePrescription({ patient, visit, appointment }) {
     doc.restore();
   }
 
-  y = 150;
+  y = bannerH + 22;
 
   // ─── PATIENT INFO ───
   doc.fontSize(10).font('Bold');
