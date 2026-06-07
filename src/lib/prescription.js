@@ -80,12 +80,6 @@ export async function generatePrescription({ patient, visit, appointment }) {
 
   const BM = 8;
 
-  // ─── BORDER ───
-  if (borderEnabled) {
-    doc.rect(BM, BM, PAGE_WIDTH - BM * 2, 842 - BM * 2).strokeColor(primaryColor).lineWidth(0.5).stroke();
-    doc.strokeColor('#000000');
-  }
-
   // ─── HEADER ───
   const PM = 30;
   const bannerH = 158;
@@ -419,24 +413,31 @@ export async function generatePrescription({ patient, visit, appointment }) {
     y += doc.heightOfString(visit.notes, { width: RW }) + 16;
   }
 
-  // ─── NOTE BANNER (sticky footer) ───
-  const noteY = Math.max(y + 30, 740);
-  doc.rect(LM, noteY, RW, 28).fill(primaryColor);
+  // ─── SIGNATURE ───
+  const sigY = Math.max(y + 30, 770);
+  const signPath = path.join(process.cwd(), 'public', 'sign.png');
+  try { doc.image(signPath, LM + 350, sigY - 65, { fit: [130, 60], align: 'center', valign: 'bottom' }); } catch (e) { logger.error('SIGN_LOAD_ERROR', { error: e.message }); }
+  doc.fontSize(8.5).font('Regular');
+  doc.text(CLINIC.doctor?.name || 'Doctor', LM + 300, sigY + 6, { align: 'right', width: 195 });
+
+  // ─── NOTE BANNER (sticky bottom) ───
+  const noteY = 842 - 28 - 10;
+  doc.rect(BM, noteY, PAGE_WIDTH - BM * 2, 28).fill(primaryColor);
   doc.fillColor('#ffffff');
   doc.fontSize(7.5).font('Bold');
-  doc.text('NOTE:', LM + 8, noteY + 4);
+  doc.text('NOTE:', BM + 10, noteY + 4);
   doc.font('Regular');
   doc.text(
     'Please inform the doctor of any medical conditions (BP, Diabetes, Thyroid, Asthma, Allergies, Pregnancy, HIV, etc.) before treatment.',
-    LM + 38, noteY + 4, { width: RW - 46 }
+    BM + 48, noteY + 4, { width: PAGE_WIDTH - BM * 2 - 58 }
   );
   doc.fillColor('#000000');
 
-  // ─── SIGNATURE (sticky footer) ───
-  const sigY = noteY + 42;
-  doc.moveTo(LM + 300, sigY).lineTo(LM + 495, sigY).stroke(textGray);
-  doc.fontSize(8.5).font('Regular');
-  doc.text(CLINIC.doctor?.name || 'Doctor', LM + 300, sigY + 6, { align: 'right', width: 195 });
+  // Border on top of everything
+  if (borderEnabled) {
+    doc.rect(BM, BM, PAGE_WIDTH - BM * 2, 842 - BM * 2).strokeColor(primaryColor).lineWidth(0.5).stroke();
+    doc.strokeColor('#000000');
+  }
 
   doc.end();
 

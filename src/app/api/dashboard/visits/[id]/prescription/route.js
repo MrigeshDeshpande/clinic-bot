@@ -35,6 +35,8 @@ export async function POST(req, { params }) {
 
     const a = rows[0];
 
+    logger.info('PRESCRIPTION_DEBUG', { id, treatment: a.treatment, prescription_key: a.prescription_key, patient_name: a.patient_name });
+
     // Return cached prescription if it exists
     if (a.prescription_key) {
       const cachedUrl = await getR2SignedUrl(a.prescription_key, 604800);
