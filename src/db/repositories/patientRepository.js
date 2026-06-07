@@ -86,7 +86,7 @@ export async function linkPatientToWaId(patientId, waId) {
   }
 }
 
-export async function updateVisitLog(appointmentId, { consultationFee, treatmentCharges, medicineCharges, notes }) {
+export async function updateVisitLog(appointmentId, { consultationFee, treatmentCharges, medicineCharges, notes, treatment, treatments }) {
   const sql = getSql();
   if (!sql) return null;
   try {
@@ -96,6 +96,8 @@ export async function updateVisitLog(appointmentId, { consultationFee, treatment
           treatment_charges = ${treatmentCharges || 0},
           medicine_charges = ${medicineCharges || 0},
           notes = ${notes || ''},
+          treatment = ${treatment || null},
+          treatments = ${treatments ? JSON.stringify(treatments) : null},
           status = 'completed',
           updated_at = NOW()
       WHERE id = ${appointmentId}
@@ -145,13 +147,13 @@ export async function getVisitsByWaId(waId) {
   }
 }
 
-export async function createAppointmentForPatient({ patientName, patientPhone, waId, date, time, treatment }) {
+export async function createAppointmentForPatient({ patientName, patientPhone, waId, date, time, treatment, treatments }) {
   const sql = getSql();
   if (!sql) return null;
   try {
     const rows = await sql`
-      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, date, time, treatment, status)
-      VALUES (gen_random_uuid(), 1, ${waId || null}, ${patientName}, ${patientPhone}, ${date}, ${time}, ${treatment || null}, 'confirmed')
+      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, date, time, treatment, treatments, status)
+      VALUES (gen_random_uuid(), 1, ${waId || null}, ${patientName}, ${patientPhone}, ${date}, ${time}, ${treatment || null}, ${treatments ? JSON.stringify(treatments) : null}, 'confirmed')
       RETURNING *
     `;
     return rows[0] || null;

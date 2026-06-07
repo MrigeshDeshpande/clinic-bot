@@ -179,14 +179,14 @@ export async function POST(req) {
     const rows = await sql`
       INSERT INTO appointments (
         logical_id, version, wa_id, patient_name, patient_phone, patient_id,
-        date, time, treatment, status,
+        date, time, treatment, treatments, status,
         consultation_fee, treatment_charges, medicine_charges,
         diagnosis, medicines, notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected,
         arrival_status,
         payment_status, payment_method, transaction_id, paid_at, paid_amount
       ) VALUES (
         gen_random_uuid(), 1, ${patient_phone || null}, ${patient_name}, ${patient_phone || null}, ${patientId},
-        ${today}, NULL, ${treatment || 'Walk-in'}, 'completed',
+        ${today}, NULL, ${treatment || 'Walk-in'}, ${JSON.stringify(treatments || [])}, 'completed',
         ${consFee}, ${treatFee}, ${medFee},
         ${diagnosis || ''}, ${JSON.stringify(medicines || [])}, ${notes || ''},
         ${followUpDate || null}, ${followUpInstructions || ''},

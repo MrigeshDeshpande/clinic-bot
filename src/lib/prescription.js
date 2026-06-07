@@ -244,14 +244,17 @@ export async function generatePrescription({ patient, visit, appointment }) {
   y += 16;
 
   // ─── TREATMENT ───
-  const treatmentText = visit?.treatment || appointment?.treatment || '';
-  if (treatmentText) {
+  const treatments = visit?.treatments?.length ? visit.treatments : (visit?.treatment ? [visit.treatment] : []);
+  if (treatments.length > 0) {
     doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
     doc.text('Treatment:', LM, y);
     y += 16;
     doc.fontSize(fontSize).font('Regular');
-    doc.text(treatmentText, LM, y);
-    y += 22;
+    treatments.forEach((t, i) => {
+      doc.text(`${i + 1}. ${t}`, LM, y);
+      y += 16;
+    });
+    y += 6;
   }
 
   if (visit?.diagnosis) {

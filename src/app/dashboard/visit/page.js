@@ -1090,7 +1090,7 @@ function VisitPageInner() {
                               }`}>{!v.time && v.status === 'completed' ? 'Walk-in' : v.status === 'completed' ? 'Done' : v.status === 'no_show' ? 'Missed' : 'Scheduled'}</span>
                             </div>
                           </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{v.treatment || 'Visit'}{v.diagnosis ? ` — ${v.diagnosis.slice(0, 60)}${v.diagnosis.length > 60 ? '...' : ''}` : ''}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{Array.isArray(v.treatments) && v.treatments.length ? v.treatments.join(', ') : (v.treatment || 'Visit')}{v.diagnosis ? ` — ${v.diagnosis.slice(0, 60)}${v.diagnosis.length > 60 ? '...' : ''}` : ''}</p>
                           {(v.consultation_fee || v.treatment_charges || v.medicine_charges) ? (
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">₹{((v.consultation_fee || 0) + (v.treatment_charges || 0) + (v.medicine_charges || 0)).toLocaleString('en-IN')}</p>
                           ) : null}

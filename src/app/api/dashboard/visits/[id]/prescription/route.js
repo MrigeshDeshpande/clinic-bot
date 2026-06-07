@@ -54,6 +54,7 @@ export async function POST(req, { params }) {
 
     const visit = {
       treatment: a.treatment,
+      treatments: Array.isArray(a.treatments) ? a.treatments : [],
       diagnosis: a.diagnosis,
       medicines: Array.isArray(a.medicines) ? a.medicines : [],
       advice_selected: Array.isArray(a.advice_selected) ? a.advice_selected : [],
@@ -70,6 +71,7 @@ export async function POST(req, { params }) {
       id: a.id,
       date: a.date,
       treatment: a.treatment,
+      treatments: Array.isArray(a.treatments) ? a.treatments : [],
     };
 
     const result = await generatePrescription({ patient, visit, appointment });

@@ -4206,6 +4206,8 @@ async function handleLogMedia(session, normalized, intent) {
     treatmentCharges: vl.treatmentCharges || 0,
     medicineCharges: vl.medicineCharges || 0,
     notes: vl.notes || '',
+    treatment: vl.treatment || null,
+    treatments: vl.treatments ? (Array.isArray(vl.treatments) ? vl.treatments : [vl.treatments]) : null,
   });
 
   if (!result) {
