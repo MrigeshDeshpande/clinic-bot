@@ -86,7 +86,7 @@ export async function linkPatientToWaId(patientId, waId) {
   }
 }
 
-export async function updateVisitLog(appointmentId, { consultationFee, treatmentCharges, medicineCharges, notes, treatment, treatments }) {
+export async function updateVisitLog(appointmentId, { consultationFee, treatmentCharges, medicineCharges, notes, treatment, treatments, nextVisit, followUpInstructions }) {
   const sql = getSql();
   if (!sql) return null;
   try {
@@ -98,10 +98,12 @@ export async function updateVisitLog(appointmentId, { consultationFee, treatment
           notes = ${notes || ''},
           treatment = ${treatment || null},
           treatments = ${treatments ? JSON.stringify(treatments) : null},
+          follow_up_date = ${nextVisit?.date || null}::date,
+          follow_up_instructions = ${followUpInstructions || (nextVisit?.date ? 'Follow-up visit scheduled' : '') || ''},
           status = 'completed',
           updated_at = NOW()
       WHERE id = ${appointmentId}
-        AND status = 'confirmed'
+        AND status IN ('confirmed', 'completed')
       RETURNING *
     `;
     return rows[0] || null;
@@ -150,10 +152,16 @@ export async function getVisitsByWaId(waId) {
 export async function createAppointmentForPatient({ patientName, patientPhone, waId, date, time, treatment, treatments }) {
   const sql = getSql();
   if (!sql) return null;
+
+  // Derive treatments array from single treatment string if not explicitly provided
+  const treatmentsArr = treatments && treatments.length > 0
+    ? treatments
+    : (treatment ? [treatment] : []);
+
   try {
     const rows = await sql`
       INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, date, time, treatment, treatments, status)
-      VALUES (gen_random_uuid(), 1, ${waId || null}, ${patientName}, ${patientPhone}, ${date}, ${time}, ${treatment || null}, ${treatments ? JSON.stringify(treatments) : null}, 'confirmed')
+      VALUES (gen_random_uuid(), 1, ${waId || null}, ${patientName}, ${patientPhone}, ${date}, ${time}, ${treatment || null}, ${JSON.stringify(treatmentsArr)}, 'confirmed')
       RETURNING *
     `;
     return rows[0] || null;

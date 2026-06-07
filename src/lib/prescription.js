@@ -244,7 +244,13 @@ export async function generatePrescription({ patient, visit, appointment }) {
   y += 16;
 
   // ─── TREATMENT ───
-  const treatments = visit?.treatments?.length ? visit.treatments : (visit?.treatment ? [visit.treatment] : []);
+  // Normalize treatments: support both JSONB arrays and comma-separated strings
+  const rawTreatments = visit?.treatments?.length
+    ? visit.treatments
+    : (visit?.treatment ? visit.treatment : []);
+  const treatments = Array.isArray(rawTreatments)
+    ? rawTreatments
+    : String(rawTreatments).split(',').map(t => t.trim()).filter(Boolean);
   if (treatments.length > 0) {
     doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
     doc.text('Treatment:', LM, y);

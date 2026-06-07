@@ -65,11 +65,11 @@ export async function POST(req) {
       }
       if (advice_selected !== undefined) {
         setClauses.push(`advice_selected = $${p++}`);
-        params.push(advice_selected);
+        params.push(Array.isArray(advice_selected) ? `{${advice_selected.map(a => `"${String(a).replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}").join(",")}}` : (advice_selected || null));
       }
       if (diagnosis_selected !== undefined) {
         setClauses.push(`diagnosis_selected = $${p++}`);
-        params.push(diagnosis_selected);
+        params.push(Array.isArray(diagnosis_selected) ? `{${diagnosis_selected.map(a => `"${String(a).replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}").join(",")}}` : (diagnosis_selected || null));
       }
       if (newStatus !== undefined) {
         setClauses.push(`status = $${p++}`);
@@ -114,7 +114,7 @@ export async function POST(req) {
          SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,
                 treatments, diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
                 notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected, prescription_key,
-               status, arrival_status, payment_status, payment_method, transaction_id, paid_amount,
+               status, arrival_status, arrived_at, payment_status, payment_method, transaction_id, paid_amount, paid_at,
                created_at, updated_at
         FROM appointments WHERE id = ${appointmentId}
       `;
@@ -174,7 +174,7 @@ export async function POST(req) {
     else if (paidAmt >= totalFees) pStatus = 'paid';
     const pMethod = pStatus === 'paid' || pStatus === 'partial' ? (paymentMethod || 'cash') : null;
     const txnId = transactionId || null;
-    const paidAt = pStatus === 'paid' || pStatus === 'partial' ? 'NOW()' : null;
+    const paidAt = pStatus === 'paid' || pStatus === 'partial' ? new Date() : null;
 
     const rows = await sql`
       INSERT INTO appointments (
@@ -182,7 +182,7 @@ export async function POST(req) {
         date, time, treatment, treatments, status,
         consultation_fee, treatment_charges, medicine_charges,
         diagnosis, medicines, notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected,
-        arrival_status,
+        arrival_status, arrived_at,
         payment_status, payment_method, transaction_id, paid_at, paid_amount
       ) VALUES (
         gen_random_uuid(), 1, ${patient_phone || null}, ${patient_name}, ${patient_phone || null}, ${patientId},
@@ -191,7 +191,7 @@ export async function POST(req) {
         ${diagnosis || ''}, ${JSON.stringify(medicines || [])}, ${notes || ''},
         ${followUpDate || null}, ${followUpInstructions || ''},
         ${advice_selected || []}, ${diagnosis_selected || []},
-        'arrived',
+        'arrived', NOW(),
         ${pStatus}, ${pMethod}, ${txnId}, ${paidAt}, ${paidAmt}
       )
       RETURNING *

@@ -917,6 +917,7 @@ async function handleWalkinTreatment(session, entities, normalized, intent) {
       date: today,
       time: null,
       treatment,
+      treatments: treatment ? [treatment] : [],
     });
 
     if (appointment) {
@@ -1898,6 +1899,7 @@ async function handleBookingConfirmation(session, intent, entities) {
         date: booking.date,
         time: booking.time,
         treatment: booking.treatment,
+        treatments: booking.treatment ? [booking.treatment] : [],
       });
       if (appointment) {
         logger.info('APPOINTMENT_CREATED', {
@@ -4208,6 +4210,8 @@ async function handleLogMedia(session, normalized, intent) {
     notes: vl.notes || '',
     treatment: vl.treatment || null,
     treatments: vl.treatments ? (Array.isArray(vl.treatments) ? vl.treatments : [vl.treatments]) : null,
+    nextVisit: vl.nextVisit || null,
+    followUpInstructions: vl.followUpInstructions || '',
   });
 
   if (!result) {

@@ -83,9 +83,12 @@ export async function POST(req) {
 
     // Create appointment — use phone as wa_id for walk-in tracking, or a placeholder if no phone
     const waId = patientPhone || `w-${Date.now()}`;
+    // Derive treatments array from single treatment string
+    const treatmentsArr = treatment ? [treatment] : [];
+
     const rows = await sql`
-      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, status, location)
-      VALUES (gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, 'confirmed', ${location || ''})
+      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, treatments, status, location)
+      VALUES (gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, ${JSON.stringify(treatmentsArr)}, 'confirmed', ${location || ''})
       RETURNING *
     `;
 
@@ -145,8 +148,12 @@ export async function GET(req) {
                      a.treatments,
                      a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                      a.consultation_fee, a.treatment_charges, a.medicine_charges,
+                     a.diagnosis, a.medicines, a.notes,
+                     a.follow_up_date, a.follow_up_instructions,
+                     a.advice_selected, a.diagnosis_selected,
                      a.location, p.location AS patient_location,
-                     a.payment_status, a.payment_method, a.transaction_id, a.created_at
+                     a.payment_status, a.payment_method, a.transaction_id, a.paid_amount, a.paid_at,
+                     a.chit_media, a.prescription_key, a.created_at, a.updated_at
               FROM appointments a
               LEFT JOIN patients p ON p.id = a.patient_id
               WHERE a.date >= CURRENT_DATE
@@ -174,8 +181,12 @@ export async function GET(req) {
                      a.treatments,
                      a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                      a.consultation_fee, a.treatment_charges, a.medicine_charges,
+                     a.diagnosis, a.medicines, a.notes,
+                     a.follow_up_date, a.follow_up_instructions,
+                     a.advice_selected, a.diagnosis_selected,
                      a.location, p.location AS patient_location,
-                     a.payment_status, a.payment_method, a.transaction_id, a.created_at
+                     a.payment_status, a.payment_method, a.transaction_id, a.paid_amount, a.paid_at,
+                     a.chit_media, a.prescription_key, a.created_at, a.updated_at
               FROM appointments a
               LEFT JOIN patients p ON p.id = a.patient_id
               WHERE a.date = ${targetDate}
