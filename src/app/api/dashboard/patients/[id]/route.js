@@ -31,7 +31,7 @@ export async function GET(req, { params }) {
         LIMIT 1
       `,
       sql`
-        SELECT a.id, a.date, a.time, a.treatment, a.diagnosis, a.medicines,
+        SELECT a.id, a.date, a.time, a.treatment, a.treatments, a.diagnosis, a.medicines,
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
                a.notes, a.follow_up_date, a.follow_up_instructions,
                a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at,
