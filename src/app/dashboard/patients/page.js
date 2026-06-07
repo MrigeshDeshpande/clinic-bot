@@ -174,6 +174,9 @@ function PatientsPageInner() {
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" />
                           Last: {formatDate(patient.last_visit)}
+                          {!patient.last_visit_time && patient.visit_count > 0 && (
+                            <span className="text-xs font-medium text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-1.5 py-0.5 rounded-full">Walk-in</span>
+                          )}
                         </span>
                       )}
                     </div>

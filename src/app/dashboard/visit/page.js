@@ -45,12 +45,25 @@ const PRESET_FEES = [
 ];
 
 const CONSULTATION_DEFAULT = 2000;
+const LOCATIONS = ['Hudco', 'Bhilai', 'Durg', 'Nehru Nagar', 'Borsi'];
+const PHONE_PREFIX = '+91';
+function stripPhonePrefix(v) { return v?.replace(/^(\+91|91)/, '') || v || ''; }
+function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE_PREFIX}${s}` : ''; }
 const CONSULTATION_STEP = 100;
 const TREATMENT_STEP = 50;
 
 function getDefaultFee(name) {
   const preset = PRESET_FEES.find(p => p.label === name);
   return preset?.fee || 0;
+}
+
+function normalizeSex(sex) {
+  if (!sex) return '';
+  const lower = sex.toLowerCase();
+  if (lower === 'm' || lower === 'male') return 'Male';
+  if (lower === 'f' || lower === 'female') return 'Female';
+  if (lower === 'o' || lower === 'other') return 'Other';
+  return sex.charAt(0).toUpperCase() + sex.slice(1);
 }
 
 export default function VisitPage() {
@@ -81,6 +94,7 @@ function VisitPageInner() {
     patientPhone: '',
     patientAge: '',
     patientSex: '',
+    patientLocation: '',
     treatment: prefillTreatment,
     consultationFee: '',
     treatmentCharges: '',
@@ -177,6 +191,7 @@ function VisitPageInner() {
 
   // Salt search
   const [saltSearch, setSaltSearch] = useState('');
+  const [showCustomLocation, setShowCustomLocation] = useState(false);
 
   // Payment
   const [paymentStatus, setPaymentStatus] = useState('pending');
@@ -218,7 +233,7 @@ function VisitPageInner() {
           setAppointmentMeta(a);
           setForm({
             patientName: a.patient_name || '',
-            patientPhone: a.patient_phone || '',
+            patientPhone: stripPhonePrefix(a.patient_phone) || '',
             patientAge: '',
             patientSex: '',
             treatment: a.treatment || '',
@@ -237,8 +252,13 @@ function VisitPageInner() {
             ? a.treatments
             : a.treatment ? [a.treatment] : [];
           const fees = {};
+          const savedTotal = Number(a.treatment_charges) || 0;
+          const defaultTotal = savedTreatments.reduce((sum, n) => sum + getDefaultFee(n), 0);
           savedTreatments.forEach(name => {
-            fees[name] = getDefaultFee(name);
+            const defaultFee = getDefaultFee(name);
+            fees[name] = savedTotal > 0 && defaultTotal > 0
+              ? Math.round(defaultFee * savedTotal / defaultTotal)
+              : defaultFee;
           });
           setTreatmentFees(fees);
           if (a.consultation_fee) {
@@ -251,7 +271,8 @@ function VisitPageInner() {
           // Fetch patient demographics + extra data (visits, messages, family)
           function applyPatientProfile(p) {
             setPatientProfile(p);
-            setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: p.sex || '' }));
+            setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: normalizeSex(p.sex), patientLocation: p.location || '' }));
+            if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
             if (p.allergies !== undefined || p.chronicConditions !== undefined || p.bloodGroup !== undefined || p.bp !== undefined || p.weight !== undefined || p.medications !== undefined) {
               setMedicalHistory({
                 allergies: p.allergies || '',
@@ -262,6 +283,7 @@ function VisitPageInner() {
                 medications: p.medications || '',
               });
             }
+            if (p.visits) setPatientVisits(p.visits);
             if (p.id) {
               Promise.all([
                 fetchCached(`/api/dashboard/patients/${p.id}/messages?limit=10`)
@@ -374,7 +396,7 @@ function VisitPageInner() {
     formReadyRef.current = true;
   }, [appointmentId]);
 
-  function restoreDraft() {
+  async function restoreDraft() {
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (!saved) return;
@@ -390,6 +412,27 @@ function VisitPageInner() {
       if (draft.paidAmount !== undefined) setPaidAmount(draft.paidAmount);
       setDraftRestored(true);
       setDraftAvailable(false);
+      // Reload patient profile if restoring a walk-in draft
+      if (!draft.appointmentId && (draft.form?.patientPhone || draft.form?.patientName)) {
+        setLoadingExtra(true);
+        try {
+          const query = withPhonePrefix(draft.form.patientPhone) || draft.form.patientName;
+          const searchRes = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(query)}`);
+          const searchData = await searchRes.json();
+          const match = draft.form.patientPhone
+            ? (searchData.patients || []).find(p => stripPhonePrefix(p.phone) === draft.form.patientPhone)
+            : (searchData.patients || [])[0];
+          if (match && match.id) {
+            const data = await fetchCached(`/api/dashboard/patients/${match.id}`);
+            if (data.patient) {
+              setPatientProfile(data.patient);
+              setForm(f => ({ ...f, patientSex: normalizeSex(data.patient.sex) }));
+              if (data.visits) setPatientVisits(data.visits);
+            }
+          }
+        } catch {}
+        setLoadingExtra(false);
+      }
       showToast('Draft restored', 'success');
     } catch {}
   }
@@ -429,16 +472,48 @@ function VisitPageInner() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  function selectPatient(p) {
+  async function selectPatient(p) {
     setForm(f => ({
       ...f,
       patientName: p.name,
-      patientPhone: p.phone || f.patientPhone,
+      patientPhone: stripPhonePrefix(p.phone) || f.patientPhone,
       patientAge: p.age?.toString() || '',
-      patientSex: p.sex || '',
+      patientSex: normalizeSex(p.sex),
+      patientLocation: p.location || '',
     }));
+    if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
     setShowSearch(false);
     setSearchResults([]);
+    if (p.id) {
+      setLoadingExtra(true);
+      try {
+        const data = await fetchCached(`/api/dashboard/patients/${p.id}`);
+        if (data.patient) {
+          const profile = data.patient;
+          setPatientProfile(profile);
+          if (profile.allergies !== undefined || profile.chronicConditions !== undefined || profile.bloodGroup !== undefined || profile.bp !== undefined || profile.weight !== undefined || profile.medications !== undefined) {
+            setMedicalHistory({
+              allergies: profile.allergies || '',
+              chronicConditions: profile.chronicConditions || '',
+              bloodGroup: profile.bloodGroup || '',
+              bp: profile.bp || '',
+              weight: profile.weight || '',
+              medications: profile.medications || '',
+            });
+          }
+          if (data.visits) setPatientVisits(data.visits);
+          Promise.all([
+            fetchCached(`/api/dashboard/patients/${p.id}/messages?limit=10`)
+              .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
+              .catch(() => {}),
+            fetchCached(`/api/dashboard/patients/${p.id}/family`)
+              .then(fData => { if (fData.family) setPatientFamily(fData.family); })
+              .catch(() => {}),
+          ]);
+        }
+      } catch {}
+      setLoadingExtra(false);
+    }
   }
 
   // ── Treatment Templates ──
@@ -482,7 +557,7 @@ function VisitPageInner() {
   }
 
   async function sendPaymentLink() {
-    const phone = patientProfile?.phone || appointmentMeta?.patient_phone || form.patientPhone;
+    const phone = patientProfile?.phone || appointmentMeta?.patient_phone || withPhonePrefix(form.patientPhone);
     if (!phone) { showToast('No patient phone number', 'error'); return; }
     setSendingPaymentLink(true);
     try {
@@ -588,9 +663,10 @@ function VisitPageInner() {
           }
         : {
             patient_name: form.patientName.trim(),
-            patient_phone: form.patientPhone.trim() || undefined,
+            patient_phone: withPhonePrefix(form.patientPhone.trim()) || undefined,
             patient_age: walkInAge,
             patient_sex: form.patientSex || undefined,
+            patient_location: form.patientLocation.trim() || undefined,
             treatment: primaryTreatment,
             treatments: selectedTreatments,
             consultationFee,
@@ -670,7 +746,7 @@ function VisitPageInner() {
   }
 
   function resetForm() {
-    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '' });
+    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '' });
     setTreatmentFees({});
     setConsultationFee(CONSULTATION_DEFAULT);
     setPatientProfile(null);
@@ -683,6 +759,7 @@ function VisitPageInner() {
     setErrors({});
     setMediaFiles([]);
     setSymptomInput('');
+    setShowCustomLocation(false);
     setShowTemplateInput(false);
     setShowTemplateLoad(false);
     setTemplateName('');
@@ -780,7 +857,7 @@ function VisitPageInner() {
           </div>
           <div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{isEdit ? 'Edit Visit' : 'Log Visit'}</h1>              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {isEdit ? `Editing visit for ${prefillName || 'patient'}` : appointmentId ? `Completing appointment for ${prefillName}` : 'Record a patient consultation'}
+              {isEdit ? `Editing visit for ${prefillName || 'patient'}` : appointmentId ? `Completing appointment for ${prefillName}` : patientProfile ? `Logging visit for ${patientProfile.name}` : 'Record a patient consultation'}
             </p>
           </div>
         </div>
@@ -822,19 +899,21 @@ function VisitPageInner() {
           </div>
 
           {/* ── Patient Profile + Appointment Context ── */}
-          {appointmentId && (appointmentMeta || patientProfile) ? (
+          {(appointmentId && (appointmentMeta || patientProfile)) || patientProfile ? (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-50/80 to-blue-50/80 dark:from-emerald-900/20 dark:to-blue-900/20 border-b border-gray-100 dark:border-gray-800">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0">
-                  {          ((patientProfile?.name || appointmentMeta?.patient_name || 'P'))[0].toUpperCase()}
+                  {((patientProfile?.name || appointmentMeta?.patient_name || 'P'))[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">{patientProfile?.name || appointmentMeta?.patient_name || 'Patient'}</h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     {appointmentMeta?.date?.slice(0, 10)}{appointmentMeta?.time ? ` at ${appointmentMeta.time?.slice(0, 5)}` : ''}
                     {appointmentMeta?.location ? ` · ${appointmentMeta.location}` : ''}
+                    {!appointmentId && patientProfile ? `${patientProfile.visit_count ? `${patientProfile.visit_count} visit${patientProfile.visit_count > 1 ? 's' : ''}${patientVisits[0]?.date ? ` · Last: ${patientVisits[0].date.slice(0, 10)}` : ''}` : 'New patient'}` : ''}
                   </p>
                 </div>
+                {appointmentMeta ? (
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
                   appointmentMeta?.status === 'completed' ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' :
                   appointmentMeta?.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' :
@@ -847,11 +926,12 @@ function VisitPageInner() {
                    appointmentMeta?.arrival_status === 'called' ? 'In Session' :
                    appointmentMeta?.arrival_status === 'arrived' ? 'Waiting' : 'Scheduled'}
                 </span>
+                ) : null}
               </div>
               <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</span>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.patient_phone || '—'}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.patient_phone || patientProfile?.phone || '—'}</p>
                 </div>
                 <div>
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Age</span>
@@ -863,7 +943,7 @@ function VisitPageInner() {
                 </div>
                 <div>
                   <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</span>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.location || '—'}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.location || patientProfile?.location || '—'}</p>
                 </div>
                 {patientProfile?.visit_count !== undefined && (
                   <div>
@@ -1000,7 +1080,7 @@ function VisitPageInner() {
                                 v.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
                                 v.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
                                 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                              }`}>{v.status === 'completed' ? 'Done' : v.status === 'no_show' ? 'Missed' : 'Scheduled'}</span>
+                              }`}>{!v.time && v.status === 'completed' ? 'Walk-in' : v.status === 'completed' ? 'Done' : v.status === 'no_show' ? 'Missed' : 'Scheduled'}</span>
                             </div>
                           </div>
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{v.treatment || 'Visit'}{v.diagnosis ? ` — ${v.diagnosis.slice(0, 60)}${v.diagnosis.length > 60 ? '...' : ''}` : ''}</p>
@@ -1141,8 +1221,8 @@ function VisitPageInner() {
             </div>
           )}
 
-          {/* Patient Info — for walk-ins (no appointmentId) */}
-          {!appointmentId && (
+          {/* Patient Info — for walk-ins (no appointmentId, no patient selected yet) */}
+          {!appointmentId && !patientProfile && (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm relative">
               <div className="flex items-center gap-2.5 mb-5">
                 <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><Search className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>
@@ -1179,9 +1259,12 @@ function VisitPageInner() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Phone</label>
-                  <input type="tel" value={form.patientPhone} onChange={e => setForm(f => ({ ...f, patientPhone: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
-                    placeholder="e.g. 9876543210" />
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-200 dark:border-gray-600 rounded-l-xl text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">{PHONE_PREFIX}</span>
+                    <input type="tel" value={stripPhonePrefix(form.patientPhone)} onChange={e => setForm(f => ({ ...f, patientPhone: stripPhonePrefix(e.target.value) }))}
+                      className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
+                      placeholder="9876543210" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
@@ -1192,13 +1275,36 @@ function VisitPageInner() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Sex</label>
-                  <select value={form.patientSex || ''} onChange={e => setForm(f => ({ ...f, patientSex: e.target.value }))}
+                    <select value={form.patientSex || ''} onChange={e => setForm(f => ({ ...f, patientSex: e.target.value }))}
                     className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all appearance-none ${!form.patientSex ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
                     <option value="">Select...</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
                   </select>
+                </div>
+                <div className={showCustomLocation ? 'md:col-span-2' : ''}>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Location</label>
+                  <div className={showCustomLocation ? 'flex flex-col sm:flex-row gap-2' : ''}>
+                    <select value={showCustomLocation ? 'Other' : (LOCATIONS.includes(form.patientLocation) ? form.patientLocation : '')} onChange={e => {
+                      if (e.target.value === 'Other') { setShowCustomLocation(true); setForm(f => ({ ...f, patientLocation: '' })); }
+                      else { setShowCustomLocation(false); setForm(f => ({ ...f, patientLocation: e.target.value })); }
+                    }}
+                      className={`${showCustomLocation ? 'sm:w-1/2' : 'w-full'} px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all appearance-none ${!showCustomLocation && form.patientLocation ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                      <option value="">Select...</option>
+                      <option value="Hudco">Hudco</option>
+                      <option value="Bhilai">Bhilai</option>
+                      <option value="Durg">Durg</option>
+                      <option value="Nehru Nagar">Nehru Nagar</option>
+                      <option value="Borsi">Borsi</option>
+                      <option value="Other">Other (type)</option>
+                    </select>
+                    {showCustomLocation && (
+                      <input type="text" value={form.patientLocation} onChange={e => setForm(f => ({ ...f, patientLocation: e.target.value }))} autoFocus
+                        className="sm:w-1/2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
+                        placeholder="Type location..." />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1513,7 +1619,7 @@ function VisitPageInner() {
                     </div>
                   )}
 
-                  {(paymentStatus === 'pending' || paymentStatus === 'partial') && paidAmount < totalFees && (patientProfile?.phone || appointmentMeta?.patient_phone || form.patientPhone) && (
+                  {(paymentStatus === 'pending' || paymentStatus === 'partial') && paidAmount < totalFees && (patientProfile?.phone || appointmentMeta?.patient_phone || withPhonePrefix(form.patientPhone)) && (
                     <div className="mb-2">
                       <button type="button" onClick={sendPaymentLink} disabled={sendingPaymentLink}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-medium rounded-lg border border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 transition-all disabled:opacity-50">

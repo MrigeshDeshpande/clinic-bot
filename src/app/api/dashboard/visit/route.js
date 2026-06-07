@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
-import { findPatientByPhone, createPatient } from '@/db/repositories/patientRepository';
+import { findPatientByPhone, createPatient, updatePatient } from '@/db/repositories/patientRepository';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function POST(req) {
@@ -14,7 +14,7 @@ export async function POST(req) {
   try {
     const sql = getSql();
     const body = await req.json();
-    const { appointmentId, treatment, treatments, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, advice_selected, diagnosis_selected, status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount } = body;
+    const { appointmentId, treatment, treatments, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, advice_selected, diagnosis_selected, status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount, patient_age, patient_sex, patient_location } = body;
 
     // ── Update existing appointment ──
     if (appointmentId) {
@@ -130,17 +130,38 @@ export async function POST(req) {
     const treatFee = Number(treatmentCharges) || 0;
     const medFee = Number(medicineCharges) || 0;
 
+    // Normalize sex value
+    const normalizedSex = (() => {
+      if (!patient_sex) return patient_sex;
+      const s = patient_sex.toLowerCase();
+      if (s === 'm' || s === 'male') return 'Male';
+      if (s === 'f' || s === 'female') return 'Female';
+      if (s === 'o' || s === 'other') return 'Other';
+      return patient_sex.charAt(0).toUpperCase() + patient_sex.slice(1);
+    })();
+
     // Find or create patient record so walk-ins appear in the Patients list
     let patientId = null;
     if (patient_phone) {
       const existing = await findPatientByPhone(patient_phone);
       if (existing) {
         patientId = existing.id;
+        // Update age/sex if provided and different
+        const updateFields = {};
+        if (patient_age && (!existing.age || existing.age !== patient_age)) updateFields.age = patient_age;
+        if (normalizedSex && (!existing.sex || existing.sex !== normalizedSex)) updateFields.sex = normalizedSex;
+        if (patient_location && existing.location !== patient_location) updateFields.location = patient_location;
+        if (Object.keys(updateFields).length > 0) {
+          await updatePatient(patientId, updateFields);
+        }
       } else {
         const created = await createPatient({
           name: patient_name,
+          age: patient_age,
+          sex: normalizedSex,
           phone: patient_phone,
           waId: patient_phone,
+          location: patient_location,
         });
         if (created) patientId = created.id;
       }

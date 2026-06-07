@@ -51,6 +51,10 @@ const DEFAULT_SLOTS = {
   sunday:  ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30'],
 };
 
+const PHONE_PREFIX = '+91';
+function stripPhonePrefix(v) { return v?.replace(/^(\+91|91)/, '') || v || ''; }
+function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE_PREFIX}${s}` : ''; }
+
 function QuickBookForm({ date, time, onClose, onBooked }) {
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
@@ -90,7 +94,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   function selectPatient(p) {
     setSelectedPatient(p);
     setPatientName(p.name);
-    setPatientPhone(p.phone || '');
+    setPatientPhone(stripPhonePrefix(p.phone) || '');
     setPatientAge(p.age ? String(p.age) : '');
     setPatientSex(p.sex || '');
     setSearchResults([]);
@@ -113,7 +117,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientName: patientName.trim(),
-          patientPhone: patientPhone.trim() || null,
+          patientPhone: withPhonePrefix(patientPhone.trim()) || null,
           patientAge: patientAge.trim() || null,
           patientSex: patientSex || null,
           date,
@@ -183,16 +187,14 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
       {/* Phone */}
       <div>
         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Phone Number</label>
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-          </svg>
+        <div className="flex">
+          <span className="inline-flex items-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-200 dark:border-gray-600 rounded-l-xl text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">{PHONE_PREFIX}</span>
           <input
             type="tel"
-            value={patientPhone}
-            onChange={e => setPatientPhone(e.target.value)}
-            placeholder="+91 98765 43210"
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+            value={stripPhonePrefix(patientPhone)}
+            onChange={e => setPatientPhone(stripPhonePrefix(e.target.value))}
+            placeholder="9876543210"
+            className="flex-1 px-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />
         </div>
       </div>

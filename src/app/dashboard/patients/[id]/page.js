@@ -12,6 +12,10 @@ import { formatDate as fmtDate } from '@/lib/date';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 import { ToastContext } from '../../layout';
 
+const PHONE_PREFIX = '+91';
+function stripPhonePrefix(v) { return v?.replace(/^(\+91|91)/, '') || v || ''; }
+function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE_PREFIX}${s}` : ''; }
+
 function formatDate(d) {
   if (!d) return 'N/A';
   const dateStr = typeof d === 'string' ? d.slice(0, 10) : String(d).slice(0, 10);
@@ -123,7 +127,7 @@ export default function PatientDetailPage() {
           name: data.patient?.name || '',
           age: data.patient?.age?.toString() || '',
           sex: data.patient?.sex || '',
-          phone: data.patient?.phone || '',
+          phone: stripPhonePrefix(data.patient?.phone) || '',
           location: data.patient?.location || '',
         });
         setLoading(false);
@@ -293,7 +297,7 @@ export default function PatientDetailPage() {
           name: editForm.name.trim(),
           age: editForm.age ? parseInt(editForm.age, 10) : null,
           sex: editForm.sex || null,
-          phone: editForm.phone.trim(),
+          phone: withPhonePrefix(editForm.phone.trim()),
           location: editForm.location.trim(),
         }),
       });
@@ -398,12 +402,15 @@ export default function PatientDetailPage() {
                     <span className="flex items-center gap-1.5">
                       <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       {editing ? (
-                        <input
-                          type="text"
-                          value={editForm.phone}
-                          onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
-                          className="bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none w-28 sm:w-32 text-gray-900 dark:text-gray-100"
-                        />
+                        <div className="flex items-center">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-300 dark:border-gray-600 rounded-l text-xs font-medium text-gray-600 dark:text-gray-300">{PHONE_PREFIX}</span>
+                          <input
+                            type="text"
+                            value={stripPhonePrefix(editForm.phone)}
+                            onChange={e => setEditForm(f => ({ ...f, phone: stripPhonePrefix(e.target.value) }))}
+                            className="bg-transparent border-b border-t border-r border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none w-28 sm:w-32 text-gray-900 dark:text-gray-100 text-sm px-1"
+                          />
+                        </div>
                       ) : (
                         patient.phone || 'N/A'
                       )}
@@ -472,7 +479,7 @@ export default function PatientDetailPage() {
                         {saving ? 'Saving...' : 'Save'}
                       </button>
                       <button
-                        onClick={() => { setEditing(false); setEditForm({ name: patient.name, age: patient.age?.toString() || '', sex: patient.sex || '', phone: patient.phone || '', location: patient.location || '' }); }}
+                        onClick={() => { setEditing(false); setEditForm({ name: patient.name, age: patient.age?.toString() || '', sex: patient.sex || '', phone: stripPhonePrefix(patient.phone) || '', location: patient.location || '' }); }}
                         className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
                       >
                         <X className="w-4 h-4" />
@@ -595,7 +602,7 @@ export default function PatientDetailPage() {
                   Last Visit
                 </div>
                 <div className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">
-                  {completedVisits[0] ? formatDate(completedVisits[0].date) : 'N/A'}
+                  {completedVisits[0] ? <>{formatDate(completedVisits[0].date)}{!completedVisits[0].time && <span className="ml-1.5 text-xs font-medium text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-1.5 py-0.5 rounded-full">Walk-in</span>}</> : 'N/A'}
                 </div>
               </button>
               {upcomingFollowUp ? (
@@ -679,7 +686,7 @@ export default function PatientDetailPage() {
                               : visit.status === 'cancelled' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'
                               : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
                             }`}>
-                              {visit.status === 'no_show' ? 'No Show' : visit.status.charAt(0).toUpperCase() + visit.status.slice(1)}
+                              {!visit.time && visit.status === 'completed' ? 'Walk-in' : visit.status === 'no_show' ? 'No Show' : visit.status.charAt(0).toUpperCase() + visit.status.slice(1)}
                             </span>
                           </div>
                           {visit.status === 'completed' && (
