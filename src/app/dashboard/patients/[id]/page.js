@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft, Activity, DollarSign, Calendar, Clock, Phone,
-  Pill, Stethoscope, FileText, Printer,
+  Pill, Stethoscope, FileText, Printer, Download,
   ChevronRight, Users, AlertCircle, Star,
   ClipboardList, Edit3, Save, X, MessageSquare
 } from 'lucide-react';
@@ -700,11 +700,27 @@ export default function PatientDetailPage() {
                                   else showToast(data.error || 'Failed to generate prescription', 'error');
                                 } catch { showToast('Network error', 'error'); }
                               }}
-                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all active:scale-95">
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all active:scale-95 cursor-pointer">
                                 <Printer className="w-3 h-3" /> Rx
                               </button>
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const res = await fetch(`/api/dashboard/visits/${visit.id}/compile`, { method: 'POST' });
+                                  const data = await res.json();
+                                  if (res.ok && data.url) {
+                                    window.open(data.url, '_blank');
+                                    showToast('✅ Document compiled successfully', 'success');
+                                  } else {
+                                    showToast(data.error || 'Failed to compile', 'error');
+                                  }
+                                } catch { showToast('Network error', 'error'); }
+                              }}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-all active:scale-95 cursor-pointer">
+                                <Download className="w-3 h-3" /> Compile
+                              </button>
                               <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`); }}
-                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95">
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95 cursor-pointer">
                                 <Edit3 className="w-3 h-3" /> Edit
                               </button>
                             </div>

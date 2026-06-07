@@ -492,6 +492,12 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS diagnosis_selected TEXT[] DEFAULT '{}';
     `;
 
+    // Compiled document key (visit summary PDF bundling prescription + images)
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS compiled_document_key TEXT;
+    `;
+
     // Location column on patients (city/area the patient is from)
     await db`
       ALTER TABLE patients

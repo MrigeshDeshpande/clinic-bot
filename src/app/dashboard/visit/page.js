@@ -117,6 +117,7 @@ function VisitPageInner() {
   const [showSearch, setShowSearch] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaFiles, setMediaFiles] = useState([]);
+  const [compiling, setCompiling] = useState(false);
 
   // Full context data
   const [appointmentMeta, setAppointmentMeta] = useState(null);
@@ -836,6 +837,56 @@ function VisitPageInner() {
               }
             }} className="px-6 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
               Print
+            </button>
+            <button onClick={async () => {
+              if (compiling) return;
+              setCompiling(true);
+              try {
+                const id = result.appointment_id;
+                if (!id) { showToast('No appointment ID', 'error'); setCompiling(false); return; }
+                showToast('⏳ Compiling document with images...', 'info', { duration: 8000 });
+                const res = await fetch(`/api/dashboard/visits/${id}/compile`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.url) {
+                  showToast('✅ PDF compiled — opening in new tab', 'success', { duration: 4000 });
+                  window.open(data.url, '_blank');
+                  // Also send via WhatsApp if phone number exists
+                  showToast('📤 Sending to patient via WhatsApp...', 'info', { duration: 6000 });
+                  const sendRes = await fetch(`/api/dashboard/visits/${id}/compile/send`, { method: 'POST' });
+                  const sendData = await sendRes.json();
+                  if (sendRes.ok && sendData.success) {
+                    showToast('✅ Document sent to patient on WhatsApp', 'success');
+                  } else if (sendData.url) {
+                    showToast('⚠️ PDF ready but WhatsApp send failed. You can share the link manually.', 'info');
+                  } else {
+                    showToast('⚠️ Document compiled but could not send via WhatsApp.', 'info');
+                  }
+                } else {
+                  showToast(data.error || 'Failed to compile document', 'error');
+                }
+              } catch (err) {
+                showToast('Network error: ' + (err.message || 'Could not compile'), 'error');
+              } finally {
+                setCompiling(false);
+              }
+            }}
+              disabled={compiling}
+              className={`px-6 py-2.5 text-sm font-medium rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer ${
+                compiling
+                  ? 'bg-gray-400 text-white cursor-not-allowed shadow-none'
+                  : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-200 dark:shadow-emerald-900/50 hover:from-emerald-600 hover:to-emerald-700'
+              }`}>
+              {compiling ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Compiling...
+                </span>
+              ) : (
+                'Compile & Send'
+              )}
             </button>
           </div>
         </div>

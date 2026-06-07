@@ -4,6 +4,17 @@ import { logger } from '@/lib/logger';
 import { findPatientByPhone, createPatient, updatePatient } from '@/db/repositories/patientRepository';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
+/** Convert a JS array to a PostgreSQL text[] array literal. */
+function toPgTextArray(arr) {
+  if (!Array.isArray(arr)) return arr || null;
+  const items = arr.map(a => {
+    const s = String(a);
+    // Escape backslashes and double-quotes inside each element
+    return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  });
+  return `{${items.join(',')}}`;
+}
+
 export async function POST(req) {
   const csrfErr = requireCsrf(req);
   if (csrfErr) return csrfErr;
@@ -65,11 +76,11 @@ export async function POST(req) {
       }
       if (advice_selected !== undefined) {
         setClauses.push(`advice_selected = $${p++}`);
-        params.push(Array.isArray(advice_selected) ? `{${advice_selected.map(a => `"${String(a).replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}").join(",")}}` : (advice_selected || null));
+        params.push(toPgTextArray(advice_selected));
       }
       if (diagnosis_selected !== undefined) {
         setClauses.push(`diagnosis_selected = $${p++}`);
-        params.push(Array.isArray(diagnosis_selected) ? `{${diagnosis_selected.map(a => `"${String(a).replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}").join(",")}}` : (diagnosis_selected || null));
+        params.push(toPgTextArray(diagnosis_selected));
       }
       if (newStatus !== undefined) {
         setClauses.push(`status = $${p++}`);

@@ -618,6 +618,18 @@ function AppointmentsContentInner() {
                                     Rx
                                   </button>
                                 )}
+                                <button onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const res = await fetch(`/api/dashboard/visits/${a.id}/compile`, { method: 'POST' });
+                                    const data = await res.json();
+                                    if (res.ok && data.url) window.open(data.url, '_blank');
+                                  } catch {}
+                                }}
+                                  className="px-1 py-0.5 rounded bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/50 text-xs cursor-pointer"
+                                  title="Compile & download visit summary">
+                                  📄
+                                </button>
                               </span>
                             )}
                             {a.status === 'no_show' && (
