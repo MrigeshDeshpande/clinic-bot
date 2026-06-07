@@ -382,6 +382,12 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS due_reminder_sent_at TIMESTAMPTZ;
     `;
 
+    // follow_up_reminder_sent_at — tracks whether follow-up reminder was sent
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS follow_up_reminder_sent_at TIMESTAMPTZ;
+    `;
+
     // due_reminder_log — history of due reminder triggers (manual + cron)
     await db`
       CREATE TABLE IF NOT EXISTS due_reminder_log (

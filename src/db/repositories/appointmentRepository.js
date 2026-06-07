@@ -497,6 +497,45 @@ export async function markDueReminderSent(id) {
   }
 }
 
+// ───────────────────────────────────────────────
+// Fetch completed appointments with follow-up dates where reminder not yet sent
+// Used by the follow-up reminder cron job
+// ───────────────────────────────────────────────
+export async function fetchAppointmentsForFollowUpReminder() {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const rows = await sql`
+      SELECT DISTINCT ON (logical_id) id, logical_id, wa_id, patient_name, date, follow_up_date, follow_up_instructions
+      FROM appointments
+      WHERE status = 'completed'
+        AND follow_up_date IS NOT NULL
+        AND follow_up_date <= CURRENT_DATE + INTERVAL '1 day'
+        AND follow_up_reminder_sent_at IS NULL
+        AND wa_id IS NOT NULL
+      ORDER BY logical_id, version DESC
+    `;
+    return rows;
+  } catch (error) {
+    logger.error('APPOINTMENT_FETCH_FOLLOW_UP_REMINDER_ERROR', { error: error.message });
+    return [];
+  }
+}
+
+// ───────────────────────────────────────────────
+// Mark follow-up reminder as sent for a given appointment id
+// ───────────────────────────────────────────────
+export async function markFollowUpReminderSent(id) {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`UPDATE appointments SET follow_up_reminder_sent_at = NOW() WHERE id = ${id}`;
+  } catch (error) {
+    logger.error('APPOINTMENT_MARK_FOLLOW_UP_REMINDER_ERROR', { id, error: error.message });
+  }
+}
+
 // Alias used by daily-summary cron — same as fetchAppointmentsByDate(today)
 export async function fetchTodayAppointments() {
   const today = new Date().toISOString().slice(0, 10);
