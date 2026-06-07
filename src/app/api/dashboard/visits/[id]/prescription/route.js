@@ -35,7 +35,14 @@ export async function POST(req, { params }) {
 
     const a = rows[0];
 
-    // Always regenerate — don't return cached prescription
+    // Return cached prescription if it exists
+    if (a.prescription_key) {
+      const cachedUrl = await getR2SignedUrl(a.prescription_key, 604800);
+      if (cachedUrl) {
+        return NextResponse.json({ key: a.prescription_key, url: cachedUrl, existing: true });
+      }
+    }
+
     const patient = {
       name: a.p_name || a.patient_name,
       phone: a.patient_phone,

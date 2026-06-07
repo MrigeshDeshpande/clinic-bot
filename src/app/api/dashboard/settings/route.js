@@ -73,6 +73,13 @@ export async function PUT(req) {
       ON CONFLICT (key)
       DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
     `;
+
+    // Invalidate all cached prescriptions when clinic/doctor/prescription settings change
+    if (['clinic', 'doctor', 'prescription'].includes(key)) {
+      await sql`UPDATE appointments SET prescription_key = NULL WHERE prescription_key IS NOT NULL`;
+      logger.info('PRESCRIPTION_CACHE_INVALIDATED', { reason: `settings:${key}` });
+    }
+
     logger.info('SETTINGS_UPDATED', { key });
     return NextResponse.json({ ok: true });
   } catch (error) {

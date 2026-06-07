@@ -826,6 +826,7 @@ function VisitPageInner() {
                 const res = await fetch(`/api/dashboard/visits/${id}/prescription`, { method: 'POST' });
                 const data = await res.json();
                 if (res.ok && data.url) {
+                  showToast('PDF generated successfully', 'success');
                   window.open(data.url, '_blank');
                 } else {
                   showToast(data.error || 'Failed to generate prescription', 'error');
@@ -971,6 +972,7 @@ function VisitPageInner() {
                           const res = await fetch(`/api/dashboard/visits/${appointmentMeta.id}/prescription`, { method: 'POST' });
                           const data = await res.json();
                           if (res.ok && data.url) {
+                            showToast('PDF generated successfully', 'success');
                             window.open(data.url, '_blank');
                           } else {
                             showToast(data.error || 'Failed to generate prescription', 'error');
@@ -1068,7 +1070,12 @@ function VisitPageInner() {
                                 <button onClick={() => {
                                   fetch(`/api/dashboard/visits/${v.id}/prescription`, { method: 'POST' })
                                     .then(r => r.json())
-                                    .then(data => { if (data.url) window.open(data.url, '_blank'); })
+                                    .then(data => {
+                                      if (data.url) {
+                                        showToast('PDF generated successfully', 'success');
+                                        window.open(data.url, '_blank');
+                                      }
+                                    })
                                     .catch(() => {});
                                 }}
                                   className="p-0.5 rounded text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
