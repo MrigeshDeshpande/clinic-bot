@@ -201,11 +201,19 @@ export async function generatePrescription({ patient, visit, appointment }) {
   if (showWatermark && watermarkText) {
     doc.save();
     doc.opacity(0.06);
-    doc.fontSize(60).font('Bold');
-    doc.fillColor(primaryColor);
-    const wmW = doc.widthOfString(watermarkText);
-    const wmH = 60;
-    doc.text(watermarkText, (PAGE_WIDTH - wmW) / 2, 360 - wmH / 2, { align: 'center' });
+    const wmLogoPath = path.join(process.cwd(), 'public', 'logo1.png');
+    try {
+      doc.image(wmLogoPath, (PAGE_WIDTH - 200) / 2, 260, { width: 200 });
+      const wmText = watermarkText || 'Shri Balaji';
+      doc.fontSize(28).font('Bold').fillColor(primaryColor);
+      const wmTW = doc.widthOfString(wmText);
+      doc.text(wmText, 0, 540, { width: PAGE_WIDTH, align: 'center' });
+    } catch {
+      doc.fontSize(60).font('Bold');
+      doc.fillColor(primaryColor);
+      const wmW = doc.widthOfString(watermarkText);
+      doc.text(watermarkText, (PAGE_WIDTH - wmW) / 2, 360 - 30, { align: 'center' });
+    }
     doc.restore();
   }
 
@@ -411,8 +419,8 @@ export async function generatePrescription({ patient, visit, appointment }) {
     y += doc.heightOfString(visit.notes, { width: RW }) + 16;
   }
 
-  // ─── NOTE BANNER ───
-  const noteY = Math.max(y + 30, 680);
+  // ─── NOTE BANNER (sticky footer) ───
+  const noteY = Math.max(y + 30, 740);
   doc.rect(LM, noteY, RW, 28).fill(primaryColor);
   doc.fillColor('#ffffff');
   doc.fontSize(7.5).font('Bold');
@@ -424,18 +432,11 @@ export async function generatePrescription({ patient, visit, appointment }) {
   );
   doc.fillColor('#000000');
 
-  // ─── SIGNATURE ───
+  // ─── SIGNATURE (sticky footer) ───
   const sigY = noteY + 42;
   doc.moveTo(LM + 300, sigY).lineTo(LM + 495, sigY).stroke(textGray);
   doc.fontSize(8.5).font('Regular');
   doc.text(CLINIC.doctor?.name || 'Doctor', LM + 300, sigY + 6, { align: 'right', width: 195 });
-
-  // ─── FOOTER ───
-  const footerY = 800;
-  doc.fontSize(7).font('Regular');
-  doc.fillColor('#999999');
-  doc.text('This is a computer-generated prescription.', LM, footerY, { align: 'center', width: RW });
-  doc.fillColor('#000000');
 
   doc.end();
 
