@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 const TOOTH_NAMES = {
@@ -125,6 +125,8 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
   const shape = toothPath(toothNumber);
   const t = toothType(toothNumber);
   const zones = ZONE_POSITIONS[t];
+  const zoneSize = 22;
+  const half = zoneSize / 2;
 
   return (
     <div className="flex flex-col items-center">
@@ -142,8 +144,26 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
           const isSel = selected === z.id;
           return (
             <g key={z.id} onClick={() => onChange(z.id)} className="cursor-pointer group">
-              <rect x={z.x - 7} y={z.y - 7} width="14" height="14" rx="3" fill="transparent" className="group-hover:fill-blue-500/10 dark:group-hover:fill-blue-400/15 transition-colors" />
-              <text x={z.x} y={z.y + 3.5} textAnchor="middle" fontSize="9" fontWeight="700" fill={isSel ? '#1e40af' : '#94a3b8'} className="select-none pointer-events-none transition-colors">{z.id}</text>
+              <rect
+                x={z.x - half}
+                y={z.y - half}
+                width={zoneSize}
+                height={zoneSize}
+                rx="4"
+                fill="transparent"
+                className="group-hover:fill-blue-500/10 dark:group-hover:fill-blue-400/15 transition-colors"
+              />
+              <text
+                x={z.x}
+                y={z.y + 4}
+                textAnchor="middle"
+                fontSize="10"
+                fontWeight="700"
+                fill={isSel ? '#1e40af' : '#94a3b8'}
+                className="select-none pointer-events-none transition-colors"
+              >
+                {z.id}
+              </text>
             </g>
           );
         })}
@@ -176,7 +196,18 @@ export default function PerToothDiagnosisPanel({
   const selectedNotes = currentEntry?.notes || '';
   const [showTreatmentInput, setShowTreatmentInput] = useState(false);
   const [customTreatment, setCustomTreatment] = useState('');
+  const [treatmentInput, setTreatmentInput] = useState('');
+  const [undoSnapshot, setUndoSnapshot] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
   const diagnosesRef = useRef(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mq.matches);
+    function handler(e) { setIsMobile(e.matches); }
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   function buildEntry(overrides = {}) {
     const e = {
@@ -207,7 +238,16 @@ export default function PerToothDiagnosisPanel({
 
   function setTreatment(treatment) {
     setShowTreatmentInput(false);
+    setTreatmentInput('');
     onSave(buildEntry({ treatment: treatment === selectedTreatment ? '' : treatment }));
+  }
+
+  function handleTreatmentKeyDown(e) {
+    if (e.key === 'Enter' && treatmentInput.trim()) {
+      e.preventDefault();
+      const match = TREATMENT_OPTIONS.find(t => t.toLowerCase() === treatmentInput.trim().toLowerCase());
+      setTreatment(match || treatmentInput.trim());
+    }
   }
 
   function handleAddCustomTreatment() {
@@ -234,11 +274,19 @@ export default function PerToothDiagnosisPanel({
   }
 
   function clearAll() {
+    if (currentEntry) setUndoSnapshot({ ...currentEntry });
     onSave({ tooth: toothNumber, diagnoses: [], surface: '', treatment: '', severity: '', status: 'active', outcome: '', notes: '' });
   }
 
-  return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
+  function undoClear() {
+    if (undoSnapshot) {
+      onSave(undoSnapshot);
+      setUndoSnapshot(null);
+    }
+  }
+
+  const panelContent = (
+    <>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
@@ -354,13 +402,28 @@ export default function PerToothDiagnosisPanel({
                   <button onClick={() => setShowTreatmentInput(false)} className="px-2 py-1 text-[10px] text-gray-400 hover:text-gray-600">✕</button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowTreatmentInput(true)}
-                  className="px-2.5 py-1 rounded-lg text-[10px] font-medium border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-emerald-300 hover:text-emerald-500 transition-all"
-                >
-                  + Custom
-                </button>
+                <>
+                  <input
+                    list="treatment-suggestions"
+                    value={treatmentInput}
+                    onChange={e => setTreatmentInput(e.target.value)}
+                    onKeyDown={handleTreatmentKeyDown}
+                    placeholder="Type to search or + Custom..."
+                    className="px-2 py-1 rounded-lg text-[10px] font-medium border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 placeholder-gray-400 dark:placeholder-gray-500 hover:border-emerald-300 hover:text-emerald-500 transition-all w-32 bg-transparent focus:outline-none focus:ring-1 focus:ring-emerald-200"
+                  />
+                  <datalist id="treatment-suggestions">
+                    {TREATMENT_OPTIONS.map(t => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    onClick={() => { setShowTreatmentInput(true); setTreatmentInput(''); }}
+                    className="px-2 py-1 rounded-lg text-[10px] font-medium border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-emerald-300 hover:text-emerald-500 transition-all"
+                  >
+                    + Custom
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -458,6 +521,50 @@ export default function PerToothDiagnosisPanel({
           </div>
         )}
       </div>
+
+      {/* Undo toast */}
+      {undoSnapshot && (
+        <div className="px-4 pb-4">
+          <div className="flex items-center justify-between px-3 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl shadow-lg text-xs font-medium">
+            <span>Tooth cleared</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={undoClear}
+                className="px-3 py-1 bg-white/20 dark:bg-gray-900/20 rounded-lg hover:bg-white/30 dark:hover:bg-gray-900/30 transition-all font-semibold"
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={() => setUndoSnapshot(null)}
+                className="p-1 hover:bg-white/10 dark:hover:bg-gray-900/10 rounded-lg transition-all"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[85vh] bg-white dark:bg-gray-900 rounded-t-2xl border-t border-gray-200 dark:border-gray-700 shadow-2xl animate-in slide-in-from-bottom duration-300">
+        <div className="flex justify-center pt-2 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {panelContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
+      {panelContent}
     </div>
   );
 }

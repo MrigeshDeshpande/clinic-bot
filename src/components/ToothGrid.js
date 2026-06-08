@@ -1,8 +1,9 @@
 'use client';
-import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useState, useEffect, useCallback, memo } from 'react';
 
 const UPPER = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
 const LOWER = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+const ALL_TEETH = [...UPPER, ...LOWER];
 
 const DIAG_COLORS = {
   'Caries': '#f59e0b',
@@ -25,7 +26,6 @@ const DIAG_COLORS = {
 };
 
 const FALLBACK_COLOR = '#3b82f6';
-
 const QUICK_DIAG = ['Caries', 'Pocket', 'Mobility', 'Fractured Tooth / Cusp', 'Missing'];
 
 const MOLAR_PATH = `M6 5c1.5-1.5 3-1.5 4.5 0 1-1 2-1 3 0 1.5-1.5 3-1.5 4.5 0 1.5 1.5 2 3 2 4.5v2.5c0 3-1.5 4.5-2.5 6l-1.5 4a1 1 0 0 1-1.9.2L12 16.5l-2.1 5.7a1 1 0 0 1-1.9-.2l-1.5-4C5.5 16.5 4 15 4 12V9.5C4 8 4.5 6.5 6 5Z`;
@@ -53,9 +53,7 @@ function toothQuadrant(num) {
 function toothColor(diagnoses, severity, color) {
   if (color) return color;
   if (!diagnoses?.length) return null;
-  const base = DIAG_COLORS[diagnoses[0]] || FALLBACK_COLOR;
-  if (!severity) return base;
-  return base;
+  return DIAG_COLORS[diagnoses[0]] || FALLBACK_COLOR;
 }
 
 function severityOpacity(severity) {
@@ -73,18 +71,183 @@ function toothPath(num) {
   return INCISOR_PATH;
 }
 
+const ToothButton = memo(function ToothButton({
+  num, entry, isActive, isSelected, multiSelect, onToothSelect, onContextMenu,
+  selectedTeeth, setSelectedTeeth, onQuickDiagnosis,
+}) {
+  const diagnoses = entry?.diagnoses || [];
+  const severity = entry?.severity || '';
+  const treatment = entry?.treatment || '';
+  const status = entry?.status || 'active';
+  const color = toothColor(diagnoses, severity, null);
+  const isMissing = diagnoses.includes('Missing');
+  const path = toothPath(num);
+  const strokeColor = color || (isActive ? '#3b82f6' : '#9ca3af');
+  const showDiagDot = diagnoses.length > 0 && !isMissing;
+  const opacity = severityOpacity(severity);
+
+  function handleClick(e) {
+    if (multiSelect) {
+      setSelectedTeeth(prev => {
+        const next = new Set(prev);
+        if (next.has(num)) next.delete(num);
+        else next.add(num);
+        return next;
+      });
+      return;
+    }
+    if (onToothSelect) onToothSelect(isActive ? null : num);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      onContextMenu={(e) => onContextMenu?.(num, e)}
+      className={`
+        relative flex flex-col items-center justify-center
+        p-px rounded-lg transition-all duration-150 cursor-pointer min-w-[52px]
+        ${!multiSelect ? 'hover:scale-110 hover:z-10 hover:drop-shadow-lg active:scale-95' : ''}
+        ${isActive && !multiSelect ? 'scale-110 z-10 ring-2 ring-blue-500/50 ring-offset-1 dark:ring-offset-gray-900 drop-shadow-lg' : ''}
+        ${isSelected ? 'ring-2 ring-violet-500/60 ring-offset-1 dark:ring-offset-gray-900' : ''}
+        ${isMissing ? 'opacity-40' : ''}
+        ${multiSelect ? 'hover:ring-2 hover:ring-violet-300 dark:hover:ring-violet-600' : ''}
+      `}
+      title={`Tooth #${num} (${toothQuadrant(num)})${diagnoses.length ? `\n${diagnoses.join(', ')}` : ''}${treatment ? `\nPlan: ${treatment}` : ''}${severity ? `\nSeverity: ${severity}` : ''}`}
+    >
+      <svg viewBox="0 0 24 24" className="w-full transition-all duration-150 overflow-visible">
+        <defs>
+          <linearGradient id={`gr-${num}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color || '#e5e7eb'} stopOpacity="0.4" />
+            <stop offset="100%" stopColor={color || '#d1d5db'} stopOpacity="0.15" />
+          </linearGradient>
+          <pattern id={`p-mild-${num}`} width="4" height="4" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="0.8" fill="currentColor" opacity="0.35" />
+          </pattern>
+          <pattern id={`p-moderate-${num}`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" strokeWidth="1.2" opacity="0.45" />
+          </pattern>
+          <pattern id={`p-severe-${num}`} width="8" height="8" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" strokeWidth="1.5" opacity="0.55" />
+            <line x1="0" y1="0" x2="8" y2="0" stroke="currentColor" strokeWidth="1.5" opacity="0.55" />
+          </pattern>
+        </defs>
+        {!color && <path d={path} fill="#f9fafb" stroke="none" className="dark:hidden" />}
+        {!color && <path d={path} fill="#374151" stroke="none" className="hidden dark:block" />}
+        {color && !isMissing && <path d={path} fill={`url(#gr-${num})`} stroke="none" />}
+        {color && !isMissing && <path d={path} fill={color} opacity={opacity} stroke="none" />}
+        {severity && color && !isMissing && (
+          <path d={path} fill={`url(#p-${severity}-${num})`} stroke="none" style={{ color }} />
+        )}
+        {isActive && !color && !multiSelect && <path d={path} fill="#3b82f6" opacity="0.06" stroke="none" />}
+        {isMissing && (
+          <>
+            <line x1="5" y1="4" x2="19" y2="22" stroke={strokeColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.5" />
+            <line x1="19" y1="4" x2="5" y2="22" stroke={strokeColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.5" />
+          </>
+        )}
+        <path
+          d={path}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={color && !isMissing ? 1.5 : 1}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={diagnoses.length === 0 || isMissing ? 'dark:stroke-gray-600' : ''}
+        />
+        {!isMissing && status === 'treated' && (
+          <circle cx="18" cy="5" r="2" fill="#22c55e" opacity="0.7" />
+        )}
+        {!isMissing && status === 'wip' && (
+          <circle cx="18" cy="5" r="2" fill="#3b82f6" opacity="0.7" />
+        )}
+      </svg>
+      <span className={`
+        text-[7px] sm:text-[8px] font-semibold leading-none select-none transition-colors mt-px
+        ${isActive && !multiSelect ? 'text-blue-600 dark:text-blue-400' : ''}
+        ${isSelected ? 'text-violet-600 dark:text-violet-400' : ''}
+        ${color && !isActive && !isSelected && !isMissing ? 'text-gray-600 dark:text-gray-300' : ''}
+        ${(!color || isMissing) && !isActive && !isSelected ? 'text-gray-400 dark:text-gray-500' : ''}
+      `}>
+        {num}
+      </span>
+      {showDiagDot && (
+        <div className="flex items-center gap-[1.5px] mt-[2px] h-[3px]">
+          {diagnoses.slice(0, 3).map((d, i) => (
+            <span key={i} className="w-[3px] h-[3px] rounded-full" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
+          ))}
+          {diagnoses.length > 3 && <span className="text-[5px] font-medium text-gray-400 dark:text-gray-500 leading-none ml-[1px]">+{diagnoses.length - 3}</span>}
+        </div>
+      )}
+      {treatment && !isMissing && (
+        <span className="text-[5px] text-emerald-500 dark:text-emerald-400 leading-none mt-[1px] font-medium truncate max-w-full px-0.5">
+          {treatment}
+        </span>
+      )}
+    </button>
+  );
+}, (prev, next) => {
+  if (prev.num !== next.num) return false;
+  if (prev.isActive !== next.isActive) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+  if (prev.multiSelect !== next.multiSelect) return false;
+  const pd = prev.entry?.diagnoses;
+  const nd = next.entry?.diagnoses;
+  if (pd?.length !== nd?.length) return false;
+  if (pd && nd) { for (let i = 0; i < pd.length; i++) { if (pd[i] !== nd[i]) return false; } }
+  if (prev.entry?.severity !== next.entry?.severity) return false;
+  if (prev.entry?.treatment !== next.entry?.treatment) return false;
+  if (prev.entry?.status !== next.entry?.status) return false;
+  return true;
+});
+
+function LoadingSkeleton() {
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 sm:p-4">
+      <div className="flex items-center justify-between mb-2 px-0.5">
+        <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Dental Chart</span>
+        <div className="w-10 h-4 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+      </div>
+      <div className="space-y-1">
+        <div className="grid grid-cols-16 gap-0">
+          {UPPER.map(num => (
+            <div key={num} className="p-px">
+              <div className="bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" style={{ paddingBottom: '85%' }} />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-center my-1">
+          <div className="w-10 h-px bg-gray-200 dark:bg-gray-700" />
+        </div>
+        <div className="grid grid-cols-16 gap-0">
+          {LOWER.map(num => (
+            <div key={num} className="p-px">
+              <div className="bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" style={{ paddingBottom: '85%' }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ToothGrid({
   toothData = [],
   onToothSelect,
   selectedTooth,
   diagnosisOptions = [],
   onQuickDiagnosis,
+  onToothEntryUpdate,
+  loading,
 }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [multiSelect, setMultiSelect] = useState(false);
   const [selectedTeeth, setSelectedTeeth] = useState(new Set());
   const [menuStyle, setMenuStyle] = useState({});
+  const [showAllLegend, setShowAllLegend] = useState(false);
+  const [undoSnapshot, setUndoSnapshot] = useState(null);
   const menuRef = useRef(null);
+  const gridRef = useRef(null);
 
   const toothMap = useMemo(() => {
     const map = {};
@@ -92,7 +255,6 @@ export default function ToothGrid({
     return map;
   }, [toothData]);
 
-  // Close menu on click outside or Esc
   useEffect(() => {
     if (!contextMenu) return;
     function handleClick(e) {
@@ -111,28 +273,38 @@ export default function ToothGrid({
     };
   }, [contextMenu]);
 
-  const diagnosesOnTooth = useCallback((num) => toothMap[num]?.diagnoses || [], [toothMap]);
-
-  function handleClick(num, e) {
-    if (multiSelect) {
-      setSelectedTeeth(prev => {
-        const next = new Set(prev);
-        if (next.has(num)) next.delete(num);
-        else next.add(num);
-        return next;
-      });
-      return;
+  // Keyboard navigation
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || multiSelect) return;
+    function handleKeyDown(e) {
+      if (selectedTooth == null) return;
+      const idx = ALL_TEETH.indexOf(selectedTooth);
+      if (idx === -1) return;
+      let next = idx;
+      if (e.key === 'ArrowRight') { e.preventDefault(); next = Math.min(idx + 1, ALL_TEETH.length - 1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); next = Math.max(idx - 1, 0); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); next = idx < 16 ? idx + 16 : idx; }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); next = idx >= 16 ? idx - 16 : idx; }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToothSelect(selectedTooth); return; }
+      else return;
+      if (next !== idx) onToothSelect(ALL_TEETH[next]);
     }
-    if (onToothSelect) onToothSelect(selectedTooth === num ? null : num);
-  }
+    grid.addEventListener('keydown', handleKeyDown);
+    return () => grid.removeEventListener('keydown', handleKeyDown);
+  }, [selectedTooth, multiSelect, onToothSelect]);
 
   function handleContextMenu(num, e) {
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
-    setMenuStyle({
-      top: rect.top + window.scrollY,
-      left: Math.min(rect.left + window.scrollX, window.innerWidth - 160),
-    });
+    const menuW = 160, menuH = 230;
+    let left = rect.left + window.scrollX;
+    let top = rect.top + window.scrollY;
+    if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+    if (left < 8) left = 8;
+    if (top + menuH > window.innerHeight - 8) top = window.innerHeight - menuH - 8;
+    if (top < 8) top = 8;
+    setMenuStyle({ top, left });
     setContextMenu(num);
   }
 
@@ -148,105 +320,61 @@ export default function ToothGrid({
   function clearTooth() {
     if (!contextMenu) return;
     const num = contextMenu;
-    if (onQuickDiagnosis) {
-      onQuickDiagnosis(num, null);
-    }
+    const prevEntry = toothMap[num];
+    if (prevEntry) setUndoSnapshot({ [num]: { ...prevEntry } });
+    if (onQuickDiagnosis) onQuickDiagnosis(num, null);
     setContextMenu(null);
   }
 
-  const allSelectedEntries = [...selectedTeeth].map(n => toothMap[n]).filter(Boolean);
-
-  function renderTooth(num) {
-    const diagnoses = diagnosesOnTooth(num);
-    const entry = toothMap[num];
-    const severity = entry?.severity || '';
-    const treatment = entry?.treatment || '';
-    const status = entry?.status || 'active';
-    const color = toothColor(diagnoses, severity, null);
-    const isActive = selectedTooth === num;
-    const isSelected = selectedTeeth.has(num);
-    const isMissing = diagnoses.includes('Missing');
-    const path = toothPath(num);
-    const strokeColor = color || (isActive ? '#3b82f6' : '#9ca3af');
-    const showDiagDot = diagnoses.length > 0 && !isMissing;
-    const opacity = severityOpacity(severity);
-
-    return (
-      <button
-        key={num}
-        type="button"
-        onClick={(e) => handleClick(num, e)}
-        onContextMenu={(e) => handleContextMenu(num, e)}
-        className={`
-          relative flex flex-col items-center justify-center
-          p-px rounded-lg transition-all duration-150 cursor-pointer
-          ${!multiSelect ? 'hover:scale-110 hover:z-10 hover:drop-shadow-lg active:scale-95' : ''}
-          ${isActive && !multiSelect ? 'scale-110 z-10 ring-2 ring-blue-500/50 ring-offset-1 dark:ring-offset-gray-900 drop-shadow-lg' : ''}
-          ${isSelected ? 'ring-2 ring-violet-500/60 ring-offset-1 dark:ring-offset-gray-900' : ''}
-          ${isMissing ? 'opacity-40' : ''}
-          ${multiSelect ? 'hover:ring-2 hover:ring-violet-300 dark:hover:ring-violet-600' : ''}
-        `}
-        title={`Tooth #${num} (${toothQuadrant(num)})${diagnoses.length ? `\n${diagnoses.join(', ')}` : ''}${treatment ? `\nPlan: ${treatment}` : ''}${severity ? `\nSeverity: ${severity}` : ''}`}
-      >
-        <svg viewBox="0 0 24 24" className="w-full transition-all duration-150 overflow-visible">
-          <defs>
-            <linearGradient id={`gr-${num}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color || '#e5e7eb'} stopOpacity="0.4" />
-              <stop offset="100%" stopColor={color || '#d1d5db'} stopOpacity="0.15" />
-            </linearGradient>
-          </defs>
-          {!color && <path d={path} fill="#f9fafb" stroke="none" className="dark:hidden" />}
-          {!color && <path d={path} fill="#374151" stroke="none" className="hidden dark:block" />}
-          {color && !isMissing && <path d={path} fill={`url(#gr-${num})`} stroke="none" />}
-          {color && !isMissing && <path d={path} fill={color} opacity={opacity} stroke="none" />}
-          {isActive && !color && !multiSelect && <path d={path} fill="#3b82f6" opacity="0.06" stroke="none" />}
-          {isMissing && (
-            <>
-              <line x1="5" y1="4" x2="19" y2="22" stroke={strokeColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.5" />
-              <line x1="19" y1="4" x2="5" y2="22" stroke={strokeColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.5" />
-            </>
-          )}
-          <path
-            d={path}
-            fill="none"
-            stroke={strokeColor}
-            strokeWidth={color && !isMissing ? 1.5 : 1}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={diagnoses.length === 0 || isMissing ? 'dark:stroke-gray-600' : ''}
-          />
-          {!isMissing && status === 'treated' && (
-            <circle cx="18" cy="5" r="2" fill="#22c55e" opacity="0.7" />
-          )}
-          {!isMissing && status === 'wip' && (
-            <circle cx="18" cy="5" r="2" fill="#3b82f6" opacity="0.7" />
-          )}
-        </svg>
-        <span className={`
-          text-[7px] sm:text-[8px] font-semibold leading-none select-none transition-colors mt-px
-          ${isActive && !multiSelect ? 'text-blue-600 dark:text-blue-400' : ''}
-          ${isSelected ? 'text-violet-600 dark:text-violet-400' : ''}
-          ${color && !isActive && !isSelected && !isMissing ? 'text-gray-600 dark:text-gray-300' : ''}
-          ${(!color || isMissing) && !isActive && !isSelected ? 'text-gray-400 dark:text-gray-500' : ''}
-        `}>
-          {num}
-        </span>
-        {showDiagDot && (
-          <div className="flex items-center gap-[1.5px] mt-[2px] h-[3px]">
-            {diagnoses.slice(0, 3).map((d, i) => (
-              <span key={i} className="w-[3px] h-[3px] rounded-full" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
-            ))}
-            {diagnoses.length > 3 && <span className="text-[5px] font-medium text-gray-400 dark:text-gray-500 leading-none ml-[1px]">+{diagnoses.length - 3}</span>}
-          </div>
-        )}
-        {treatment && !isMissing && (
-          <span className="text-[5px] text-emerald-500 dark:text-emerald-400 leading-none mt-[1px] font-medium truncate max-w-full px-0.5">
-            {treatment}
-          </span>
-        )}
-      </button>
-    );
+  function undoClear() {
+    if (!undoSnapshot) return;
+    for (const [tooth, entry] of Object.entries(undoSnapshot)) {
+      if (onToothEntryUpdate) onToothEntryUpdate(Number(tooth), entry);
+    }
+    setUndoSnapshot(null);
   }
+
+  function bulkAction(diag) {
+    for (const num of selectedTeeth) {
+      if (diag === null) {
+        const prevEntry = toothMap[num];
+        if (prevEntry) setUndoSnapshot(s => ({ ...s, [num]: { ...prevEntry } }));
+      }
+      onQuickDiagnosis?.(num, diag);
+    }
+    setSelectedTeeth(new Set());
+  }
+
+  function handleBulkClear() {
+    const snap = {};
+    for (const num of selectedTeeth) {
+      const entry = toothMap[num];
+      if (entry) snap[num] = { ...entry };
+    }
+    if (Object.keys(snap).length > 0) setUndoSnapshot(snap);
+    for (const num of selectedTeeth) onQuickDiagnosis?.(num, null);
+    setSelectedTeeth(new Set());
+  }
+
+  function handleSelectAll() {
+    setSelectedTeeth(new Set(ALL_TEETH));
+  }
+
+  function handleDeselectAll() {
+    setSelectedTeeth(new Set());
+  }
+
+  const allDiagnoses = useMemo(() => {
+    const set = new Set();
+    for (const d of toothData) {
+      for (const diag of (d.diagnoses || [])) {
+        if (diag !== 'Missing') set.add(diag);
+      }
+    }
+    return Array.from(set);
+  }, [toothData]);
+
+  if (loading) return <LoadingSkeleton />;
 
   function renderRow(teeth, labelLeft, labelRight) {
     return (
@@ -254,8 +382,43 @@ export default function ToothGrid({
         <div className="flex flex-col items-center pt-6 w-5 shrink-0">
           <span className="text-[8px] font-bold text-gray-400 dark:text-gray-500">{labelLeft}</span>
         </div>
-        <div className="flex-1 grid" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))', gap: 0 }}>
-          {teeth.map(renderTooth)}
+        <div className="flex-1 min-w-0">
+          <div className="hidden sm:grid sm:grid-cols-16 gap-0">
+            {teeth.map(num => (
+              <ToothButton
+                key={num}
+                num={num}
+                entry={toothMap[num]}
+                isActive={selectedTooth === num}
+                isSelected={selectedTeeth.has(num)}
+                multiSelect={multiSelect}
+                onToothSelect={onToothSelect}
+                onContextMenu={handleContextMenu}
+                selectedTeeth={selectedTeeth}
+                setSelectedTeeth={setSelectedTeeth}
+                onQuickDiagnosis={onQuickDiagnosis}
+              />
+            ))}
+          </div>
+          <div className="sm:hidden overflow-x-auto snap-x snap-mandatory scrollbar-thin">
+            <div className="grid grid-cols-16 gap-0 min-w-[900px]">
+              {teeth.map(num => (
+                <ToothButton
+                  key={num}
+                  num={num}
+                  entry={toothMap[num]}
+                  isActive={selectedTooth === num}
+                  isSelected={selectedTeeth.has(num)}
+                  multiSelect={multiSelect}
+                  onToothSelect={onToothSelect}
+                  onContextMenu={handleContextMenu}
+                  selectedTeeth={selectedTeeth}
+                  setSelectedTeeth={setSelectedTeeth}
+                  onQuickDiagnosis={onQuickDiagnosis}
+                />
+              ))}
+            </div>
+          </div>
         </div>
         <div className="flex flex-col items-center pt-6 w-5 shrink-0">
           <span className="text-[8px] font-bold text-gray-400 dark:text-gray-500">{labelRight}</span>
@@ -265,7 +428,7 @@ export default function ToothGrid({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 sm:p-4">
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 sm:p-4" ref={gridRef} tabIndex={multiSelect ? -1 : 0} onKeyDown={() => {}}>
       {/* Header */}
       <div className="flex items-center justify-between mb-2 px-0.5">
         <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Dental Chart</span>
@@ -295,55 +458,73 @@ export default function ToothGrid({
 
       {/* Bulk action bar */}
       {multiSelect && selectedTeeth.size > 0 && (
-        <div className="mt-2 flex items-center gap-2 px-2 py-1.5 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg">
+        <div className="mt-2 flex items-center gap-2 px-2 py-1.5 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg flex-wrap">
           <span className="text-[10px] font-medium text-violet-700 dark:text-violet-300 shrink-0">{selectedTeeth.size} selected</span>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             {QUICK_DIAG.slice(0, 4).map(d => (
               <button
                 key={d}
                 type="button"
-                onClick={() => {
-                  for (const num of selectedTeeth) {
-                    onQuickDiagnosis?.(num, d);
-                  }
-                  setSelectedTeeth(new Set());
-                }}
+                onClick={() => bulkAction(d)}
                 className="px-2 py-0.5 text-[9px] font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-600 dark:text-gray-400 hover:border-blue-300 transition-all"
               >
                 {d}
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              for (const num of selectedTeeth) {
-                onQuickDiagnosis?.(num, null);
-              }
-              setSelectedTeeth(new Set());
-            }}
-            className="px-2 py-0.5 text-[9px] font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all ml-auto"
-          >
-            Clear
-          </button>
+          <div className="flex gap-1 ml-auto">
+            {selectedTeeth.size < ALL_TEETH.length && (
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="px-2 py-0.5 text-[9px] font-medium text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md transition-all"
+              >
+                Select all
+              </button>
+            )}
+            {selectedTeeth.size > 0 && (
+              <button
+                type="button"
+                onClick={handleDeselectAll}
+                className="px-2 py-0.5 text-[9px] font-medium text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md transition-all"
+              >
+                Deselect all
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleBulkClear}
+              className="px-2 py-0.5 text-[9px] font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"
+            >
+              Clear
+            </button>
+          </div>
         </div>
       )}
 
       {/* Legend */}
-      {toothData.flatMap(d => d.diagnoses).filter(d => d !== 'Missing').length > 0 && (
+      {allDiagnoses.length > 0 && (
         <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800 text-[9px] text-gray-500 dark:text-gray-400 justify-center">
-          {Array.from(new Set(toothData.flatMap(d => d.diagnoses).filter(d => d !== 'Missing'))).slice(0, 5).map(d => (
+          {(showAllLegend ? allDiagnoses : allDiagnoses.slice(0, 5)).map(d => (
             <span key={d} className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
               {d}
             </span>
           ))}
-          {toothData.flatMap(d => d.diagnoses).filter(d => d !== 'Missing').length > 5 && <span className="text-gray-400">+ more</span>}
+          {allDiagnoses.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setShowAllLegend(!showAllLegend)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+            >
+              {showAllLegend ? '▲ less' : `+${allDiagnoses.length - 5} more`}
+            </button>
+          )}
         </div>
       )}
 
       {/* Tooth type legend */}
-      <div className="flex items-center justify-center gap-3 mt-2 text-[7px] text-gray-400 dark:text-gray-500">
+      <div className="flex items-center justify-center gap-3 mt-2 text-[7px] text-gray-400 dark:text-gray-500 flex-wrap">
         {[
           { path: MOLAR_PATH, label: 'Molar' },
           { path: PREMOLAR_PATH, label: 'Premolar' },
@@ -395,6 +576,31 @@ export default function ToothGrid({
               className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
               Clear all
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Undo toast */}
+      {undoSnapshot && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-2 fade-in duration-200">
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl shadow-2xl text-xs font-medium">
+            <span>Tooth cleared</span>
+            <button
+              type="button"
+              onClick={undoClear}
+              className="px-3 py-1 bg-white/20 dark:bg-gray-900/20 rounded-lg hover:bg-white/30 dark:hover:bg-gray-900/30 transition-all font-semibold"
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              onClick={() => setUndoSnapshot(null)}
+              className="p-1 hover:bg-white/10 dark:hover:bg-gray-900/10 rounded-lg transition-all"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>

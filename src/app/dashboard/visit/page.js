@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef, useContext } from 'react';
+import { useState, useEffect, Suspense, useRef, useContext, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext } from '../layout';
@@ -122,6 +122,40 @@ function VisitPageInner() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaFiles, setMediaFiles] = useState([]);
   const [compiling, setCompiling] = useState(false);
+
+  // Stable callbacks for ToothGrid + PerToothDiagnosisPanel
+  const stableSetSelectedTooth = useCallback(setSelectedTooth, []);
+  const handleQuickDiagnosis = useCallback((tooth, diag) => {
+    setForm(f => {
+      const existing = f.toothDiagnoses.filter(t => t.tooth !== tooth);
+      if (diag === null) return { ...f, toothDiagnoses: existing };
+      const prev = f.toothDiagnoses.find(t => t.tooth === tooth);
+      const diagnoses = prev?.diagnoses?.includes(diag)
+        ? prev.diagnoses.filter(d => d !== diag)
+        : [...(prev?.diagnoses || []), diag];
+      const next = diagnoses.length > 0
+        ? [...existing, { tooth, diagnoses, surface: prev?.surface || '', treatment: prev?.treatment || '', severity: prev?.severity || '', status: prev?.status || 'active' }]
+        : existing;
+      return { ...f, toothDiagnoses: next };
+    });
+  }, []);
+  const handleToothEntryUpdate = useCallback((tooth, entry) => {
+    setForm(f => {
+      const existing = f.toothDiagnoses.filter(t => t.tooth !== tooth);
+      const next = [...existing, entry];
+      return { ...f, toothDiagnoses: next };
+    });
+  }, []);
+  const handleToothSave = useCallback((entry) => {
+    setForm(f => {
+      const existing = f.toothDiagnoses.filter(t => t.tooth !== entry.tooth);
+      const next = entry.diagnoses.length > 0
+        ? [...existing, entry]
+        : existing;
+      return { ...f, toothDiagnoses: next };
+    });
+  }, []);
+  const handleToothClose = useCallback(() => setSelectedTooth(null), []);
 
   // Full context data
   const [appointmentMeta, setAppointmentMeta] = useState(null);
@@ -1724,23 +1758,12 @@ function VisitPageInner() {
               <div className="space-y-3">
                 <ToothGrid
                   toothData={form.toothDiagnoses}
-                  onToothSelect={setSelectedTooth}
+                  onToothSelect={stableSetSelectedTooth}
                   selectedTooth={selectedTooth}
                   diagnosisOptions={diagnosisOptions}
-                  onQuickDiagnosis={(tooth, diag) => {
-                    setForm(f => {
-                      const existing = f.toothDiagnoses.filter(t => t.tooth !== tooth);
-                      if (diag === null) return { ...f, toothDiagnoses: existing };
-                      const prev = f.toothDiagnoses.find(t => t.tooth === tooth);
-                      const diagnoses = prev?.diagnoses?.includes(diag)
-                        ? prev.diagnoses.filter(d => d !== diag)
-                        : [...(prev?.diagnoses || []), diag];
-                      const next = diagnoses.length > 0
-                        ? [...existing, { tooth, diagnoses, surface: prev?.surface || '', treatment: prev?.treatment || '', severity: prev?.severity || '', status: prev?.status || 'active' }]
-                        : existing;
-                      return { ...f, toothDiagnoses: next };
-                    });
-                  }}
+                  onQuickDiagnosis={handleQuickDiagnosis}
+                  onToothEntryUpdate={handleToothEntryUpdate}
+                  loading={appointmentId && !appointmentMeta && !form.toothDiagnoses.length}
                 />
 
                 {selectedTooth && (
@@ -1749,16 +1772,8 @@ function VisitPageInner() {
                       toothNumber={selectedTooth}
                       currentEntry={form.toothDiagnoses.find(t => t.tooth === selectedTooth)}
                       diagnosisOptions={diagnosisOptions}
-                      onSave={(entry) => {
-                        setForm(f => {
-                          const existing = f.toothDiagnoses.filter(t => t.tooth !== entry.tooth);
-                          const next = entry.diagnoses.length > 0
-                            ? [...existing, entry]
-                            : existing;
-                          return { ...f, toothDiagnoses: next };
-                        });
-                      }}
-                      onClose={() => setSelectedTooth(null)}
+                      onSave={handleToothSave}
+                      onClose={handleToothClose}
                     />
                   </div>
                 )}
