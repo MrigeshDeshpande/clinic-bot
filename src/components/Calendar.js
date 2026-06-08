@@ -56,7 +56,7 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="w-full bg-gradient-to-br from-white to-gray-50/80 dark:from-gray-900 dark:to-gray-950/80 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow duration-300 p-5">
+    <div className="w-full h-full bg-gradient-to-br from-white to-gray-50/80 dark:from-gray-900 dark:to-gray-950/80 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow duration-300 p-5 flex flex-col">
       {/* Header */}
       {!hideHeader && (
         <div className="flex items-center justify-between mb-5">
@@ -191,7 +191,7 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
       </div>
 
       {/* Legend */}
-      <div className="flex items-center justify-center gap-5 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800/80">
+      <div className="flex items-center justify-center gap-5 mt-auto pt-4 border-t border-gray-100 dark:border-gray-800/80">
         <span className="flex items-center gap-2 text-[11px] font-medium text-gray-400 dark:text-gray-500">
           <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.4)]" />
           Open
