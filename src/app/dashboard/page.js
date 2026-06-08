@@ -372,7 +372,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
   const totalBooked = Object.keys(bookedByTime).length;
   const available = slots.length - totalBooked;
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 transition-colors duration-200">
+    <div className="h-full bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 transition-colors duration-200 flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-gray-400 dark:text-gray-500" />
@@ -661,17 +661,17 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-in">
       {/* Header — always rendered, even during loading, to optimize LCP */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 py-4 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
         </div>
       </div>
 
       {loading ? (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <div className="xl:col-span-2 shimmer h-80 rounded-xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="shimmer h-80 rounded-xl" />
             <div className="shimmer h-80 rounded-xl" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -683,35 +683,31 @@ export default function DashboardPage() {
           </div>
         </div>
       ) : (
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Calendar */}
-        <div className="xl:col-span-2">
-          <Calendar
-            selectedDate={selectedDate}
-            onDateSelect={setSelectedDate}
-            datesData={datesData}
-            onMonthChange={(y, m) => {
-              fetch(`/api/dashboard/calendar?year=${y}&month=${m}`)
-                .then(r => r.json())
-                .then(json => {
-                  setDatesData(json.dates || {});
-                  if (json.slotDefinitions) setSlotDefinitions(json.slotDefinitions);
-                })
-                .catch(e => console.error('Calendar month change error:', e));
-            }}
-          />
-        </div>
+        <Calendar
+          selectedDate={selectedDate}
+          onDateSelect={setSelectedDate}
+          datesData={datesData}
+          onMonthChange={(y, m) => {
+            fetch(`/api/dashboard/calendar?year=${y}&month=${m}`)
+              .then(r => r.json())
+              .then(json => {
+                setDatesData(json.dates || {});
+                if (json.slotDefinitions) setSlotDefinitions(json.slotDefinitions);
+              })
+              .catch(e => console.error('Calendar month change error:', e));
+          }}
+        />
 
         {/* Slot detail for selected day */}
-        <div>
-          <SlotGrid
-            selectedDate={selectedDate}
-            appointments={appointments}
-            datesData={datesData}
-            slotDefinitions={slotDefinitions}
-            onBookSlotRef={bookSlotRef}
-          />
-        </div>
+        <SlotGrid
+          selectedDate={selectedDate}
+          appointments={appointments}
+          datesData={datesData}
+          slotDefinitions={slotDefinitions}
+          onBookSlotRef={bookSlotRef}
+        />
       </div>
       )
       }

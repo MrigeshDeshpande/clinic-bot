@@ -302,8 +302,7 @@ function AppointmentsContentInner() {
   return (
     <>
       <div className="animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 py-4 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Appointments</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">

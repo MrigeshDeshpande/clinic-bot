@@ -329,7 +329,7 @@ export default function DashboardLayout({ children }) {
           </aside>
 
           {/* Main Content */}
-          <main className="md:ml-64 pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-colors duration-200">
+          <main className="md:ml-64 pt-24 md:pt-12 p-6 md:p-10 min-h-screen transition-colors duration-200">
             <div className="animate-fade-in mx-auto">
               {children}
             </div>
