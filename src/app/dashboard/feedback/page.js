@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Star, Phone, ThumbsUp, Meh, Frown, CheckCircle } from 'lucide-react';
+import { fetchCached } from '@/lib/clientFetchCache';
 
 export default function FeedbackPage() {
   const [feedback, setFeedback] = useState(null);
@@ -10,8 +11,7 @@ export default function FeedbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    fetch('/api/dashboard/feedback?limit=50')
-      .then(r => r.json())
+    fetchCached('/api/dashboard/feedback?limit=50')
       .then(d => setFeedback(d))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -128,25 +128,25 @@ export default function FeedbackPage() {
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
               {entries.map((e, i) => (
-                <div key={e.id || i} className="px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/patients?q=${encodeURIComponent(e.patient_name || '')}`)}>
+                                  <div key={e.id || i} className="px-6 py-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/patients?q=${encodeURIComponent(e.patient_name || '')}`)}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ratingBadge(e.rating)}`}>
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border ${ratingBadge(e.rating)}`}>
                         {ratingIcon(e.rating)}
                         {e.rating}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{e.patient_name || 'Anonymous'}</p>
-                        {e.comment && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{e.comment}</p>}
+                        <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">{e.patient_name || 'Anonymous'}</p>
+                        {e.comment && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{e.comment}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {e.callback && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-medium">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-medium">
                           <Phone className="w-3 h-3" /> Callback
                         </span>
                       )}
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
                         {new Date(e.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </span>
                     </div>
@@ -164,7 +164,7 @@ export default function FeedbackPage() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-red-500" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Callback Requests</h3>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Callback Requests</h3>
               </div>
               <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full">{pendingCallbacks.length}</span>
             </div>
@@ -204,7 +204,7 @@ export default function FeedbackPage() {
 
           {/* Rating Distribution Bar */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Distribution</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">Distribution</h3>
             <div className="space-y-2">
               {[
                 { label: 'Great', count: summary.great, color: 'bg-emerald-500' },

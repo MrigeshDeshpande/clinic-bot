@@ -138,8 +138,8 @@ export default function DueRemindersPage() {
             { label: 'Total Reminders Sent', value: logs.reduce((s, l) => s + Number(l.sent_count), 0), color: 'emerald' },
           ].map(s => (
             <div key={s.label} className={`bg-${s.color}-50 dark:bg-${s.color}-900/20 border border-${s.color}-100 dark:border-${s.color}-800 rounded-xl p-4`}>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{s.label}</p>
-              <p className={`text-2xl font-bold text-${s.color === 'gray' ? 'gray-900 dark:text-gray-100' : `${s.color}-700 dark:text-${s.color}-400`}`}>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{s.label}</p>
+              <p className={`text-3xl font-bold leading-tight text-${s.color === 'gray' ? 'gray-900 dark:text-gray-100' : `${s.color}-700 dark:text-${s.color}-400`}`}>
                 {s.value}
               </p>
             </div>
@@ -150,7 +150,7 @@ export default function DueRemindersPage() {
       {/* History Table */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
             <Clock className="w-4 h-4 text-gray-400" />
             Trigger History
           </h2>
@@ -186,7 +186,7 @@ export default function DueRemindersPage() {
                   className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
                       log.triggered_by === 'manual'
                         ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
                         : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
@@ -194,17 +194,17 @@ export default function DueRemindersPage() {
                       {log.triggered_by}
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
                         {log.total_appointments} appt(s), {log.sent_count} sent
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                      <p className="text-sm text-gray-400 dark:text-gray-500">
                         {formatTime(log.triggered_at)}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {Number(log.template_sent_count) > 0 && (
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                      <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded">
                         {log.template_sent_count} template
                       </span>
                     )}
@@ -220,9 +220,9 @@ export default function DueRemindersPage() {
                 {expandedLog === log.id && log.details?.appointments && (
                   <div className="px-5 pb-3 pl-14">
                     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-1.5">
-                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Appointments</p>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Appointments</p>
                       {log.details.appointments.map((a, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
+                        <div key={i} className="flex items-center justify-between text-sm">
                           <span className="text-gray-700 dark:text-gray-300 truncate">{a.name || 'Unknown'}</span>
                           <span className="text-gray-500 dark:text-gray-400 font-medium shrink-0 ml-2">₹{a.due} due</span>
                         </div>

@@ -78,3 +78,55 @@ export async function getR2SignedUrl(key, expiresIn = 3600) {
     return null;
   }
 }
+
+/**
+ * Download a file from R2 as a Buffer.
+ * @param {string} key - The R2 object key
+ * @returns {Promise<Buffer|null>} The file contents as a Buffer, or null on failure
+ */
+export async function getR2Object(key) {
+  const s3 = getClient();
+  if (!s3) return null;
+  try {
+    const command = new GetObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+    });
+    const response = await s3.send(command);
+    if (!response.Body) return null;
+
+    // If Body is already a Buffer (SDK may collect it depending on config)
+    if (Buffer.isBuffer(response.Body)) return response.Body;
+    if (response.Body instanceof Uint8Array) return Buffer.from(response.Body);
+
+    // Convert the readable stream to a Buffer using the stream 'data'/'end' pattern
+    // for maximum compatibility across AWS SDK versions
+    const chunks = [];
+    const stream = response.Body;
+
+    if (typeof stream.on === 'function' && typeof stream.read === 'function') {
+      // Node.js Readable stream — use event-based approach
+      await new Promise((resolve, reject) => {
+        stream.on('data', (chunk) => chunks.push(chunk));
+        stream.on('end', resolve);
+        stream.on('error', reject);
+        // Resume in case it's in paused mode
+        stream.resume();
+      });
+    } else if (typeof stream[Symbol.asyncIterator] === 'function') {
+      // Async iterable (AWS SDK SdkStream wrapper)
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+    } else {
+      // Unknown body type — try transformToByteArray (SDK v3 helper)
+      const bytes = await stream.transformToByteArray();
+      return Buffer.from(bytes);
+    }
+
+    return Buffer.concat(chunks);
+  } catch (error) {
+    logger.error('R2_GET_OBJECT_ERROR', { key, error: error.message });
+    return null;
+  }
+}

@@ -19,7 +19,7 @@ export async function POST(req, { params }) {
       SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone,
              a.patient_id, a.date, a.treatment, a.treatments,
              a.consultation_fee, a.treatment_charges, a.medicine_charges,
-             a.diagnosis, a.medicines, a.notes,
+             a.diagnosis, a.medicines, a.notes, a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
              a.follow_up_date, a.follow_up_instructions,
              a.prescription_key,
              p.name AS p_name, p.age AS p_age, p.sex AS p_sex
@@ -35,11 +35,13 @@ export async function POST(req, { params }) {
 
     const a = rows[0];
 
-    // If prescription already exists, return the signed URL
+    logger.info('PRESCRIPTION_DEBUG', { id, treatment: a.treatment, prescription_key: a.prescription_key, patient_name: a.patient_name });
+
+    // Return cached prescription if it exists
     if (a.prescription_key) {
-      const url = await getR2SignedUrl(a.prescription_key, 604800);
-      if (url) {
-        return NextResponse.json({ key: a.prescription_key, url, existing: true });
+      const cachedUrl = await getR2SignedUrl(a.prescription_key, 604800);
+      if (cachedUrl) {
+        return NextResponse.json({ key: a.prescription_key, url: cachedUrl, existing: true });
       }
     }
 
@@ -52,8 +54,12 @@ export async function POST(req, { params }) {
 
     const visit = {
       treatment: a.treatment,
+      treatments: Array.isArray(a.treatments) ? a.treatments : [],
+      tooth_diagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
       diagnosis: a.diagnosis,
       medicines: Array.isArray(a.medicines) ? a.medicines : [],
+      advice_selected: Array.isArray(a.advice_selected) ? a.advice_selected : [],
+      diagnosis_selected: Array.isArray(a.diagnosis_selected) ? a.diagnosis_selected : [],
       consultationFee: a.consultation_fee || 0,
       treatmentCharges: a.treatment_charges || 0,
       medicineCharges: a.medicine_charges || 0,
@@ -66,6 +72,7 @@ export async function POST(req, { params }) {
       id: a.id,
       date: a.date,
       treatment: a.treatment,
+      treatments: Array.isArray(a.treatments) ? a.treatments : [],
     };
 
     const result = await generatePrescription({ patient, visit, appointment });
@@ -83,7 +90,14 @@ export async function POST(req, { params }) {
     logger.info('PRESCRIPTION_GENERATED_DASHBOARD', { appointmentId: id, key: result.key });
     return NextResponse.json({ key: result.key, url: result.url, existing: false });
   } catch (error) {
-    logger.error('PRESCRIPTION_GENERATE_DASHBOARD_ERROR', { error: error.message });
-    return jsonError(error);
+    logger.error('PRESCRIPTION_GENERATE_DASHBOARD_ERROR', {
+      error: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
+    return NextResponse.json(
+      { error: error.message || 'Prescription generation failed' },
+      { status: 500 },
+    );
   }
 }

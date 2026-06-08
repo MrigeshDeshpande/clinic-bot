@@ -4,15 +4,20 @@ import { logger } from '@/lib/logger';
 // ───────────────────────────────────────────────
 // Create a new appointment (version 1 of a new logical chain)
 // ───────────────────────────────────────────────
-export async function createAppointment({ sessionId, waId, patientName, patientId, patientPhone, date, time, treatment }) {
+export async function createAppointment({ sessionId, waId, patientName, patientId, patientPhone, date, time, treatment, treatments }) {
   const sql = getSql();
   if (!sql) return null;
 
+  // Derive treatments array from single treatment string if not explicitly provided
+  const treatmentsArr = treatments && treatments.length > 0
+    ? treatments
+    : (treatment ? [treatment] : []);
+
   try {
     const rows = await sql`
-      INSERT INTO appointments (logical_id, version, session_id, wa_id, patient_name, patient_id, patient_phone, date, time, treatment)
+      INSERT INTO appointments (logical_id, version, session_id, wa_id, patient_name, patient_id, patient_phone, date, time, treatment, treatments)
       VALUES (gen_random_uuid(), 1, ${sessionId || null}, ${waId}, ${patientName || null},
-              ${patientId || null}, ${patientPhone || null}, ${date}, ${time}, ${treatment || null})
+              ${patientId || null}, ${patientPhone || null}, ${date}, ${time}, ${treatment || null}, ${JSON.stringify(treatmentsArr)})
       RETURNING *
     `;
     return rows[0] || null;
@@ -302,7 +307,14 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
       // The UNIQUE (logical_id, version) constraint + retry loop
       // handle concurrent access correctly.
       const current = await sql`
-        SELECT version, wa_id, patient_name FROM appointments
+        SELECT version, wa_id, patient_name, patient_phone, patient_id,
+               session_id, treatment, treatments, diagnosis, medicines,
+               consultation_fee, treatment_charges, medicine_charges,
+               notes, follow_up_date, follow_up_instructions,
+               advice_selected, diagnosis_selected,
+               location, payment_status, payment_method, transaction_id,
+               paid_amount, paid_at, arrival_status, chit_media
+        FROM appointments
         WHERE logical_id = ${logicalId}
         ORDER BY version DESC
         LIMIT 1
@@ -313,7 +325,15 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
         return null;
       }
 
-      const { version: currentVersion, wa_id, patient_name } = current[0];
+      const {
+        version: currentVersion, wa_id, patient_name, patient_phone, patient_id,
+        session_id, treatment: oldTreatment, treatments, diagnosis, medicines,
+        consultation_fee, treatment_charges, medicine_charges,
+        notes, follow_up_date, follow_up_instructions,
+        advice_selected, diagnosis_selected,
+        location, payment_status, payment_method, transaction_id,
+        paid_amount, paid_at, arrival_status, chit_media
+      } = current[0];
       const newVersion = currentVersion + 1;
 
       // Step 2: Mark current version as superseded.
@@ -330,8 +350,24 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
       // Step 3: Insert new version with the new data.
       // UNIQUE (logical_id, version) constraint prevents duplicate versions.
       const rows = await sql`
-        INSERT INTO appointments (logical_id, version, replaces_version, wa_id, patient_name, date, time, treatment, status)
-        VALUES (${logicalId}, ${newVersion}, ${currentVersion}, ${wa_id}, ${patient_name}, ${date}, ${time}, ${treatment || null}, 'confirmed')
+        INSERT INTO appointments (
+          logical_id, version, replaces_version, wa_id, patient_name, patient_phone, patient_id,
+          session_id, date, time, treatment, treatments, diagnosis, medicines,
+          consultation_fee, treatment_charges, medicine_charges,
+          notes, follow_up_date, follow_up_instructions,
+          advice_selected, diagnosis_selected,
+          location, payment_status, payment_method, transaction_id,
+          paid_amount, paid_at, arrival_status, chit_media, status
+        ) VALUES (
+          ${logicalId}, ${newVersion}, ${currentVersion}, ${wa_id}, ${patient_name}, ${patient_phone}, ${patient_id},
+          ${session_id}, ${date}, ${time}, ${treatment || oldTreatment}, ${JSON.stringify(treatments)},
+          ${diagnosis}, ${JSON.stringify(medicines)},
+          ${consultation_fee}, ${treatment_charges}, ${medicine_charges},
+          ${notes}, ${follow_up_date}, ${follow_up_instructions},
+          ${advice_selected || []}, ${diagnosis_selected || []},
+          ${location}, ${payment_status}, ${payment_method}, ${transaction_id},
+          ${paid_amount}, ${paid_at}, ${arrival_status}, ${chit_media}, 'confirmed'
+        )
         RETURNING *
       `;
 
@@ -458,6 +494,45 @@ export async function markDueReminderSent(id) {
     await sql`UPDATE appointments SET due_reminder_sent_at = NOW() WHERE id = ${id}`;
   } catch (error) {
     logger.error('APPOINTMENT_MARK_DUE_REMINDER_ERROR', { id, error: error.message });
+  }
+}
+
+// ───────────────────────────────────────────────
+// Fetch completed appointments with follow-up dates where reminder not yet sent
+// Used by the follow-up reminder cron job
+// ───────────────────────────────────────────────
+export async function fetchAppointmentsForFollowUpReminder() {
+  const sql = getSql();
+  if (!sql) return [];
+
+  try {
+    const rows = await sql`
+      SELECT DISTINCT ON (logical_id) id, logical_id, wa_id, patient_name, date, follow_up_date, follow_up_instructions
+      FROM appointments
+      WHERE status = 'completed'
+        AND follow_up_date IS NOT NULL
+        AND follow_up_date <= CURRENT_DATE + INTERVAL '1 day'
+        AND follow_up_reminder_sent_at IS NULL
+        AND wa_id IS NOT NULL
+      ORDER BY logical_id, version DESC
+    `;
+    return rows;
+  } catch (error) {
+    logger.error('APPOINTMENT_FETCH_FOLLOW_UP_REMINDER_ERROR', { error: error.message });
+    return [];
+  }
+}
+
+// ───────────────────────────────────────────────
+// Mark follow-up reminder as sent for a given appointment id
+// ───────────────────────────────────────────────
+export async function markFollowUpReminderSent(id) {
+  const sql = getSql();
+  if (!sql) return;
+  try {
+    await sql`UPDATE appointments SET follow_up_reminder_sent_at = NOW() WHERE id = ${id}`;
+  } catch (error) {
+    logger.error('APPOINTMENT_MARK_FOLLOW_UP_REMINDER_ERROR', { id, error: error.message });
   }
 }
 

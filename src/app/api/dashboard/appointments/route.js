@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getSql, runMigrations } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
+import { getClinicDateStr, getClinicMinutes } from '@/lib/clinicTime';
+import { CLINIC } from '@/config/clinic';
 
 export async function POST(req) {
   const csrfErr = requireCsrf(req);
@@ -18,6 +20,15 @@ export async function POST(req) {
 
     if (!patientName || !date || !time) {
       return NextResponse.json({ error: 'patientName, date, and time are required' }, { status: 400 });
+    }
+
+    // Reject past-time bookings in clinic timezone
+    if (date === getClinicDateStr()) {
+      const [h, m] = time.split(':').map(Number);
+      const timeMinutes = h * 60 + m;
+      if (timeMinutes <= getClinicMinutes()) {
+        return NextResponse.json({ error: 'That time has already passed today.' }, { status: 400 });
+      }
     }
 
     // Find or create patient record (with age and sex)
@@ -38,6 +49,8 @@ export async function POST(req) {
           if (patientSex) { setParts.push(`sex = $${idx++}`); params.push(patientSex); }
           params.push(patientId);
           await sql.query(`UPDATE patients SET ${setParts.join(', ')} WHERE id = $${idx}`, params);
+          // Invalidate cached prescriptions for this patient
+          await sql`UPDATE appointments SET prescription_key = NULL, updated_at = NOW() WHERE patient_id = ${patientId} AND prescription_key IS NOT NULL`;
         }
       } else {
         const ageVal = patientAge ? parseInt(patientAge, 10) : null;
@@ -70,9 +83,12 @@ export async function POST(req) {
 
     // Create appointment — use phone as wa_id for walk-in tracking, or a placeholder if no phone
     const waId = patientPhone || `w-${Date.now()}`;
+    // Derive treatments array from single treatment string
+    const treatmentsArr = treatment ? [treatment] : [];
+
     const rows = await sql`
-      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, status, location)
-      VALUES (gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, 'confirmed', ${location || ''})
+      INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, treatments, status, location)
+      VALUES (gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, ${JSON.stringify(treatmentsArr)}, 'confirmed', ${location || ''})
       RETURNING *
     `;
 
@@ -88,7 +104,6 @@ export async function GET(req) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
   try {
-    await runMigrations();
     const sql = getSql();
 
     const { searchParams } = new URL(req.url);
@@ -104,10 +119,11 @@ export async function GET(req) {
                a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
                a.treatments,
          a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
-                 a.consultation_fee, a.treatment_charges, a.medicine_charges,
-                 a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
-                  a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at,
-                  a.payment_status, a.payment_method, a.transaction_id
+               a.consultation_fee, a.treatment_charges, a.medicine_charges,
+               a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
+               a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at,
+               a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
+               a.payment_status, a.payment_method, a.transaction_id, a.paid_amount
         FROM appointments a
         LEFT JOIN patients p ON p.id = a.patient_id
         WHERE a.id = ${id}
@@ -131,14 +147,18 @@ export async function GET(req) {
                      a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
                      a.treatments,
                      a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
-                      a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
-                       a.chit_media, a.prescription_key, a.location, p.location AS patient_location,
-                       a.payment_status, a.payment_method, a.transaction_id, a.created_at, a.updated_at
-               FROM appointments a
-               LEFT JOIN patients p ON p.id = a.patient_id
-               WHERE a.date >= CURRENT_DATE
-                 AND a.status IN ('confirmed', 'completed', 'no_show')
-               ORDER BY a.date ASC, a.time ASC
+                     a.consultation_fee, a.treatment_charges, a.medicine_charges,
+                     a.diagnosis, a.medicines, a.notes,
+                     a.follow_up_date, a.follow_up_instructions,
+                     a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
+                     a.location, p.location AS patient_location,
+                     a.payment_status, a.payment_method, a.transaction_id, a.paid_amount, a.paid_at,
+                     a.chit_media, a.prescription_key, a.created_at, a.updated_at
+              FROM appointments a
+              LEFT JOIN patients p ON p.id = a.patient_id
+              WHERE a.date >= CURRENT_DATE
+                AND a.status IN ('confirmed', 'completed', 'no_show')
+              ORDER BY a.date ASC, a.time ASC
             `,
             sql`
               SELECT
@@ -160,14 +180,18 @@ export async function GET(req) {
                      a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
                      a.treatments,
                      a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
-                        a.consultation_fee, a.treatment_charges, a.medicine_charges, a.notes,
-                        a.chit_media, a.prescription_key, a.location, p.location AS patient_location,
-                        a.payment_status, a.payment_method, a.transaction_id, a.created_at, a.updated_at
-               FROM appointments a
-               LEFT JOIN patients p ON p.id = a.patient_id
-               WHERE a.date = ${targetDate}
-                 AND a.status IN ('confirmed', 'completed', 'no_show')
-               ORDER BY a.time ASC
+                     a.consultation_fee, a.treatment_charges, a.medicine_charges,
+                     a.diagnosis, a.medicines, a.notes,
+                     a.follow_up_date, a.follow_up_instructions,
+                     a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
+                     a.location, p.location AS patient_location,
+                     a.payment_status, a.payment_method, a.transaction_id, a.paid_amount, a.paid_at,
+                     a.chit_media, a.prescription_key, a.created_at, a.updated_at
+              FROM appointments a
+              LEFT JOIN patients p ON p.id = a.patient_id
+              WHERE a.date = ${targetDate}
+                AND a.status IN ('confirmed', 'completed', 'no_show')
+              ORDER BY a.time ASC
             `,
             sql`
               SELECT

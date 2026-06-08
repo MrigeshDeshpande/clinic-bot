@@ -65,3 +65,7 @@ ALTER TABLE appointments
   ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]',
   ADD COLUMN IF NOT EXISTS follow_up_date DATE,
   ADD COLUMN IF NOT EXISTS follow_up_instructions TEXT DEFAULT '';
+
+-- Compiled document key (visit summary PDF bundling prescription + images)
+ALTER TABLE appointments
+  ADD COLUMN IF NOT EXISTS compiled_document_key TEXT;

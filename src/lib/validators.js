@@ -1,4 +1,5 @@
 import { CLINIC } from '@/config/clinic';
+import { getClinicMinutes, getClinicDateStr, getClinicToday } from '@/lib/clinicTime';
 
 function isSunday(date) {
   return date.getDay() === 0;
@@ -40,8 +41,7 @@ const HINGLISH_NUMBER_WORDS = {
 };
 
 function addDays(n) {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
+  const d = getClinicToday();
   d.setDate(d.getDate() + n);
   return d;
 }
@@ -164,14 +164,13 @@ export function validateDate(text) {
 
   if (!parsedDate) return { valid: false, reason: 'PARSE_FAILED' };
 
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
+  const clinicNow = getClinicToday();
 
-  if (parsedDate < now) {
+  if (parsedDate < clinicNow) {
     return { valid: false, reason: 'PAST_DATE', parsed: parsedDate, suggestion: 'That date has passed. Please choose a future date.' };
   }
 
-  if (daysBetween(now, parsedDate) > CLINIC.bookingHorizonDays) {
+  if (daysBetween(clinicNow, parsedDate) > CLINIC.bookingHorizonDays) {
     return { valid: false, reason: 'BEYOND_HORIZON', parsed: parsedDate, suggestion: `We only book up to ${CLINIC.bookingHorizonDays} days ahead. Please choose a closer date.` };
   }
 
@@ -338,13 +337,12 @@ export function validateTime(text, date) {
     return { valid: false, reason: 'SLOT_UNAVAILABLE', parsed: parsedTime, suggestion: `Try one of: ${slots.slice(0, 5).join(', ')}.` };
   }
 
-  // Reject if the time has already passed for today
+  // Reject if the time has already passed for today (in clinic timezone)
   if (date) {
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-    const dateStr = date instanceof Date ? date.toISOString().slice(0, 10) : String(date);
+    const today = getClinicDateStr();
+    const dateStr = date instanceof Date ? date.toLocaleDateString('en-CA', { timeZone: CLINIC.timeZone }) : String(date);
     if (dateStr === today) {
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const nowMinutes = getClinicMinutes();
       if (timeMinutes <= nowMinutes) {
         return { valid: false, reason: 'TIME_PASSED', parsed: parsedTime, suggestion: `That time has already passed. Please choose a later time.` };
       }

@@ -8,13 +8,14 @@ import Calendar from '@/components/Calendar';
 import { DateContext } from './layout';
 import { TREATMENT_NAMES } from '@/lib/treatments';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
+import { fetchCached } from '@/lib/clientFetchCache';
 
 function StatusBadge({ status, arrivalStatus }) {
-  if (status === 'completed') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
-  if (status === 'no_show') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">No Show</span>;
-  if (arrivalStatus === 'called') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">In Session</span>;
-  if (arrivalStatus === 'arrived') return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">Waiting</span>;
-  return <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
+  if (status === 'completed') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
+  if (status === 'no_show') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">No Show</span>;
+  if (arrivalStatus === 'called') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">In Session</span>;
+  if (arrivalStatus === 'arrived') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">Waiting</span>;
+  return <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
 }
 
 const STAT_CARDS = [
@@ -42,6 +43,49 @@ const COLOR_MAP = {
   revenue: { text: 'text-emerald-700 dark:text-emerald-400', icon: 'text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30', ring: 'ring-emerald-100 dark:ring-emerald-800' },
 };
 
+const CARD_STYLE_MAP = {
+  total: {
+    hoverBg: 'hover:bg-gray-500/[0.02] dark:hover:bg-gray-400/[0.01]',
+    hoverBorder: 'hover:border-gray-300 dark:hover:border-gray-700',
+    hoverGlow: 'hover:shadow-lg hover:shadow-gray-200/20 dark:hover:shadow-gray-950/20',
+    accentBar: 'bg-gray-400 dark:bg-gray-600',
+    accentText: 'text-gray-500 dark:text-gray-400',
+    iconColor: 'text-gray-400 dark:text-gray-500'
+  },
+  waiting: {
+    hoverBg: 'hover:bg-amber-500/[0.03] dark:hover:bg-amber-400/[0.015]',
+    hoverBorder: 'hover:border-amber-300 dark:hover:border-amber-800/60',
+    hoverGlow: 'hover:shadow-lg hover:shadow-amber-200/10 dark:hover:shadow-amber-950/10',
+    accentBar: 'bg-amber-500 dark:bg-amber-400',
+    accentText: 'text-amber-600 dark:text-amber-400',
+    iconColor: 'text-amber-500 dark:text-amber-400'
+  },
+  in_session: {
+    hoverBg: 'hover:bg-blue-500/[0.03] dark:hover:bg-blue-400/[0.015]',
+    hoverBorder: 'hover:border-blue-300 dark:hover:border-blue-800/60',
+    hoverGlow: 'hover:shadow-lg hover:shadow-blue-200/10 dark:hover:shadow-blue-950/10',
+    accentBar: 'bg-blue-500 dark:bg-blue-400',
+    accentText: 'text-blue-600 dark:text-blue-400',
+    iconColor: 'text-blue-500 dark:text-blue-400'
+  },
+  completed: {
+    hoverBg: 'hover:bg-green-500/[0.03] dark:hover:bg-green-400/[0.015]',
+    hoverBorder: 'hover:border-green-300 dark:hover:border-green-800/60',
+    hoverGlow: 'hover:shadow-lg hover:shadow-green-200/10 dark:hover:shadow-green-950/10',
+    accentBar: 'bg-green-500 dark:bg-green-400',
+    accentText: 'text-green-600 dark:text-green-400',
+    iconColor: 'text-green-500 dark:text-green-400'
+  },
+  revenue: {
+    hoverBg: 'hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-400/[0.015]',
+    hoverBorder: 'hover:border-emerald-300 dark:hover:border-emerald-800/60',
+    hoverGlow: 'hover:shadow-lg hover:shadow-emerald-200/10 dark:hover:shadow-emerald-950/10',
+    accentBar: 'bg-emerald-500 dark:bg-emerald-400',
+    accentText: 'text-emerald-700 dark:text-emerald-400',
+    iconColor: 'text-emerald-500 dark:text-emerald-400'
+  }
+};
+
 // Default slot definitions (fallback if API doesn't return them)
 const DEFAULT_SLOTS = {
   weekday: ['10:00','10:30','11:00','11:30','12:00','12:30',
@@ -49,6 +93,10 @@ const DEFAULT_SLOTS = {
             '18:00','18:30','19:00','19:30'],
   sunday:  ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30'],
 };
+
+const PHONE_PREFIX = '+91';
+function stripPhonePrefix(v) { return v?.replace(/^(\+91|91)/, '') || v || ''; }
+function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE_PREFIX}${s}` : ''; }
 
 function QuickBookForm({ date, time, onClose, onBooked }) {
   const [patientName, setPatientName] = useState('');
@@ -89,7 +137,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   function selectPatient(p) {
     setSelectedPatient(p);
     setPatientName(p.name);
-    setPatientPhone(p.phone || '');
+    setPatientPhone(stripPhonePrefix(p.phone) || '');
     setPatientAge(p.age ? String(p.age) : '');
     setPatientSex(p.sex || '');
     setSearchResults([]);
@@ -112,7 +160,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientName: patientName.trim(),
-          patientPhone: patientPhone.trim() || null,
+          patientPhone: withPhonePrefix(patientPhone.trim()) || null,
           patientAge: patientAge.trim() || null,
           patientSex: patientSex || null,
           date,
@@ -182,16 +230,14 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
       {/* Phone */}
       <div>
         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Phone Number</label>
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-          </svg>
+        <div className="flex">
+          <span className="inline-flex items-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-200 dark:border-gray-600 rounded-l-xl text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">{PHONE_PREFIX}</span>
           <input
             type="tel"
-            value={patientPhone}
-            onChange={e => setPatientPhone(e.target.value)}
-            placeholder="+91 98765 43210"
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+            value={stripPhonePrefix(patientPhone)}
+            onChange={e => setPatientPhone(stripPhonePrefix(e.target.value))}
+            placeholder="9876543210"
+            className="flex-1 px-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />
         </div>
       </div>
@@ -329,6 +375,13 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
     if (t) bookedByTime[t] = a;
   }
 
+  // Time-aware helpers for today's schedule
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  function addMins(t, m) { const [h, min] = t.split(':').map(Number); const total = h * 60 + min + m; return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`; }
+  const nextFreeSlot = isToday ? slots.find(s => s > currentHHMM && !bookedByTime[s]) : null;
+
   if (dateInfo?.isBlocked) {
     return (
       <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl p-6 text-center">
@@ -362,7 +415,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
   const totalBooked = Object.keys(bookedByTime).length;
   const available = slots.length - totalBooked;
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 transition-colors duration-200">
+    <div className="h-full bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 transition-colors duration-200 flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-gray-400 dark:text-gray-500" />
@@ -372,7 +425,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400 mb-3">
+      <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> {totalBooked} booked</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400" /> {available} open</span>
         <span className="ml-auto text-gray-400 dark:text-gray-500">{Math.round((totalBooked / slots.length) * 100)}% full</span>
@@ -380,49 +433,70 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
 
       {morningSlots.length > 0 && (
         <div className="mb-3">
-          <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Morning</p>
+          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Morning</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
             {morningSlots.map(slotTime => {
               const isBooked = !!bookedByTime[slotTime];
               const bookedAppt = bookedByTime[slotTime];
+              const isPast = isToday && addMins(slotTime, 30) <= currentHHMM;
+              const isCurrent = isToday && slotTime <= currentHHMM && addMins(slotTime, 30) > currentHHMM;
+              const isNextFree = slotTime === nextFreeSlot;
+              const showBook = !isBooked && !isPast;
               return (
                 <button
                   key={slotTime}
                   type="button"
+                  disabled={isPast && !isBooked}
                   className={`relative rounded-lg border text-center transition-all duration-150 ${
-                    isBooked
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 active:scale-95'
-                      : 'bg-green-50/60 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:shadow-sm active:scale-95'
+                    isPast && !isBooked
+                      ? 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60'
+                      : isBooked
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 active:scale-95'
+                        : isNextFree
+                          ? 'bg-green-50 dark:bg-green-900/20 border-emerald-400 dark:border-emerald-500 hover:bg-green-100 dark:hover:bg-green-900/30 active:scale-95 ring-2 ring-emerald-300/50 dark:ring-emerald-600/50 animate-pulse'
+                          : 'bg-green-50/60 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:shadow-sm active:scale-95'
                   }`}
                   onClick={() => {
                     if (isBooked && bookedAppt?.patient_id) {
                       router.push(`/dashboard/patients/${bookedAppt.patient_id}`);
-                    } else if (!isBooked) {
+                    } else if (showBook) {
                       onBookSlotRef?.current?.(slotTime);
                     }
                   }}
                 >
-                    <div className="px-2.5 py-2.5">
+                  <div className="px-3 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
-                      <span className={`text-xs font-semibold ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
+                      {isCurrent ? (
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0" />
+                      ) : (
+                        <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
+                      )}
+                      <span className={`text-sm font-semibold leading-tight ${
+                        isPast && !isBooked ? 'text-gray-400 dark:text-gray-500'
+                        : isBooked ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-green-700 dark:text-green-300'
+                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-[10px] font-bold text-red-500 uppercase">Now</span>}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate leading-tight">{bookedAppt.patient_name || 'Booked'}</p>
+                        <p className={`text-xs font-medium truncate leading-tight ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}`}>{bookedAppt.patient_name || 'Booked'}</p>
+                      </div>
+                    ) : showBook ? (
+                      <div className="flex items-center justify-center gap-1 mt-1">
+                        <Plus className={`w-2.5 h-2.5 ${isNextFree ? 'text-emerald-500' : 'text-green-500 dark:text-green-400'}`} />
+                        <p className={`text-xs font-medium leading-tight ${isNextFree ? 'text-emerald-600 dark:text-emerald-400' : 'text-green-600 dark:text-green-400'}`}>Book</p>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-1 mt-1">
-                        <Plus className="w-2.5 h-2.5 text-green-500 dark:text-green-400" />
-                        <p className="text-[10px] text-green-600 dark:text-green-400 font-medium leading-tight">Book</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium leading-tight">Passed</p>
                       </div>
                     )}
                   </div>
-                  {isBooked && bookedAppt.arrival_status === 'arrived' && (
+                  {isBooked && bookedAppt.arrival_status === 'arrived' && !isPast && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white dark:border-gray-900" title="Arrived" />
                   )}
-                  {isBooked && bookedAppt.arrival_status === 'called' && (
+                  {isBooked && bookedAppt.arrival_status === 'called' && !isPast && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white dark:border-gray-900" title="In Session" />
                   )}
                 </button>
@@ -434,49 +508,70 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
 
       {afternoonSlots.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Afternoon</p>
+          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">Afternoon</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
             {afternoonSlots.map(slotTime => {
               const isBooked = !!bookedByTime[slotTime];
               const bookedAppt = bookedByTime[slotTime];
+              const isPast = isToday && addMins(slotTime, 30) <= currentHHMM;
+              const isCurrent = isToday && slotTime <= currentHHMM && addMins(slotTime, 30) > currentHHMM;
+              const isNextFree = slotTime === nextFreeSlot;
+              const showBook = !isBooked && !isPast;
               return (
                 <button
                   key={slotTime}
                   type="button"
+                  disabled={isPast && !isBooked}
                   className={`relative rounded-lg border text-center transition-all duration-150 ${
-                    isBooked
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 active:scale-95'
-                      : 'bg-green-50/60 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:shadow-sm active:scale-95'
+                    isPast && !isBooked
+                      ? 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60'
+                      : isBooked
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 active:scale-95'
+                        : isNextFree
+                          ? 'bg-green-50 dark:bg-green-900/20 border-emerald-400 dark:border-emerald-500 hover:bg-green-100 dark:hover:bg-green-900/30 active:scale-95 ring-2 ring-emerald-300/50 dark:ring-emerald-600/50 animate-pulse'
+                          : 'bg-green-50/60 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:shadow-sm active:scale-95'
                   }`}
                   onClick={() => {
                     if (isBooked && bookedAppt?.patient_id) {
                       router.push(`/dashboard/patients/${bookedAppt.patient_id}`);
-                    } else if (!isBooked) {
+                    } else if (showBook) {
                       onBookSlotRef?.current?.(slotTime);
                     }
                   }}
                 >
-                    <div className="px-2.5 py-2.5">
+                  <div className="px-3 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : 'text-green-400'}`} />
-                      <span className={`text-xs font-semibold ${isBooked ? 'text-blue-700 dark:text-blue-300' : 'text-green-700 dark:text-green-300'}`}>{slotTime}</span>
+                      {isCurrent ? (
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0" />
+                      ) : (
+                        <Clock className={`w-3 h-3 ${isBooked ? 'text-blue-400' : isPast ? 'text-gray-300 dark:text-gray-600' : 'text-green-400'}`} />
+                      )}
+                      <span className={`text-sm font-semibold leading-tight ${
+                        isPast && !isBooked ? 'text-gray-400 dark:text-gray-500'
+                        : isBooked ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-green-700 dark:text-green-300'
+                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-[10px] font-bold text-red-500 uppercase">Now</span>}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate leading-tight">{bookedAppt.patient_name || 'Booked'}</p>
+                        <p className={`text-xs font-medium truncate leading-tight ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-blue-600 dark:text-blue-400'}`}>{bookedAppt.patient_name || 'Booked'}</p>
+                      </div>
+                    ) : showBook ? (
+                      <div className="flex items-center justify-center gap-1 mt-1">
+                        <Plus className={`w-2.5 h-2.5 ${isNextFree ? 'text-emerald-500' : 'text-green-500 dark:text-green-400'}`} />
+                        <p className={`text-xs font-medium leading-tight ${isNextFree ? 'text-emerald-600 dark:text-emerald-400' : 'text-green-600 dark:text-green-400'}`}>Book</p>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-1 mt-1">
-                        <Plus className="w-2.5 h-2.5 text-green-500 dark:text-green-400" />
-                        <p className="text-[10px] text-green-600 dark:text-green-400 font-medium leading-tight">Book</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium leading-tight">Passed</p>
                       </div>
                     )}
                   </div>
-                  {isBooked && bookedAppt.arrival_status === 'arrived' && (
+                  {isBooked && bookedAppt.arrival_status === 'arrived' && !isPast && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white dark:border-gray-900" title="Arrived" />
                   )}
-                  {isBooked && bookedAppt.arrival_status === 'called' && (
+                  {isBooked && bookedAppt.arrival_status === 'called' && !isPast && (
                     <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white dark:border-gray-900" title="In Session" />
                   )}
                 </button>
@@ -510,12 +605,11 @@ export default function DashboardPage() {
     const month = d.getMonth() + 1;
 
     Promise.all([
-      fetch(`/api/dashboard/appointments?date=${selectedDate}`).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch appointments'); return d; }),
-      fetch(`/api/dashboard/calendar?year=${year}&month=${month}`).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to fetch calendar'); return d; }),
+      fetchCached(`/api/dashboard/appointments?date=${selectedDate}`),
+      fetchCached(`/api/dashboard/calendar?year=${year}&month=${month}`),
     ])
       .then(([apptData, calData]) => {
         if (cancelled) return;
-        if (apptData.error) throw new Error(apptData.error);
         setData(apptData);
         setDatesData(calData.dates || {});
         if (calData.slotDefinitions) setSlotDefinitions(calData.slotDefinitions);
@@ -569,9 +663,29 @@ export default function DashboardPage() {
     setToast('Appointment booked successfully');
   }
 
+  const totals = data?.totals || {};
+  const appointments = data?.appointments || [];
+  const confirmed = appointments.filter(a => a.status === 'confirmed');
+  const completed = appointments.filter(a => a.status === 'completed');
+  const todayRevenue = completed.reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
+  const todayCollected = completed.reduce((sum, a) => sum + Number(a.paid_amount || 0), 0);
+  const todayPending = completed.reduce((sum, a) => sum + (Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0) - Number(a.paid_amount || 0)), 0);
+  const paymentMethods = completed.filter(a => a.payment_status === 'paid' || a.payment_status === 'partial').reduce((acc, a) => { const m = a.payment_method || 'cash'; acc[m] = (acc[m] || 0) + 1; return acc; }, {});
+
+  function formatCurrency(amount) {
+    return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+  }
+
   if (overviewError) {
     return (
       <div className="animate-fade-in">
+        {/* Header always rendered for LCP */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
+          </div>
+        </div>
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center max-w-lg mx-auto mt-12">
           <XCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-1">Something went wrong</h3>
@@ -587,112 +701,110 @@ export default function DashboardPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="shimmer h-8 w-64 rounded-lg" />
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 shimmer h-80 rounded-xl" />
-          <div className="shimmer h-80 rounded-xl" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="shimmer h-28 rounded-xl" />)}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="shimmer h-64 rounded-xl" />
-          <div className="shimmer h-64 rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
-  const totals = data?.totals || {};
-  const appointments = data?.appointments || [];
-  const confirmed = appointments.filter(a => a.status === 'confirmed');
-  const completed = appointments.filter(a => a.status === 'completed');
-  const todayRevenue = completed.reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
-  const todayCollected = completed.reduce((sum, a) => sum + Number(a.paid_amount || 0), 0);
-  const todayPending = completed.reduce((sum, a) => sum + (Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0) - Number(a.paid_amount || 0)), 0);
-  const paymentMethods = completed.filter(a => a.payment_status === 'paid' || a.payment_status === 'partial').reduce((acc, a) => { const m = a.payment_method || 'cash'; acc[m] = (acc[m] || 0) + 1; return acc; }, {});
-
-  function formatCurrency(amount) {
-    return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
-  }
-
   return (
     <div className="animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Header — always rendered, even during loading, to optimize LCP */}
+      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 py-4 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {formatDateLong(selectedDate)}
-          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
         </div>
       </div>
 
-      {/* Calendar + Slot Detail — side by side on large screens */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-        {/* Calendar */}
-        <div className="xl:col-span-2">
-          <Calendar
-            selectedDate={selectedDate}
-            onDateSelect={setSelectedDate}
-            datesData={datesData}
-            onMonthChange={(y, m) => {
-              fetch(`/api/dashboard/calendar?year=${y}&month=${m}`)
-                .then(r => r.json())
-                .then(json => {
-                  setDatesData(json.dates || {});
-                  if (json.slotDefinitions) setSlotDefinitions(json.slotDefinitions);
-                })
-                .catch(e => console.error('Calendar month change error:', e));
-            }}
-          />
+      {loading ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="shimmer h-80 rounded-xl" />
+            <div className="shimmer h-80 rounded-xl" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => <div key={i} className="shimmer h-28 rounded-xl" />)}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="shimmer h-64 rounded-xl" />
+            <div className="shimmer h-64 rounded-xl" />
+          </div>
         </div>
+      ) : (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Calendar */}
+        <Calendar
+          selectedDate={selectedDate}
+          onDateSelect={setSelectedDate}
+          datesData={datesData}
+          onMonthChange={(y, m) => {
+            fetch(`/api/dashboard/calendar?year=${y}&month=${m}`)
+              .then(r => r.json())
+              .then(json => {
+                setDatesData(json.dates || {});
+                if (json.slotDefinitions) setSlotDefinitions(json.slotDefinitions);
+              })
+              .catch(e => console.error('Calendar month change error:', e));
+          }}
+        />
 
         {/* Slot detail for selected day */}
-        <div>
-          <SlotGrid
-            selectedDate={selectedDate}
-            appointments={appointments}
-            datesData={datesData}
-            slotDefinitions={slotDefinitions}
-            onBookSlotRef={bookSlotRef}
-          />
-        </div>
+        <SlotGrid
+          selectedDate={selectedDate}
+          appointments={appointments}
+          datesData={datesData}
+          slotDefinitions={slotDefinitions}
+          onBookSlotRef={bookSlotRef}
+        />
       </div>
+      )
+      }
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         {[...STAT_CARDS, REVENUE_CARD].map(card => {
-          const c = COLOR_MAP[card.key];
+          const style = CARD_STYLE_MAP[card.key];
           let value;
           if (card.key === 'total') value = appointments.length;
           else if (card.key === 'revenue') value = formatCurrency(todayRevenue);
           else value = totals[card.key] || 0;
           return (
-            <button key={card.key} onClick={() => {
-              const links = {
-                total: '/dashboard/appointments',
-                waiting: '/dashboard/appointments?arrival=arrived',
-                in_session: '/dashboard/appointments?arrival=called',
-                completed: '/dashboard/appointments?status=completed',
-                revenue: '/dashboard/stats',
-              };
-              router.push(links[card.key] || '/dashboard/appointments');
-            }} className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:shadow-md dark:hover:shadow-gray-900/50 hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer active:scale-[0.98]">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{card.label}</p>
-                <div className={`w-9 h-9 rounded-lg ${c.bg} flex items-center justify-center ring-1 ${c.ring} group-hover:scale-110 transition-transform duration-200`}>
-                  {card.key === 'revenue' ? (
-                    <div className={`${c.icon}`}>{REVENUE_CARD.icon}</div>
-                  ) : (
-                    <svg className={`w-5 h-5 ${c.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">{card.icon}</svg>
-                  )}
+            <button
+              key={card.key}
+              onClick={() => {
+                const links = {
+                  total: '/dashboard/appointments',
+                  waiting: '/dashboard/appointments?arrival=arrived',
+                  in_session: '/dashboard/appointments?arrival=called',
+                  completed: '/dashboard/appointments?status=completed',
+                  revenue: '/dashboard/stats',
+                };
+                router.push(links[card.key] || '/dashboard/appointments');
+              }}
+              className={`relative overflow-hidden w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:-translate-y-0.5 transition-all duration-300 group cursor-pointer active:scale-[0.98] ${style.hoverBg} ${style.hoverBorder} ${style.hoverGlow}`}
+            >
+              {/* Watermark Icon */}
+              <div className={`absolute -right-3 -bottom-3 w-20 h-20 pointer-events-none transition-all duration-500 ease-out group-hover:scale-125 group-hover:rotate-12 ${style.iconColor}`}>
+                {card.key === 'revenue' ? (
+                  <div className="w-full h-full opacity-[0.12] dark:opacity-[0.06] flex items-center justify-center">
+                    <DollarSign className="w-14 h-14" />
+                  </div>
+                ) : (
+                  <svg className="w-full h-full opacity-[0.12] dark:opacity-[0.06]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    {card.icon}
+                  </svg>
+                )}
+              </div>
+
+              {/* Card Contents */}
+              <div className="relative z-10 flex flex-col h-full justify-between">
+                <div>
+                  <span className={`text-[11px] font-bold tracking-wider uppercase ${style.accentText}`}>
+                    {card.label}
+                  </span>
+                  <p className="text-3xl font-extrabold tracking-tight mt-2 text-gray-900 dark:text-gray-100">
+                    {value}
+                  </p>
                 </div>
               </div>
-              <p className={`text-3xl font-bold ${c.text}`}>{value}</p>
+
+              {/* Bottom Accent Bar */}
+              <div className={`absolute bottom-0 left-0 right-0 h-1 ${style.accentBar} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
             </button>
           );
         })}
@@ -705,31 +817,31 @@ export default function DashboardPage() {
             <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30">
               <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
             </div>
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Today&apos;s Collection</span>
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">{completed.length} completed visits</span>
+              <span className="text-base font-semibold text-gray-700 dark:text-gray-300">Today&apos;s Collection</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{completed.length} completed visits</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <div>
-              <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Collected</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 uppercase">Collected</span>
               <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(todayCollected)}</p>
             </div>
             <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
             <div>
-              <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Pending</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 uppercase">Pending</span>
               <p className="text-lg font-bold text-amber-500 dark:text-amber-400">{formatCurrency(todayPending)}</p>
             </div>
             <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
             <div className="flex gap-3">
               {Object.entries(paymentMethods).map(([method, count]) => (
                 <div key={method} className="text-center">
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 uppercase block">{method}</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 uppercase block">{method}</span>
                   <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{count}</span>
                 </div>
               ))}
             </div>
             {todayPending > 0 && (
               <button onClick={() => router.push('/dashboard/appointments?status=completed')}
-                className="ml-auto px-3 py-1.5 text-[11px] font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all">
+                className="ml-auto px-3 py-1.5 text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all">
                 Collect Pending
               </button>
             )}
@@ -743,7 +855,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-blue-500 animate-dot-pulse" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Upcoming</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Upcoming</h2>
             </div>
             <Link href="/dashboard/appointments" className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors">
               View all →
@@ -760,7 +872,7 @@ export default function DashboardPage() {
                       {(a.patient_name || 'P')[0].toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
                         {a.is_priority ? '⭐ ' : ''}
                         {a.patient_id ? (
                           <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
@@ -770,10 +882,10 @@ export default function DashboardPage() {
                           a.patient_name || 'Patient'
                         )}
                         {recentBookings.some(b => b.id === a.id) && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 animate-scale-in">New</span>
+                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 animate-scale-in">New</span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{a.time?.slice(0, 5)} — {Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'}</p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 truncate">{a.time?.slice(0, 5)} — {Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'}</p>
                     </div>
                   </div>
                   <StatusBadge status={a.status} arrivalStatus={a.arrival_status} />
@@ -786,7 +898,7 @@ export default function DashboardPage() {
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 transition-colors duration-200">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-dot-pulse" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Activity</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Activity</h2>
           </div>
           {completed.length === 0 ? (
             <p className="text-gray-400 dark:text-gray-500 text-sm py-8 text-center">No completed visits for this date.</p>
@@ -799,7 +911,7 @@ export default function DashboardPage() {
                       {(a.patient_name || 'P')[0].toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
                         {a.patient_id ? (
                           <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
                             {a.patient_name || 'Patient'}
@@ -808,7 +920,7 @@ export default function DashboardPage() {
                           a.patient_name || 'Patient'
                         )}
                       </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'} — ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}</p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500 truncate">{Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'} — ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}</p>
                     </div>
                   </div>
                   <StatusBadge status={a.status} />

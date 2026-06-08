@@ -54,7 +54,7 @@ function getDefaultFee(name) {
 function AdjusterInput({ value, onChange, disabled }) {
   return (
     <div className="relative">
-      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 dark:text-gray-500">₹</span>
+      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 dark:text-gray-500">₹</span>
       <input
         type="number"
         min="0"
@@ -193,7 +193,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Complete Visit</h3>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {appointment.patient_name || 'Patient'}
                 {appointment.time && <span> · {appointment.time?.slice(0, 5)}</span>}
               </p>
@@ -222,7 +222,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
                 </svg>
                 <h4 className="text-xs font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider">Treatments</h4>
               </div>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-2.5">Tap to select — add all that apply</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2.5">Tap to select — add all that apply</p>
 
               <div className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
                 {TREATMENT_NAMES.map(name => {
@@ -238,7 +238,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
                       <span className="text-base shrink-0 w-6 text-center">{preset?.icon || '🩺'}</span>
                       <span className="flex-1 text-left">{name}</span>
                       {preset && (
-                        <span className={`text-[11px] font-semibold shrink-0 ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                        <span className={`text-xs font-semibold shrink-0 ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
                           ₹{preset.fee}
                         </span>
                       )}
@@ -261,7 +261,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
 
               {selectedTreatments.length > 0 && (
                 <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800">
-                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                     {selectedTreatments.length} treatment{selectedTreatments.length > 1 ? 's' : ''} selected
                   </p>
                 </div>
@@ -280,7 +280,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
               <div className="space-y-2.5">
                 {/* Consultation Fee */}
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-gray-500 dark:text-gray-400">Consultation</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Consultation</span>
                   <div className="flex items-center gap-1">
                     <AdjusterButton onClick={() => adjustConsultation(-CONSULTATION_STEP)} disabled={consultationFee <= 0} label="−" />
                     <AdjusterInput value={consultationFee} onChange={e => setConsultationFee(Math.max(0, Number(e.target.value) || 0))} />
@@ -291,13 +291,13 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
                 {/* Selected Treatments */}
                 {selectedTreatments.length === 0 ? (
                   <div className="py-4 text-center">
-                    <p className="text-[10px] text-gray-300 dark:text-gray-600 italic">No treatments selected yet</p>
+                    <p className="text-xs text-gray-300 dark:text-gray-600 italic">No treatments selected yet</p>
                   </div>
                 ) : (
                   <div className="max-h-[220px] overflow-y-auto space-y-1.5 pr-0.5">
                     {selectedTreatments.map(name => (
                       <div key={name} className="flex items-center justify-between py-0.5">
-                        <span className="text-[11px] text-gray-600 dark:text-gray-400 truncate max-w-[90px]" title={name}>{name}</span>
+                        <span className="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[90px]" title={name}>{name}</span>
                         <div className="flex items-center gap-1 shrink-0">
                           <AdjusterButton onClick={() => adjustTreatmentFee(name, -TREATMENT_STEP)} disabled={(treatmentFees[name] || 0) <= 0} label="−" />
                           <AdjusterInput
@@ -316,9 +316,9 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
 
                 {/* Medicine Charges */}
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-gray-500 dark:text-gray-400">Medicine</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Medicine</span>
                   <div className="relative">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 dark:text-gray-500">₹</span>
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 dark:text-gray-500">₹</span>
                     <input type="number" min="0" value={medicineCharges} onChange={e => setMedicineCharges(e.target.value)}
                       className="w-20 pl-5 pr-2 py-1 text-xs text-center font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       placeholder="0" />
@@ -341,7 +341,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
             {/* Expandable diagnosis & follow-up */}
             {!showDetails && (
               <button type="button" onClick={() => setShowDetails(true)}
-                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all">
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
@@ -352,36 +352,36 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
             {showDetails && (
               <div className="space-y-2.5 animate-slide-down">
                 <div>
-                  <label className="block text-[10px] font-medium text-gray-400 dark:text-gray-500 mb-1">Diagnosis / Observations</label>
+                  <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">Diagnosis / Observations</label>
                   <textarea value={diagnosis} onChange={e => setDiagnosis(e.target.value)}
                     rows={2} className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all resize-none"
                     placeholder="Brief diagnosis or observations..." />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-400 dark:text-gray-500 mb-1">Follow-up Date</label>
+                    <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">Follow-up Date</label>
                     <input type="date" value={followUpDate} onChange={e => setFollowUpDate(e.target.value)}
                       className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-400 dark:text-gray-500 mb-1">Instructions</label>
+                    <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 mb-1">Instructions</label>
                     <input type="text" value={followUpInstructions} onChange={e => setFollowUpInstructions(e.target.value)}
                       className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all"
                       placeholder="e.g. Return in 2 weeks" />
                   </div>
                 </div>
                 {selectedTreatments.length > 0 && (
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500">💡 Follow-up auto-suggested for last selected treatment</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">💡 Follow-up auto-suggested for last selected treatment</p>
                 )}
                 <button type="button" onClick={() => setShowDetails(false)}
-                  className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
                   Hide details ↑
                 </button>
               </div>
             )}
 
             {error && (
-              <div className="flex items-center gap-2 text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg px-3 py-2 border border-red-100 dark:border-red-800">
+              <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg px-3 py-2 border border-red-100 dark:border-red-800">
                 <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 {error}
               </div>

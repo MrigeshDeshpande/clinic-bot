@@ -9,6 +9,7 @@ export const CLINIC = {
     sunday:  { open: '10:00', close: '14:00', label: 'Sunday: 10:00 AM \u2013 2:00 PM' },
   },
   bookingHorizonDays: 30,
+  timeZone: 'Asia/Kolkata',
   slotIntervalMinutes: 30,
   slots: {
     weekday: ['10:00','10:30','11:00','11:30','12:00','12:30',
@@ -17,7 +18,7 @@ export const CLINIC = {
     sunday:  ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30'],
   },
   doctor: {
-    name: 'Dr. Vishnu Vardhan',
+    name: 'Dr. M. Vishnu Vardhan',
     waId: process.env.DOCTOR_WA_ID || '',
   },
   receptionist: {

@@ -154,7 +154,7 @@ export default function SchedulePage() {
             <button onClick={() => goToMonth(-1)} className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{monthNames[m - 1]} {y}</h3>
+            <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">{monthNames[m - 1]} {y}</h3>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => {
@@ -162,7 +162,7 @@ export default function SchedulePage() {
                   setViewDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
                   setSelectedDate(d.toISOString().slice(0, 10));
                 }}
-                className="px-2 py-1 text-[10px] font-medium rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="px-2 py-1 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               >
                 Today
               </button>
@@ -174,7 +174,7 @@ export default function SchedulePage() {
 
           <div className="grid grid-cols-7 mb-2">
             {dayNames.map(d => (
-              <div key={d} className="text-center text-[11px] font-medium text-gray-400 dark:text-gray-500 py-0.5">{d}</div>
+              <div key={d} className="text-center text-xs font-medium text-gray-400 dark:text-gray-500 py-0.5">{d}</div>
             ))}
           </div>
 
@@ -191,7 +191,7 @@ export default function SchedulePage() {
                 <button
                   key={day}
                   onClick={() => setSelectedDate(isSelected ? null : dateStr)}
-                   className={`h-11 flex flex-col items-center justify-center text-xs transition-all rounded-lg mx-0.5 ${
+                   className={`h-12 flex flex-col items-center justify-center text-sm transition-all rounded-lg mx-0.5 ${
                     isSelected
                       ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium'
                       : isBlocked
@@ -207,7 +207,7 @@ export default function SchedulePage() {
             })}
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-400 dark:text-gray-500">
+          <div className="flex items-center justify-center gap-4 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400 dark:text-gray-500">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" /> Blocked</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-200 dark:bg-gray-600" /> Available</span>
           </div>
@@ -281,21 +281,21 @@ export default function SchedulePage() {
           {/* Blocked Dates List */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Blocked Dates</h3>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Blocked Dates</h3>
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">{blockedDates.length}</span>
             </div>
             {blockedDates.length === 0 ? (
-              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">No blocked dates. All dates are available.</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">No blocked dates. All dates are available.</p>
             ) : (
               <div className="space-y-1.5 max-h-64 overflow-y-auto">
                 {blockedDates.map(b => (
                   <div key={b.date} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                      <span className="text-base text-gray-700 dark:text-gray-300">
                         {formatDateShort(b.date)}
                       </span>
-                      {b.reason && <span className="text-xs text-gray-400 dark:text-gray-500">— {b.reason}</span>}
+                      {b.reason && <span className="text-sm text-gray-400 dark:text-gray-500">— {b.reason}</span>}
                     </div>
                     <button
                       onClick={() => handleUnblock(b.date)}

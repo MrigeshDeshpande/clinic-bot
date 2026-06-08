@@ -2,6 +2,7 @@ import { getSql } from '@/db/pool';
 import { CLINIC } from '@/config/clinic';
 import { validateDate, validateTime, validateTreatment, validatePhone } from '@/lib/validators';
 import { formatDate, formatTime, formatPhone } from '@/utils/formatters';
+import { getClinicMinutes, getClinicToday, getClinicDateStr } from '@/lib/clinicTime';
 import { createAppointment, findAppointmentsByWaId, findUpcomingByWaId, supersedeAppointment, cancelAppointment,
          fetchAppointmentsByDate, updateAppointmentStatus, countAppointmentsByDateRange,
           countAppointmentsBySlot, findBookedTimesForDate, findNextAvailableSlots, fetchLatestCompletedByWaId, fetchTodayQueue, updateArrivalStatus,
@@ -916,6 +917,7 @@ async function handleWalkinTreatment(session, entities, normalized, intent) {
       date: today,
       time: null,
       treatment,
+      treatments: treatment ? [treatment] : [],
     });
 
     if (appointment) {
@@ -1102,9 +1104,8 @@ export async function checkAndSendPostVisit(waId) {
     const sql = getSql();
     if (!sql) return;
 
-    const today = new Date().toISOString().slice(0, 10);
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const today = getClinicDateStr();
+    const nowMinutes = getClinicMinutes();
 
     // Find today's confirmed appointments for this patient
     // that haven't received a post-visit message yet
@@ -1523,10 +1524,10 @@ async function handleBookingCollection(session, entities, normalized, intent) {
 function timeQuickPickSections(slots, bookingDate, bookedSet, session) {
   let availableSlots = slots;
   if (bookingDate) {
-    const today = new Date().toISOString().slice(0, 10);
-    const dateStr = bookingDate instanceof Date ? bookingDate.toISOString().slice(0, 10) : String(bookingDate);
+    const today = getClinicDateStr();
+    const dateStr = bookingDate instanceof Date ? bookingDate.toLocaleDateString('en-CA', { timeZone: CLINIC.timeZone }) : String(bookingDate);
     if (dateStr === today) {
-      const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+      const nowMinutes = getClinicMinutes();
       availableSlots = slots.filter(s => {
         const [h, m] = s.split(':').map(Number);
         return h * 60 + m > nowMinutes;
@@ -1898,6 +1899,7 @@ async function handleBookingConfirmation(session, intent, entities) {
         date: booking.date,
         time: booking.time,
         treatment: booking.treatment,
+        treatments: booking.treatment ? [booking.treatment] : [],
       });
       if (appointment) {
         logger.info('APPOINTMENT_CREATED', {
@@ -3366,12 +3368,12 @@ async function buildDoctorMainMenuBody(session, includeGreeting = false) {
   let body = '';
 
   if (includeGreeting) {
-    const hour = new Date().getHours();
+    const hour = Math.floor(getClinicMinutes() / 60);
     const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     body += `${greeting}, ${doctorName}! 👋\n\n`;
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getClinicDateStr();
   const appointments = await fetchAppointmentsByDate(today);
   const count = appointments.length;
 
@@ -4206,6 +4208,10 @@ async function handleLogMedia(session, normalized, intent) {
     treatmentCharges: vl.treatmentCharges || 0,
     medicineCharges: vl.medicineCharges || 0,
     notes: vl.notes || '',
+    treatment: vl.treatment || null,
+    treatments: vl.treatments ? (Array.isArray(vl.treatments) ? vl.treatments : [vl.treatments]) : null,
+    nextVisit: vl.nextVisit || null,
+    followUpInstructions: vl.followUpInstructions || '',
   });
 
   if (!result) {
@@ -5179,7 +5185,7 @@ async function buildReceptionistMainMenuBody(session, includeGreeting) {
   let body = '';
 
   if (includeGreeting) {
-    const hour = new Date().getHours();
+    const hour = Math.floor(getClinicMinutes() / 60);
     const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     body += `${greeting}, ${name}! 👋\n\n`;
   }

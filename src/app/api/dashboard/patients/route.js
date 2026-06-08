@@ -18,9 +18,18 @@ export async function GET(req) {
       const pattern = `%${q}%`;
       patients = await sql`
         SELECT p.id, p.name, p.phone, p.age, p.sex, p.wa_id, p.created_at,
-          (SELECT COUNT(*) FROM appointments a WHERE a.patient_id = p.id AND a.status = 'completed') AS visit_count,
-          (SELECT MAX(a.date) FROM appointments a WHERE a.patient_id = p.id) AS last_visit
+          COALESCE(ac.visit_count, 0)::int AS visit_count,
+          ac.last_visit,
+          lv.time AS last_visit_time
         FROM patients p
+        LEFT JOIN (
+          SELECT patient_id,
+            COUNT(*) FILTER (WHERE status = 'completed') AS visit_count,
+            MAX(date) AS last_visit
+          FROM appointments
+          GROUP BY patient_id
+        ) ac ON ac.patient_id = p.id
+        LEFT JOIN appointments lv ON lv.patient_id = p.id AND lv.date = ac.last_visit AND lv.status = 'completed'
         WHERE p.name ILIKE ${pattern} OR p.phone ILIKE ${pattern}
         ORDER BY p.created_at DESC
         LIMIT ${limit}
@@ -28,9 +37,18 @@ export async function GET(req) {
     } else {
       patients = await sql`
         SELECT p.id, p.name, p.phone, p.age, p.sex, p.wa_id, p.created_at,
-          (SELECT COUNT(*) FROM appointments a WHERE a.patient_id = p.id AND a.status = 'completed') AS visit_count,
-          (SELECT MAX(a.date) FROM appointments a WHERE a.patient_id = p.id) AS last_visit
+          COALESCE(ac.visit_count, 0)::int AS visit_count,
+          ac.last_visit,
+          lv.time AS last_visit_time
         FROM patients p
+        LEFT JOIN (
+          SELECT patient_id,
+            COUNT(*) FILTER (WHERE status = 'completed') AS visit_count,
+            MAX(date) AS last_visit
+          FROM appointments
+          GROUP BY patient_id
+        ) ac ON ac.patient_id = p.id
+        LEFT JOIN appointments lv ON lv.patient_id = p.id AND lv.date = ac.last_visit AND lv.status = 'completed'
         ORDER BY p.created_at DESC
         LIMIT ${limit}
       `;

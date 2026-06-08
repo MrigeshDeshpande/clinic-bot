@@ -1,12 +1,21 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef, useContext } from 'react';
+import { useState, useEffect, Suspense, useRef, useContext, useCallback } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ToastContext } from '../layout';
+import { ToastContext, SidebarContext } from '../layout';
 import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import MediaViewer from '@/components/MediaViewer';
+import { apiFetch } from '@/lib/clientApi';
+import { fetchCached } from '@/lib/clientFetchCache';
+import ToothGrid from '@/components/ToothGrid';
+import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
+import PrescriptionPreview from '@/components/PrescriptionPreview';
+
+const DRAFT_KEY = 'visit_draft';
+const TEMPLATES_KEY = 'visit_templates';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash', icon: '\u{1F4B5}' },
@@ -40,12 +49,39 @@ const PRESET_FEES = [
 ];
 
 const CONSULTATION_DEFAULT = 2000;
+const LOCATIONS = ['Hudco', 'Bhilai', 'Durg', 'Nehru Nagar', 'Borsi'];
+const PHONE_PREFIX = '+91';
+function stripPhonePrefix(v) { return v?.replace(/^(\+91|91)/, '') || v || ''; }
+function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE_PREFIX}${s}` : ''; }
 const CONSULTATION_STEP = 100;
 const TREATMENT_STEP = 50;
 
 function getDefaultFee(name) {
   const preset = PRESET_FEES.find(p => p.label === name);
   return preset?.fee || 0;
+}
+
+const FREQUENCY_OPTIONS = ['Daily one time', 'Twice a day', 'Thrice a day'];
+const DURATION_OPTIONS = [3, 5, 7, 10, 14, 21, 30];
+const TIMING_OPTIONS = [
+  { value: 'after', label: 'After meal' },
+  { value: 'before', label: 'Before meal' },
+];
+
+const RATING_CATEGORIES = [
+  { key: 'payment_time', label: 'Payment on Time' },
+  { key: 'timely_appointment', label: 'Timely Appointment' },
+  { key: 'behaviour', label: 'Behaviour' },
+  { key: 'cooperative_treatment', label: 'Cooperative to Treatment' },
+];
+
+function normalizeSex(sex) {
+  if (!sex) return '';
+  const lower = sex.toLowerCase();
+  if (lower === 'm' || lower === 'male') return 'Male';
+  if (lower === 'f' || lower === 'female') return 'Female';
+  if (lower === 'o' || lower === 'other') return 'Other';
+  return sex.charAt(0).toUpperCase() + sex.slice(1);
 }
 
 export default function VisitPage() {
@@ -62,6 +98,7 @@ export default function VisitPage() {
 
 function VisitPageInner() {
   const { showToast } = useContext(ToastContext);
+  const { setSidebarCollapsed } = useContext(SidebarContext);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -76,6 +113,7 @@ function VisitPageInner() {
     patientPhone: '',
     patientAge: '',
     patientSex: '',
+    patientLocation: '',
     treatment: prefillTreatment,
     consultationFee: '',
     treatmentCharges: '',
@@ -85,7 +123,13 @@ function VisitPageInner() {
     followUpDate: '',
     followUpInstructions: '',
     notes: '',
+    adviceSelected: [],
+    diagnosisSelected: [],
+    toothDiagnoses: [],
   });
+  const [adviceOptions, setAdviceOptions] = useState([]);
+  const [diagnosisOptions, setDiagnosisOptions] = useState([]);
+  const [selectedTooth, setSelectedTooth] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [errors, setErrors] = useState({});
@@ -94,10 +138,78 @@ function VisitPageInner() {
   const [showSearch, setShowSearch] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaFiles, setMediaFiles] = useState([]);
+  const [compiling, setCompiling] = useState(false);
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [sendingReviewLink, setSendingReviewLink] = useState(false);
+  const [patientRatings, setPatientRatings] = useState({});
+  const [savingRatings, setSavingRatings] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Escape closes preview
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape' && showPreview) { setShowPreview(false); setSidebarCollapsed(false); } }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showPreview, setSidebarCollapsed]);
+
+  // Restore sidebar on unmount
+  useEffect(() => () => setSidebarCollapsed(false), [setSidebarCollapsed]);
+
+  // Load google maps review URL from settings
+  useEffect(() => {
+    fetch('/api/dashboard/settings')
+      .then(r => r.json())
+      .then(data => {
+        if (data.settings?.google_maps?.review_url) setGoogleMapsUrl(data.settings.google_maps.review_url);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Stable callbacks for ToothGrid + PerToothDiagnosisPanel
+  const stableSetSelectedTooth = useCallback(setSelectedTooth, []);
+  const handleQuickDiagnosis = useCallback((tooth, diag) => {
+    setForm(f => {
+      const existing = f.toothDiagnoses.filter(t => t.tooth !== tooth);
+      if (diag === null) return { ...f, toothDiagnoses: existing };
+      const prev = f.toothDiagnoses.find(t => t.tooth === tooth);
+      const diagnoses = prev?.diagnoses?.includes(diag)
+        ? prev.diagnoses.filter(d => d !== diag)
+        : [...(prev?.diagnoses || []), diag];
+      const next = diagnoses.length > 0
+        ? [...existing, { tooth, diagnoses, surface: prev?.surface || '', treatment: prev?.treatment || '', severity: prev?.severity || '', status: prev?.status || 'active' }]
+        : existing;
+      return { ...f, toothDiagnoses: next };
+    });
+  }, []);
+  const handleToothEntryUpdate = useCallback((tooth, entry) => {
+    setForm(f => {
+      const existing = f.toothDiagnoses.filter(t => t.tooth !== tooth);
+      const next = [...existing, entry];
+      return { ...f, toothDiagnoses: next };
+    });
+  }, []);
+  const handleToothSave = useCallback((entry) => {
+    setForm(f => {
+      const existing = f.toothDiagnoses.filter(t => t.tooth !== entry.tooth);
+      const next = entry.diagnoses.length > 0
+        ? [...existing, entry]
+        : existing;
+      return { ...f, toothDiagnoses: next };
+    });
+  }, []);
+  const handleToothClose = useCallback(() => setSelectedTooth(null), []);
 
   // Full context data
   const [appointmentMeta, setAppointmentMeta] = useState(null);
   const [patientProfile, setPatientProfile] = useState(null);
+
+  // Sync patient ratings from patient profile
+  useEffect(() => {
+    if (patientProfile?.patient_ratings) {
+      setPatientRatings(patientProfile.patient_ratings);
+    }
+  }, [patientProfile]);
+
   const [patientVisits, setPatientVisits] = useState([]);
   const [patientMessages, setPatientMessages] = useState([]);
   const [patientFamily, setPatientFamily] = useState([]);
@@ -168,6 +280,7 @@ function VisitPageInner() {
 
   // Salt search
   const [saltSearch, setSaltSearch] = useState('');
+  const [showCustomLocation, setShowCustomLocation] = useState(false);
 
   // Payment
   const [paymentStatus, setPaymentStatus] = useState('pending');
@@ -184,18 +297,32 @@ function VisitPageInner() {
     }));
   }, [prefillName, prefillTreatment]);
 
+  // Fetch diagnosis & advice options from settings
+  useEffect(() => {
+    fetch('/api/dashboard/settings')
+      .then(r => r.json())
+      .then(data => {
+        if (data.settings?.checklists?.advice) {
+          setAdviceOptions(data.settings.checklists.advice);
+        }
+        if (data.settings?.checklists?.diagnosis) {
+          setDiagnosisOptions(data.settings.checklists.diagnosis);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Load existing visit data (auto-fill all fields)
   useEffect(() => {
     if (!appointmentId) return;
-    fetch(`/api/dashboard/appointments?id=${appointmentId}`)
-      .then(r => r.json())
+    fetchCached(`/api/dashboard/appointments?id=${appointmentId}`)
       .then(data => {
         const a = data.appointment || data;
         if (a) {
           setAppointmentMeta(a);
           setForm({
             patientName: a.patient_name || '',
-            patientPhone: a.patient_phone || '',
+            patientPhone: stripPhonePrefix(a.patient_phone) || '',
             patientAge: '',
             patientSex: '',
             treatment: a.treatment || '',
@@ -207,13 +334,21 @@ function VisitPageInner() {
             followUpDate: a.follow_up_date?.slice(0, 10) || '',
             followUpInstructions: a.follow_up_instructions || '',
             notes: a.notes || '',
+            adviceSelected: Array.isArray(a.advice_selected) ? a.advice_selected : [],
+            diagnosisSelected: Array.isArray(a.diagnosis_selected) ? a.diagnosis_selected : [],
+            toothDiagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
           });
           const savedTreatments = Array.isArray(a.treatments) && a.treatments.length > 0
             ? a.treatments
             : a.treatment ? [a.treatment] : [];
           const fees = {};
+          const savedTotal = Number(a.treatment_charges) || 0;
+          const defaultTotal = savedTreatments.reduce((sum, n) => sum + getDefaultFee(n), 0);
           savedTreatments.forEach(name => {
-            fees[name] = getDefaultFee(name);
+            const defaultFee = getDefaultFee(name);
+            fees[name] = savedTotal > 0 && defaultTotal > 0
+              ? Math.round(defaultFee * savedTotal / defaultTotal)
+              : defaultFee;
           });
           setTreatmentFees(fees);
           if (a.consultation_fee) {
@@ -226,7 +361,8 @@ function VisitPageInner() {
           // Fetch patient demographics + extra data (visits, messages, family)
           function applyPatientProfile(p) {
             setPatientProfile(p);
-            setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: p.sex || '' }));
+            setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: normalizeSex(p.sex), patientLocation: p.location || '' }));
+            if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
             if (p.allergies !== undefined || p.chronicConditions !== undefined || p.bloodGroup !== undefined || p.bp !== undefined || p.weight !== undefined || p.medications !== undefined) {
               setMedicalHistory({
                 allergies: p.allergies || '',
@@ -237,47 +373,39 @@ function VisitPageInner() {
                 medications: p.medications || '',
               });
             }
-            setLoadingExtra(true);
-            // Fetch visits history (already returned by patient API)
             if (p.visits) setPatientVisits(p.visits);
-            // Fetch messages
             if (p.id) {
-              fetch(`/api/dashboard/patients/${p.id}/messages?limit=10`)
-                .then(r => r.json())
-                .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
-                .catch(() => {});
-              // Fetch family
-              fetch(`/api/dashboard/patients/${p.id}/family`)
-                .then(r => r.json())
-                .then(fData => { if (fData.family) setPatientFamily(fData.family); })
-                .catch(() => {});
+              Promise.all([
+                fetchCached(`/api/dashboard/patients/${p.id}/messages?limit=10`)
+                  .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
+                  .catch(() => {}),
+                fetchCached(`/api/dashboard/patients/${p.id}/family`)
+                  .then(fData => { if (fData.family) setPatientFamily(fData.family); })
+                  .catch(() => {}),
+              ]);
             }
             setLoadingExtra(false);
           }
+          async function loadPatientProfile(id) {
+            const pData = await fetchCached(`/api/dashboard/patients/${id}`);
+            if (pData.patient) applyPatientProfile({ ...pData.patient, visits: pData.visits });
+          }
           if (a.patient_id) {
-            fetch(`/api/dashboard/patients/${a.patient_id}`)
-              .then(r => r.json())
-              .then(pData => { if (pData.patient) applyPatientProfile({ ...pData.patient, visits: pData.visits }); })
-              .catch(() => {});
+            loadPatientProfile(a.patient_id);
           } else if (a.patient_phone) {
-            fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(a.patient_phone)}`)
-              .then(r => r.json())
-              .then(pData => {
+            (async () => {
+              try {
+                const pData = await fetchCached(`/api/dashboard/patients/search?q=${encodeURIComponent(a.patient_phone)}`);
                 const match = (pData.patients || []).find(p => p.phone === a.patient_phone);
                 if (match) {
-                  // Also fetch visits for phone-search matches
                   applyPatientProfile(match);
                   if (match.id) {
-                    fetch(`/api/dashboard/patients/${match.id}`)
-                      .then(r => r.json())
-                      .then(pData => {
-                        if (pData.visits) setPatientVisits(pData.visits);
-                      })
-                      .catch(() => {});
+                    const full = await fetchCached(`/api/dashboard/patients/${match.id}`);
+                    if (full.visits) setPatientVisits(full.visits);
                   }
                 }
-              })
-              .catch(() => {});
+              } catch {}
+            })();
           }
         }
       })
@@ -323,6 +451,13 @@ function VisitPageInner() {
   useEffect(() => {
     if (!formReadyRef.current) return;
     if (submitting) return;
+    // Don't save drafts while the success screen is showing (post-submit)
+    if (result) return;
+    // Don't save if form is empty — nothing to restore
+    const hasContent = form.patientName || form.diagnosis || form.medicines.length > 0 || form.notes ||
+      Object.keys(treatmentFees).length > 0 || form.followUpDate || form.adviceSelected.length > 0 ||
+      form.diagnosisSelected.length > 0;
+    if (!hasContent) return;
     const timer = setTimeout(() => {
       const draft = {
         form: { ...form },
@@ -341,8 +476,60 @@ function VisitPageInner() {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
       } catch {}
     }, 1000);
-    return () => clearTimeout(timer);
-  }, [form, treatmentFees, consultationFee, medicalHistory, mediaFiles, submitting, appointmentId, paymentStatus, paymentMethod, transactionId, paidAmount]);
+    return () => {
+      clearTimeout(timer);
+      // Flush the draft immediately on unmount (e.g. navigation away)
+      if (!formReadyRef.current || submitting || result) return;
+      const hasContent2 = form.patientName || form.diagnosis || form.medicines.length > 0 || form.notes ||
+        Object.keys(treatmentFees).length > 0 || form.followUpDate;
+      if (!hasContent2) return;
+      try {
+        const draft = {
+          form: { ...form },
+          treatmentFees: { ...treatmentFees },
+          consultationFee,
+          medicalHistory: { ...medicalHistory },
+          mediaFiles: mediaFiles.map(f => ({ name: f.name, size: f.size, type: f.type })),
+          paymentStatus,
+          paymentMethod,
+          transactionId,
+          paidAmount,
+          savedAt: Date.now(),
+          appointmentId,
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch {}
+    };
+  }, [form, treatmentFees, consultationFee, medicalHistory, mediaFiles, submitting, result, appointmentId, paymentStatus, paymentMethod, transactionId, paidAmount]);
+
+  // ── Save draft on tab close / refresh ──
+  useEffect(() => {
+    function handleBeforeUnload() {
+      if (!formReadyRef.current) return;
+      const hasContent = form.patientName || form.diagnosis || form.medicines.length > 0 || form.notes ||
+        Object.keys(treatmentFees).length > 0 || form.followUpDate || form.adviceSelected.length > 0 ||
+        form.diagnosisSelected.length > 0;
+      if (!hasContent) return;
+      try {
+        const draft = {
+          form: { ...form },
+          treatmentFees: { ...treatmentFees },
+          consultationFee,
+          medicalHistory: { ...medicalHistory },
+          mediaFiles: mediaFiles.map(f => ({ name: f.name, size: f.size, type: f.type })),
+          paymentStatus,
+          paymentMethod,
+          transactionId,
+          paidAmount,
+          savedAt: Date.now(),
+          appointmentId,
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch {}
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [form, treatmentFees, consultationFee, medicalHistory, mediaFiles, appointmentId, paymentStatus, paymentMethod, transactionId, paidAmount]);
 
   // Restore draft on mount
   useEffect(() => {
@@ -358,7 +545,7 @@ function VisitPageInner() {
     formReadyRef.current = true;
   }, [appointmentId]);
 
-  function restoreDraft() {
+  async function restoreDraft() {
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (!saved) return;
@@ -374,6 +561,27 @@ function VisitPageInner() {
       if (draft.paidAmount !== undefined) setPaidAmount(draft.paidAmount);
       setDraftRestored(true);
       setDraftAvailable(false);
+      // Reload patient profile if restoring a walk-in draft
+      if (!draft.appointmentId && (draft.form?.patientPhone || draft.form?.patientName)) {
+        setLoadingExtra(true);
+        try {
+          const query = withPhonePrefix(draft.form.patientPhone) || draft.form.patientName;
+          const searchRes = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(query)}`);
+          const searchData = await searchRes.json();
+          const match = draft.form.patientPhone
+            ? (searchData.patients || []).find(p => stripPhonePrefix(p.phone) === draft.form.patientPhone)
+            : (searchData.patients || [])[0];
+          if (match && match.id) {
+            const data = await fetchCached(`/api/dashboard/patients/${match.id}`);
+            if (data.patient) {
+              setPatientProfile(data.patient);
+              setForm(f => ({ ...f, patientSex: normalizeSex(data.patient.sex) }));
+              if (data.visits) setPatientVisits(data.visits);
+            }
+          }
+        } catch {}
+        setLoadingExtra(false);
+      }
       showToast('Draft restored', 'success');
     } catch {}
   }
@@ -413,16 +621,48 @@ function VisitPageInner() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  function selectPatient(p) {
+  async function selectPatient(p) {
     setForm(f => ({
       ...f,
       patientName: p.name,
-      patientPhone: p.phone || f.patientPhone,
+      patientPhone: stripPhonePrefix(p.phone) || f.patientPhone,
       patientAge: p.age?.toString() || '',
-      patientSex: p.sex || '',
+      patientSex: normalizeSex(p.sex),
+      patientLocation: p.location || '',
     }));
+    if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
     setShowSearch(false);
     setSearchResults([]);
+    if (p.id) {
+      setLoadingExtra(true);
+      try {
+        const data = await fetchCached(`/api/dashboard/patients/${p.id}`);
+        if (data.patient) {
+          const profile = data.patient;
+          setPatientProfile(profile);
+          if (profile.allergies !== undefined || profile.chronicConditions !== undefined || profile.bloodGroup !== undefined || profile.bp !== undefined || profile.weight !== undefined || profile.medications !== undefined) {
+            setMedicalHistory({
+              allergies: profile.allergies || '',
+              chronicConditions: profile.chronicConditions || '',
+              bloodGroup: profile.bloodGroup || '',
+              bp: profile.bp || '',
+              weight: profile.weight || '',
+              medications: profile.medications || '',
+            });
+          }
+          if (data.visits) setPatientVisits(data.visits);
+          Promise.all([
+            fetchCached(`/api/dashboard/patients/${p.id}/messages?limit=10`)
+              .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
+              .catch(() => {}),
+            fetchCached(`/api/dashboard/patients/${p.id}/family`)
+              .then(fData => { if (fData.family) setPatientFamily(fData.family); })
+              .catch(() => {}),
+          ]);
+        }
+      } catch {}
+      setLoadingExtra(false);
+    }
   }
 
   // ── Treatment Templates ──
@@ -461,12 +701,31 @@ function VisitPageInner() {
     if (existing >= 0) {
       setForm(f => ({ ...f, medicines: f.medicines.filter((_, i) => i !== existing) }));
     } else {
-      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '' }] }));
+      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '', timing: 'after' }] }));
+    }
+  }
+
+  async function saveRatings() {
+    const patientId = patientProfile?.id || appointmentMeta?.patient_id;
+    if (!patientId) { showToast('No patient selected — cannot save ratings', 'error'); return; }
+    setSavingRatings(true);
+    try {
+      const res = await fetch(`/api/dashboard/patients/${patientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_ratings: patientRatings }),
+      });
+      if (res.ok) showToast('Ratings saved', 'success');
+      else showToast('Failed to save ratings', 'error');
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setSavingRatings(false);
     }
   }
 
   async function sendPaymentLink() {
-    const phone = patientProfile?.phone || appointmentMeta?.patient_phone || form.patientPhone;
+    const phone = patientProfile?.phone || appointmentMeta?.patient_phone || withPhonePrefix(form.patientPhone);
     if (!phone) { showToast('No patient phone number', 'error'); return; }
     setSendingPaymentLink(true);
     try {
@@ -519,7 +778,7 @@ function VisitPageInner() {
   }
 
   function addMedicine() {
-    setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '' }] }));
+    setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '', timing: 'after' }] }));
   }
   function updateMedicine(idx, field, value) {
     setForm(f => { const meds = [...f.medicines]; meds[idx] = { ...meds[idx], [field]: value }; return { ...f, medicines: meds }; });
@@ -565,14 +824,18 @@ function VisitPageInner() {
             notes: form.notes.trim() || undefined,
             followUpDate: form.followUpDate || undefined,
             followUpInstructions: form.followUpInstructions.trim() || undefined,
+            advice_selected: form.adviceSelected,
+            diagnosis_selected: form.diagnosisSelected,
+            tooth_diagnoses: form.toothDiagnoses,
             status: 'completed',
             ...paymentPayload,
           }
         : {
             patient_name: form.patientName.trim(),
-            patient_phone: form.patientPhone.trim() || undefined,
+            patient_phone: withPhonePrefix(form.patientPhone.trim()) || undefined,
             patient_age: walkInAge,
             patient_sex: form.patientSex || undefined,
+            patient_location: form.patientLocation.trim() || undefined,
             treatment: primaryTreatment,
             treatments: selectedTreatments,
             consultationFee,
@@ -582,6 +845,9 @@ function VisitPageInner() {
             medicines: form.medicines.filter(m => m.name.trim()),
             followUpDate: form.followUpDate || undefined,
             followUpInstructions: form.followUpInstructions.trim() || undefined,
+            advice_selected: form.adviceSelected,
+            diagnosis_selected: form.diagnosisSelected,
+            tooth_diagnoses: form.toothDiagnoses,
             notes: form.notes.trim() || undefined,
             ...paymentPayload,
           };
@@ -636,7 +902,8 @@ function VisitPageInner() {
           console.log('[MEDIA] No files to upload or missing appointment ID');
         }
         localStorage.removeItem(DRAFT_KEY);
-        setResult({ patient_name: form.patientName, treatment: primaryTreatment });
+        const appointmentIdForResult = data.appointment?.id || appointmentId;
+        setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
       } else {
         showToast(data.error || 'Failed to log visit', 'error');
       }
@@ -649,7 +916,7 @@ function VisitPageInner() {
   }
 
   function resetForm() {
-    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '' });
+    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '', adviceSelected: [], diagnosisSelected: [], toothDiagnoses: [] });
     setTreatmentFees({});
     setConsultationFee(CONSULTATION_DEFAULT);
     setPatientProfile(null);
@@ -662,6 +929,7 @@ function VisitPageInner() {
     setErrors({});
     setMediaFiles([]);
     setSymptomInput('');
+    setShowCustomLocation(false);
     setShowTemplateInput(false);
     setShowTemplateLoad(false);
     setTemplateName('');
@@ -694,7 +962,7 @@ function VisitPageInner() {
   if (result) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-8 md:p-12 max-w-md w-full text-center shadow-lg transition-colors duration-200">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-8 md:p-12 max-w-lg w-full text-center shadow-lg transition-colors duration-200">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30 mb-6">
             <ClipboardCheck className="w-10 h-10 text-emerald-500 dark:text-emerald-400" />
           </div>
@@ -702,7 +970,55 @@ function VisitPageInner() {
           <div className="text-gray-500 dark:text-gray-400 text-sm mb-6 space-y-1">
             <p><span className="font-medium text-gray-700 dark:text-gray-300">{result.patient_name}</span> — {result.treatment}</p>
           </div>
-          <div className="flex gap-3 justify-center">
+
+          {/* Doctor's Patient Rating */}
+          {(patientProfile?.id || appointmentMeta?.patient_id) && (
+            <div className="mb-6 text-left bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3 text-center">
+                Rate this Patient
+              </h3>
+              <div className="space-y-2.5">
+                {RATING_CATEGORIES.map(cat => (
+                  <div key={cat.key} className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 min-w-[110px] sm:min-w-[140px]">{cat.label}</span>
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setPatientRatings(prev => ({ ...prev, [cat.key]: (prev[cat.key] || 0) === star ? 0 : star }))}
+                          className={`w-5 h-5 flex items-center justify-center rounded-sm transition-all hover:scale-110 active:scale-90 ${
+                            (patientRatings[cat.key] || 0) >= star
+                              ? 'text-amber-400'
+                              : 'text-gray-300 dark:text-gray-600'
+                          }`}
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        </button>
+                      ))}
+                      <span className="ml-1.5 text-[10px] font-medium text-gray-400 dark:text-gray-500 min-w-[20px]">
+                        {patientRatings[cat.key] || 0}/5
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">Rate the patient across these categories</p>
+                <button
+                  onClick={saveRatings}
+                  disabled={savingRatings}
+                  className="px-3 py-1.5 text-[11px] font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-all active:scale-95"
+                >
+                  {savingRatings ? 'Saving...' : 'Save Ratings'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 justify-center flex-wrap">
               {isEdit ? (
                 <button onClick={() => router.push(`/dashboard/patients/${searchParams.get('patientId') || ''}`)} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
                   Back to Patient
@@ -721,8 +1037,121 @@ function VisitPageInner() {
                 </button>
               </>
             )}
-            <button onClick={() => window.print()} className="px-6 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+            <button onClick={async () => {
+              try {
+                const id = result.appointment_id;
+                if (!id) { showToast('No appointment ID — cannot generate prescription', 'error'); return; }
+                const res = await apiFetch(`/api/dashboard/visits/${id}/prescription`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.url) {
+                  showToast('PDF generated successfully', 'success');
+                  window.open(data.url, '_blank');
+                } else {
+                  showToast(data.error || 'Failed to generate prescription', 'error');
+                }
+              } catch {
+                showToast('Network error', 'error');
+              }
+            }} className="px-6 py-2.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
               Print
+            </button>
+            <button onClick={async () => {
+              if (compiling) return;
+              setCompiling(true);
+              try {
+                const id = result.appointment_id;
+                if (!id) { showToast('No appointment ID', 'error'); setCompiling(false); return; }
+                showToast('⏳ Compiling document with images...', 'info', { duration: 8000 });
+                const res = await apiFetch(`/api/dashboard/visits/${id}/compile`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.url) {
+                  showToast('✅ PDF compiled — opening in new tab', 'success', { duration: 4000 });
+                  window.open(data.url, '_blank');
+                  // Also send via WhatsApp if phone number exists
+                  showToast('📤 Sending to patient via WhatsApp...', 'info', { duration: 6000 });
+                  const sendRes = await apiFetch(`/api/dashboard/visits/${id}/compile/send`, { method: 'POST' });
+                  const sendData = await sendRes.json();
+                  if (sendRes.ok && sendData.success) {
+                    showToast('✅ Document sent to patient on WhatsApp', 'success');
+                  } else if (sendData.url) {
+                    showToast('⚠️ PDF ready but WhatsApp send failed. You can share the link manually.', 'info');
+                  } else {
+                    showToast('⚠️ Document compiled but could not send via WhatsApp.', 'info');
+                  }
+                } else {
+                  showToast(data.error || 'Failed to compile document', 'error');
+                }
+              } catch (err) {
+                showToast('Network error: ' + (err.message || 'Could not compile'), 'error');
+              } finally {
+                setCompiling(false);
+              }
+            }}
+              disabled={compiling}
+              className={`px-6 py-2.5 text-sm font-medium rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer ${
+                compiling
+                  ? 'bg-gray-400 text-white cursor-not-allowed shadow-none'
+                  : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-200 dark:shadow-emerald-900/50 hover:from-emerald-600 hover:to-emerald-700'
+              }`}>
+              {compiling ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Compiling...
+                </span>
+              ) : (
+                'Compile & Send'
+              )}
+            </button>
+            <button onClick={async () => {
+              if (!googleMapsUrl) { showToast('Set Google Maps review URL in settings first', 'error'); return; }
+              setSendingReviewLink(true);
+              try {
+                const phone = result?.patient_name ? (appointmentMeta?.patient_phone || form.patientPhone) : '';
+                const waId = appointmentMeta?.patient_phone?.startsWith('+') ? appointmentMeta.patient_phone.slice(1) : appointmentMeta?.patient_phone || '';
+                if (!waId && form.patientPhone) {
+                  const p = withPhonePrefix(form.patientPhone);
+                  const cleanWaId = p.startsWith('+') ? p.slice(1) : p;
+                  if (cleanWaId) {
+                    const msg = `Dear ${result.patient_name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
+                    const res = await fetch('/api/dashboard/send-whatsapp', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ to: cleanWaId, message: msg }),
+                    });
+                    if (res.ok) showToast('Google review link sent on WhatsApp', 'success');
+                    else showToast('Failed to send', 'error');
+                    setSendingReviewLink(false);
+                    return;
+                  }
+                }
+                if (waId) {
+                  const msg = `Dear ${result.patient_name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
+                  const res = await fetch('/api/dashboard/send-whatsapp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: waId, message: msg }),
+                  });
+                  if (res.ok) showToast('Google review link sent on WhatsApp', 'success');
+                  else showToast('Failed to send', 'error');
+                } else {
+                  showToast('No phone number available', 'error');
+                }
+              } catch { showToast('Network error', 'error'); }
+              setSendingReviewLink(false);
+            }}
+              disabled={sendingReviewLink}
+              className={`px-6 py-2.5 text-sm font-medium rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer ${
+                sendingReviewLink
+                  ? 'bg-gray-400 text-white cursor-not-allowed shadow-none'
+                  : 'bg-orange-500 text-white shadow-orange-200 dark:shadow-orange-900/50 hover:bg-orange-600'
+              }`}>
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1H12v3h5.46c-.69 2.01-2.43 3.46-4.96 3.46-3.04 0-5.5-2.46-5.5-5.5s2.46-5.5 5.5-5.5c1.46 0 2.68.53 3.67 1.42l2.52-2.52C16.87 3.96 14.57 3 12 3 7.03 3 3 7.03 3 12s4.03 9 9 9c4.54 0 8.29-3.22 8.99-7.5l.36-2.4z" /></svg>
+                {sendingReviewLink ? 'Sending...' : 'Google Review'}
+              </span>
             </button>
           </div>
         </div>
@@ -743,11 +1172,26 @@ function VisitPageInner() {
           <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50">
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
-          <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{isEdit ? 'Edit Visit' : 'Log Visit'}</h1>              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-              {isEdit ? `Editing visit for ${prefillName || 'patient'}` : appointmentId ? `Completing appointment for ${prefillName}` : 'Record a patient consultation'}
+          <div className="flex-1">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{isEdit ? 'Edit Visit' : 'Log Visit'}</h1>              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {isEdit ? `Editing visit for ${prefillName || 'patient'}` : appointmentId ? `Completing appointment for ${prefillName}` : patientProfile ? `Logging visit for ${patientProfile.name}` : 'Record a patient consultation'}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowPreview(s => { const next = !s; setSidebarCollapsed(next); return next; })}
+            className={`px-4 py-2 text-xs font-medium rounded-xl border transition-all active:scale-95 flex items-center gap-1.5 ${
+              showPreview
+                ? 'bg-blue-500 text-white border-blue-500 hover:bg-blue-600 shadow-sm'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            {showPreview ? 'Hide Preview' : 'Preview'}
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -782,25 +1226,27 @@ function VisitPageInner() {
           )}
 
           {/* Keyboard shortcut hint */}
-          <div className="text-right text-[10px] text-gray-400 dark:text-gray-500">
-            <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-[10px]">Ctrl+Enter</kbd> to submit
+          <div className="text-right text-xs text-gray-400 dark:text-gray-500">
+            <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-xs">Ctrl+Enter</kbd> to submit
           </div>
 
           {/* ── Patient Profile + Appointment Context ── */}
-          {appointmentId && (appointmentMeta || patientProfile) ? (
+          {(appointmentId && (appointmentMeta || patientProfile)) || patientProfile ? (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-50/80 to-blue-50/80 dark:from-emerald-900/20 dark:to-blue-900/20 border-b border-gray-100 dark:border-gray-800">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0">
-                  {          ((patientProfile?.name || appointmentMeta?.patient_name || 'P'))[0].toUpperCase()}
+                  {((patientProfile?.name || appointmentMeta?.patient_name || 'P'))[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">{patientProfile?.name || appointmentMeta?.patient_name || 'Patient'}</h2>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     {appointmentMeta?.date?.slice(0, 10)}{appointmentMeta?.time ? ` at ${appointmentMeta.time?.slice(0, 5)}` : ''}
                     {appointmentMeta?.location ? ` · ${appointmentMeta.location}` : ''}
+                    {!appointmentId && patientProfile ? `${patientProfile.visit_count ? `${patientProfile.visit_count} visit${patientProfile.visit_count > 1 ? 's' : ''}${patientVisits[0]?.date ? ` · Last: ${patientVisits[0].date.slice(0, 10)}` : ''}` : 'New patient'}` : ''}
                   </p>
                 </div>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                {appointmentMeta ? (
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
                   appointmentMeta?.status === 'completed' ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' :
                   appointmentMeta?.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' :
                   appointmentMeta?.arrival_status === 'called' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800' :
@@ -812,57 +1258,61 @@ function VisitPageInner() {
                    appointmentMeta?.arrival_status === 'called' ? 'In Session' :
                    appointmentMeta?.arrival_status === 'arrived' ? 'Waiting' : 'Scheduled'}
                 </span>
+                ) : null}
               </div>
               <div className="px-6 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</span>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.patient_phone || '—'}</p>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Phone</span>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.patient_phone || patientProfile?.phone || '—'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Age</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Age</span>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{patientProfile?.age ? `${patientProfile.age} yrs` : '—'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sex</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sex</span>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{patientProfile?.sex ? (patientProfile.sex.charAt(0).toUpperCase() + patientProfile.sex.slice(1)) : '—'}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</span>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.location || '—'}</p>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Location</span>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{appointmentMeta?.location || patientProfile?.location || '—'}</p>
                 </div>
                 {patientProfile?.visit_count !== undefined && (
                   <div>
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Visits</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Visits</span>
                     <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{patientProfile.visit_count}</p>
                   </div>
                 )}
                 {patientProfile?.total_spent !== undefined && (
                   <div>
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Spent</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Spent</span>
                     <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">₹{Number(patientProfile.total_spent).toLocaleString('en-IN')}</p>
                   </div>
                 )}
-                {appointmentMeta?.chit_media?.length > 0 && (
+                {appointmentMeta?.chit_media?.length > 0 ? (
                   <div className="col-span-full">
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">Media Shared ({appointmentMeta.chit_media.length})</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">Media Shared ({appointmentMeta.chit_media.length})</span>
                     <MediaViewer mediaKeys={appointmentMeta.chit_media} getSignedUrl={getSignedUrl} />
                   </div>
-                )}
+                ) : !appointmentMeta && (() => {
+                  const latestWithMedia = patientVisits.find(v => Array.isArray(v.chit_media) && v.chit_media.length > 0);
+                  if (!latestWithMedia) return null;
+                  return (
+                    <div className="col-span-full">
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">Media from Previous Visits ({latestWithMedia.chit_media.length})</span>
+                      <MediaViewer mediaKeys={latestWithMedia.chit_media} getSignedUrl={getSignedUrl} />
+                    </div>
+                  );
+                })()}
                 {appointmentMeta?.status === 'completed' && (
                   <div>
-                    <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription</span>
-                    {appointmentMeta?.prescription_key ? (
-                      <a href={getSignedUrl(appointmentMeta.prescription_key)} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 mt-0.5 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
-                        <Download className="w-3.5 h-3.5" />
-                        Download PDF
-                      </a>
-                    ) : (
-                      <button onClick={async () => {
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription</span>
+                    <button onClick={async () => {
                         try {
                           const res = await fetch(`/api/dashboard/visits/${appointmentMeta.id}/prescription`, { method: 'POST' });
                           const data = await res.json();
                           if (res.ok && data.url) {
+                            showToast('PDF generated successfully', 'success');
                             window.open(data.url, '_blank');
                           } else {
                             showToast(data.error || 'Failed to generate prescription', 'error');
@@ -875,7 +1325,6 @@ function VisitPageInner() {
                         <Download className="w-3.5 h-3.5" />
                         Generate
                       </button>
-                    )}
                   </div>
                 )}
               </div>
@@ -888,183 +1337,143 @@ function VisitPageInner() {
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Visits</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Visits</span>
                 </div>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{patientProfile.visit_count || 0}</p>                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                <p className="text-2xl font-bold leading-tight text-gray-900 dark:text-gray-100">{patientProfile.visit_count || 0}</p>                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {patientVisits.length > 0 ? `Last: ${patientVisits[0]?.date?.slice(0, 10) || 'N/A'}` : 'First visit'}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Spent</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Spent</span>
                 </div>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">₹{Number(patientProfile.total_spent || 0).toLocaleString('en-IN')}</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                <p className="text-2xl font-bold leading-tight text-gray-900 dark:text-gray-100">₹{Number(patientProfile.total_spent || 0).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                   {patientProfile.visit_count > 0 ? `Avg: ₹${Math.round(Number(patientProfile.total_spent || 0) / (patientProfile.visit_count || 1)).toLocaleString('en-IN')}` : '—'}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Patient Since</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Patient Since</span>
                 </div>
                 <p className="text-xl font-bold text-gray-900 dark:text-gray-100 text-sm leading-tight">{patientProfile.created_at?.slice(0, 10) || '—'}</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                   {patientProfile.created_at ? `${Math.floor((Date.now() - new Date(patientProfile.created_at).getTime()) / (1000 * 60 * 60 * 24 * 30))} months ago` : ''}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-violet-500" />
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Follow-up</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Follow-up</span>
                 </div>
                 {(() => {
                   const lastVisit = patientVisits.find(v => v.follow_up_date);
                   const fupDate = lastVisit?.follow_up_date;
                   const isOverdue = fupDate && new Date(fupDate) < new Date();
                   const hasReturned = fupDate && patientVisits.some(v => v.date === fupDate || (v.date > fupDate && v.date < new Date(Date.now() + 86400000).toISOString().slice(0, 10)));
-                  if (!fupDate) return <><p className="text-xl font-bold text-gray-400 dark:text-gray-500">—</p><p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">No follow-up set</p></>;
-                  if (hasReturned) return <><p className="text-xl font-bold text-emerald-500">✓</p><p className="text-[10px] text-emerald-500 mt-0.5">Completed</p></>;
-                  if (isOverdue) return <><p className="text-xl font-bold text-red-500">{Math.floor((Date.now() - new Date(fupDate).getTime()) / (1000 * 60 * 60 * 24))}d</p><p className="text-[10px] text-red-500 mt-0.5">Overdue since {fupDate}</p></>;
-                  return <><p className="text-xl font-bold text-amber-500">⏳</p><p className="text-[10px] text-amber-500 mt-0.5">Due {fupDate}</p></>;
+                  if (!fupDate) return <><p className="text-xl font-bold text-gray-400 dark:text-gray-500">—</p><p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">No follow-up set</p></>;
+                  if (hasReturned) return <><p className="text-xl font-bold text-emerald-500">✓</p><p className="text-xs text-emerald-500 mt-0.5">Completed</p></>;
+                  if (isOverdue) return <><p className="text-xl font-bold text-red-500">{Math.floor((Date.now() - new Date(fupDate).getTime()) / (1000 * 60 * 60 * 24))}d</p><p className="text-xs text-red-500 mt-0.5">Overdue since {fupDate}</p></>;
+                  return <><p className="text-xl font-bold text-amber-500">⏳</p><p className="text-xs text-amber-500 mt-0.5">Due {fupDate}</p></>;
                 })()}
               </div>
             </div>
           )}
 
-          {/* ── Visit History + WhatsApp Snippets ── */}
-          {patientProfile && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Visit History */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
-                  <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><Clock className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Visit History</h2>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal">Past {Math.min(patientVisits.length, 5)} visits</span>
+          {/* ── Medical & Dental History (Compact) ── */}
+          {patientProfile && (() => {
+            const hasEntries = medicalHistory.allergies || medicalHistory.chronicConditions || medicalHistory.bloodGroup || medicalHistory.bp || medicalHistory.weight || medicalHistory.medications;
+            if (!hasEntries) return null;
+            return (
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30"><Heart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /></div>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-sm">Medical & Dental History</h2>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">Reference — editable below</span>
                 </div>
-                <div className="px-5 py-3 space-y-0 max-h-[300px] overflow-y-auto">
-                  {patientVisits.length === 0 ? (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-6">No past visits recorded</p>
-                  ) : (
-                    patientVisits.slice(0, 5).map((v, i) => (
-                      <div key={v.id} className="flex gap-3 py-2.5 border-b border-gray-50 dark:border-gray-800 last:border-0">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className={`w-2 h-2 rounded-full ${v.status === 'completed' ? 'bg-emerald-400' : v.status === 'no_show' ? 'bg-red-400' : 'bg-blue-400'}`} />
-                          {i < Math.min(patientVisits.length, 5) - 1 && <div className="w-px flex-1 bg-gray-100 dark:bg-gray-800" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-gray-900 dark:text-gray-100">{v.date?.slice(0, 10)}{v.time ? ` ${v.time?.slice(0, 5)}` : ''}</p>
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                              v.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
-                              v.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
-                              'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                            }`}>{v.status === 'completed' ? 'Done' : v.status === 'no_show' ? 'Missed' : 'Scheduled'}</span>
-                          </div>
-                          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{v.treatment || 'Visit'}{v.diagnosis ? ` — ${v.diagnosis.slice(0, 60)}${v.diagnosis.length > 60 ? '...' : ''}` : ''}</p>
-                          {(v.consultation_fee || v.treatment_charges || v.medicine_charges) ? (
-                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">₹{((v.consultation_fee || 0) + (v.treatment_charges || 0) + (v.medicine_charges || 0)).toLocaleString('en-IN')}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    ))
+                <div className="flex flex-wrap gap-2">
+                  {medicalHistory.allergies && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-medium border border-red-100 dark:border-red-800">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Allergies: {medicalHistory.allergies}
+                    </span>
+                  )}
+                  {medicalHistory.chronicConditions && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-medium border border-orange-100 dark:border-orange-800">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Chronic: {medicalHistory.chronicConditions}
+                    </span>
+                  )}
+                  {medicalHistory.bloodGroup && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium border border-blue-100 dark:border-blue-800">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                      Blood: {medicalHistory.bloodGroup}
+                    </span>
+                  )}
+                  {(medicalHistory.bp || medicalHistory.weight) && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-xs font-medium border border-teal-100 dark:border-teal-800">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      {[medicalHistory.bp, medicalHistory.weight].filter(Boolean).join(' / ')}
+                    </span>
+                  )}
+                  {medicalHistory.medications && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-xs font-medium border border-violet-100 dark:border-violet-800">
+                      <Pill className="w-3 h-3" />
+                      Meds: {medicalHistory.medications}
+                    </span>
                   )}
                 </div>
               </div>
+            );
+          })()}
 
-              {/* WhatsApp Conversation Snippets */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
-                  <div className="p-1.5 rounded-lg bg-green-50 dark:bg-green-900/30"><MessageSquare className="w-3.5 h-3.5 text-green-500 dark:text-green-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">WhatsApp Conversation</h2>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal">Recent messages</span>
-                </div>
-                <div className="px-5 py-3 max-h-[300px] overflow-y-auto">
-                  {loadingExtra ? (
-                    <div className="flex items-center justify-center py-6">
-                      <div className="w-4 h-4 border-2 border-gray-200 dark:border-gray-700 border-t-emerald-500 rounded-full animate-spin" />
-                    </div>
-                  ) : patientMessages.length === 0 ? (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-6">No WhatsApp messages found</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {patientMessages.filter(m => m.role === 'user' || m.intent).slice(-6).reverse().map((m, i) => (
-                        <div key={m.id || i} className={`flex ${m.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-                          <div className={`max-w-[85%] px-3 py-2 rounded-xl text-xs ${
-                            m.role === 'user'
-                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-bl-sm'
-                              : 'bg-emerald-50 dark:bg-emerald-900/30 text-gray-700 dark:text-gray-300 rounded-br-sm'
-                          }`}>
-                            <p className="leading-relaxed">{m.content || '(no content)'}</p>
-                            <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">
-                              {m.role === 'user' ? 'Patient' : 'Clinic'} · {m.created_at ? new Date(m.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
-                              {m.intent && <span className="ml-1 px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-[8px]">{m.intent}</span>}
-                            </p>
-                          </div>
+          {/* ── WhatsApp Conversation ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
+                <div className="p-1.5 rounded-lg bg-green-50 dark:bg-green-900/30"><MessageSquare className="w-3.5 h-3.5 text-green-500 dark:text-green-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">WhatsApp Conversation</h2>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Recent messages</span>
+              </div>
+              <div className="px-5 py-3 max-h-[300px] overflow-y-auto">
+                {loadingExtra ? (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="w-4 h-4 border-2 border-gray-200 dark:border-gray-700 border-t-emerald-500 rounded-full animate-spin" />
+                  </div>
+                ) : patientMessages.length === 0 ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-6">No WhatsApp messages found</p>
+                ) : (
+                  <div className="space-y-2">
+                    {patientMessages.filter(m => m.role === 'user' || m.intent).slice(-6).reverse().map((m, i) => (
+                      <div key={m.id || i} className={`flex ${m.role === 'user' ? 'justify-start' : 'justify-end'}`}>
+                        <div className={`max-w-[85%] px-3 py-2 rounded-xl text-xs ${
+                          m.role === 'user'
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-bl-sm'
+                            : 'bg-emerald-50 dark:bg-emerald-900/30 text-gray-700 dark:text-gray-300 rounded-br-sm'
+                        }`}>
+                          <p className="leading-relaxed">{m.content || '(no content)'}</p>
+                          <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">
+                            {m.role === 'user' ? 'Patient' : 'Clinic'} · {m.created_at ? new Date(m.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                            {m.intent && <span className="ml-1 px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-[8px]">{m.intent}</span>}
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* ── Medical History + Family ── */}
+          {/* ── Family Members ── */}
           {patientProfile && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Medical History Flags */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30"><Heart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Medical History</h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Allergies</label>
-                    <input type="text" value={medicalHistory.allergies} onChange={e => setMedicalHistory(h => ({ ...h, allergies: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200 dark:focus:ring-red-800 focus:border-red-400 dark:focus:border-red-500 transition-all placeholder-gray-400"
-                      placeholder="e.g. Penicillin, Latex" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Chronic Conditions</label>
-                    <input type="text" value={medicalHistory.chronicConditions} onChange={e => setMedicalHistory(h => ({ ...h, chronicConditions: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all placeholder-gray-400"
-                      placeholder="e.g. Diabetes, Hypertension" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Blood Group</label>
-                    <input type="text" value={medicalHistory.bloodGroup} onChange={e => setMedicalHistory(h => ({ ...h, bloodGroup: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
-                      placeholder="e.g. O+" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">BP / Weight</label>
-                    <div className="flex gap-2">
-                      <input type="text" value={medicalHistory.bp} onChange={e => setMedicalHistory(h => ({ ...h, bp: e.target.value }))}
-                        className="w-1/2 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
-                        placeholder="BP" />
-                      <input type="text" value={medicalHistory.weight} onChange={e => setMedicalHistory(h => ({ ...h, weight: e.target.value }))}
-                        className="w-1/2 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
-                        placeholder="Weight" />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Current Medications</label>
-                  <input type="text" value={medicalHistory.medications} onChange={e => setMedicalHistory(h => ({ ...h, medications: e.target.value }))}
-                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-400 dark:focus:border-violet-500 transition-all placeholder-gray-400"
-                    placeholder="e.g. Metformin 500mg, Amlodipine 5mg" />
-                </div>
-              </div>
-
-              {/* Family Members */}
               <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
                 <div className="flex items-center gap-2.5 mb-4">
                   <div className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/30"><Users className="w-3.5 h-3.5 text-teal-500 dark:text-teal-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Family Members</h2>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal">{patientFamily.length > 0 ? `${patientFamily.length} linked` : ''}</span>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Family Members</h2>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{patientFamily.length > 0 ? `${patientFamily.length} linked` : ''}</span>
                 </div>
                 {loadingExtra ? (
                   <div className="flex items-center justify-center py-6">
@@ -1081,14 +1490,14 @@ function VisitPageInner() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">{f.name}</p>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
                             {f.relationship_type ? f.relationship_type.charAt(0).toUpperCase() + f.relationship_type.slice(1) : 'Family'}
                             {f.age ? ` · ${f.age} yrs` : ''}{f.sex ? ` · ${f.sex.charAt(0).toUpperCase() + f.sex.slice(1)}` : ''}
                           </p>
                         </div>
                         {f.id && (
                           <button type="button" onClick={() => router.push(`/dashboard/patients/${f.id}`)}
-                            className="px-2.5 py-1 text-[10px] font-medium rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-teal-300 dark:hover:border-teal-600 transition-all shrink-0">
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-teal-300 dark:hover:border-teal-600 transition-all shrink-0">
                             View
                           </button>
                         )}
@@ -1097,15 +1506,14 @@ function VisitPageInner() {
                   </div>
                 )}
               </div>
-            </div>
           )}
 
-          {/* Patient Info — for walk-ins (no appointmentId) */}
-          {!appointmentId && (
+          {/* Patient Info — for walk-ins (no appointmentId, no patient selected yet) */}
+          {!appointmentId && !patientProfile && (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm relative">
               <div className="flex items-center gap-2.5 mb-5">
                 <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><Search className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Patient Information</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Patient Information</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="relative">
@@ -1138,9 +1546,12 @@ function VisitPageInner() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Phone</label>
-                  <input type="tel" value={form.patientPhone} onChange={e => setForm(f => ({ ...f, patientPhone: e.target.value }))}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
-                    placeholder="e.g. 9876543210" />
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-200 dark:border-gray-600 rounded-l-xl text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">{PHONE_PREFIX}</span>
+                    <input type="tel" value={stripPhonePrefix(form.patientPhone)} onChange={e => setForm(f => ({ ...f, patientPhone: stripPhonePrefix(e.target.value) }))}
+                      className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
+                      placeholder="9876543210" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
@@ -1151,13 +1562,36 @@ function VisitPageInner() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Sex</label>
-                  <select value={form.patientSex || ''} onChange={e => setForm(f => ({ ...f, patientSex: e.target.value }))}
+                    <select value={form.patientSex || ''} onChange={e => setForm(f => ({ ...f, patientSex: e.target.value }))}
                     className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all appearance-none ${!form.patientSex ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
                     <option value="">Select...</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
                   </select>
+                </div>
+                <div className={showCustomLocation ? 'md:col-span-2' : ''}>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Location</label>
+                  <div className={showCustomLocation ? 'flex flex-col sm:flex-row gap-2' : ''}>
+                    <select value={showCustomLocation ? 'Other' : (LOCATIONS.includes(form.patientLocation) ? form.patientLocation : '')} onChange={e => {
+                      if (e.target.value === 'Other') { setShowCustomLocation(true); setForm(f => ({ ...f, patientLocation: '' })); }
+                      else { setShowCustomLocation(false); setForm(f => ({ ...f, patientLocation: e.target.value })); }
+                    }}
+                      className={`${showCustomLocation ? 'sm:w-1/2' : 'w-full'} px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all appearance-none ${!showCustomLocation && form.patientLocation ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                      <option value="">Select...</option>
+                      <option value="Hudco">Hudco</option>
+                      <option value="Bhilai">Bhilai</option>
+                      <option value="Durg">Durg</option>
+                      <option value="Nehru Nagar">Nehru Nagar</option>
+                      <option value="Borsi">Borsi</option>
+                      <option value="Other">Other (type)</option>
+                    </select>
+                    {showCustomLocation && (
+                      <input type="text" value={form.patientLocation} onChange={e => setForm(f => ({ ...f, patientLocation: e.target.value }))} autoFocus
+                        className="sm:w-1/2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
+                        placeholder="Type location..." />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1172,7 +1606,7 @@ function VisitPageInner() {
 
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30"><Stethoscope className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Treatments</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Treatments</h2>
                 <div className="ml-auto flex items-center gap-1">
                   <button type="button" onClick={() => setShowTemplateLoad(true)} title="Load template"
                     className="p-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-emerald-500 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-700 transition-all">
@@ -1222,7 +1656,7 @@ function VisitPageInner() {
                           <span className="text-xs text-gray-700 dark:text-gray-300">{t.name}</span>
                           <div className="flex gap-1">
                             <button type="button" onClick={() => loadTemplate(t)}
-                              className="px-2 py-0.5 text-[10px] font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">Apply</button>
+                              className="px-2 py-0.5 text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">Apply</button>
                             <button type="button" onClick={() => deleteTemplate(t.id)}
                               className="p-0.5 text-gray-400 hover:text-red-500 transition-all">
                               <Trash2 className="w-3 h-3" />
@@ -1257,7 +1691,7 @@ function VisitPageInner() {
                           </span>
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-gray-900 dark:text-gray-100">{s.name}</p>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500">{s.symptom}</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500">{s.symptom}</p>
                           </div>
                         </button>
                       ))}
@@ -1266,7 +1700,7 @@ function VisitPageInner() {
                 </div>
               </div>
 
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2.5">Tap treatments to add — select all that apply</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5">Tap treatments to add — select all that apply</p>
 
               <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
                 {TREATMENT_NAMES.map(name => {
@@ -1282,7 +1716,7 @@ function VisitPageInner() {
                       <span className="text-base shrink-0 w-5 text-center">{preset?.icon || '🩺'}</span>
                       <span className="text-left truncate">{name}</span>
                       {preset && (
-                        <span className={`ml-auto text-[11px] font-semibold shrink-0 ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                        <span className={`ml-auto text-xs font-semibold shrink-0 ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
                           ₹{preset.fee}
                         </span>
                       )}
@@ -1304,11 +1738,11 @@ function VisitPageInner() {
               </div>
 
               {errors.treatment && (
-                <p className="text-[10px] text-red-500 dark:text-red-400 mt-2">⚠ {errors.treatment}</p>
+                <p className="text-xs text-red-500 dark:text-red-400 mt-2">⚠ {errors.treatment}</p>
               )}
               {selectedTreatments.length > 0 && (
                 <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800">
-                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                     {selectedTreatments.length} treatment{selectedTreatments.length > 1 ? 's' : ''} selected
                   </p>
                 </div>
@@ -1429,14 +1863,14 @@ function VisitPageInner() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="flex-1">
-                          <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-0.5">Amount Paid</label>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">Amount Paid</label>
                           <input type="number" value={paidAmount} onChange={e => setPaidAmount(Number(e.target.value) || 0)}
                             min={0} max={totalFees}
-                            className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[11px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
+                            className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
                         </div>
                         {paidAmount < totalFees && (
                           <div className="flex-shrink-0 text-right">
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500">Due</div>
+                            <div className="text-xs text-gray-400 dark:text-gray-500">Due</div>
                             <div className="text-xs font-semibold text-red-500 dark:text-red-400">₹{(totalFees - paidAmount).toLocaleString('en-IN')}</div>
                           </div>
                         )}
@@ -1444,7 +1878,7 @@ function VisitPageInner() {
                       <div className="flex gap-1.5 flex-wrap">
                         {PAYMENT_METHODS.map(m => (
                           <button key={m.value} type="button" onClick={() => setPaymentMethod(m.value)}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all ${
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                               paymentMethod === m.value
                                 ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-300'
                                 : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'
@@ -1456,13 +1890,13 @@ function VisitPageInner() {
                       <div className="relative">
                         <input type="text" value={transactionId} onChange={e => setTransactionId(e.target.value)}
                           placeholder="Transaction ID / ref (optional)"
-                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-[11px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 transition-all placeholder-gray-400" />
                       </div>
                       {paymentMethod === 'upi' && (
                         <div className="flex items-center gap-2">
                           <a href={upiDeepLink(paidAmount || totalFees, transactionId || Date.now().toString(36), `${form.patientName} ${form.diagnosis?.slice(0, 30) || ''}`)}
                             target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-[10px] font-medium rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                             UPI Link
                           </a>
@@ -1472,10 +1906,10 @@ function VisitPageInner() {
                     </div>
                   )}
 
-                  {(paymentStatus === 'pending' || paymentStatus === 'partial') && paidAmount < totalFees && (patientProfile?.phone || appointmentMeta?.patient_phone || form.patientPhone) && (
+                  {(paymentStatus === 'pending' || paymentStatus === 'partial') && paidAmount < totalFees && (patientProfile?.phone || appointmentMeta?.patient_phone || withPhonePrefix(form.patientPhone)) && (
                     <div className="mb-2">
                       <button type="button" onClick={sendPaymentLink} disabled={sendingPaymentLink}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-medium rounded-lg border border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 transition-all disabled:opacity-50">
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-medium rounded-lg border border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50 transition-all disabled:opacity-50">
                         <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                         {sendingPaymentLink ? 'Sending...' : `Send UPI Link on WhatsApp${paymentStatus === 'partial' ? ' (Due ₹' + (totalFees - paidAmount).toLocaleString('en-IN') + ')' : ''}`}
                       </button>
@@ -1486,15 +1920,140 @@ function VisitPageInner() {
             </div>
           </div>
 
+          {/* Tooth Grid + Per-Tooth Diagnosis */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30">
+                <svg className="w-4 h-4 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+              </div>
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Tooth Chart</h2>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Tap a tooth to add diagnosis</span>
+            </div>
+
+            {diagnosisOptions.length === 0 ? (
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4 italic">
+                No diagnosis items configured. Add them in{' '}
+                <Link href="/dashboard/settings" className="text-blue-500 hover:text-blue-600 underline">Settings</Link>.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <ToothGrid
+                  toothData={form.toothDiagnoses}
+                  onToothSelect={stableSetSelectedTooth}
+                  selectedTooth={selectedTooth}
+                  diagnosisOptions={diagnosisOptions}
+                  onQuickDiagnosis={handleQuickDiagnosis}
+                  onToothEntryUpdate={handleToothEntryUpdate}
+                  loading={appointmentId && !appointmentMeta && !form.toothDiagnoses.length}
+                />
+
+                {selectedTooth && (
+                  <div className="mt-3">
+                    <PerToothDiagnosisPanel
+                      toothNumber={selectedTooth}
+                      currentEntry={form.toothDiagnoses.find(t => t.tooth === selectedTooth)}
+                      diagnosisOptions={diagnosisOptions}
+                      onSave={handleToothSave}
+                      onClose={handleToothClose}
+                    />
+                  </div>
+                )}
+
+                {/* Summary of all tooth entries */}
+                {form.toothDiagnoses.length > 0 && (
+                  <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-3">
+                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-2">
+                      {form.toothDiagnoses.length} tooth/teeth affected
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {form.toothDiagnoses.map(entry => (
+                        <button
+                          key={entry.tooth}
+                          type="button"
+                          onClick={() => setSelectedTooth(entry.tooth)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                            selectedTooth === entry.tooth
+                              ? 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300'
+                              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-200'
+                          }`}
+                        >
+                          <span>#{entry.tooth}</span>
+                          {entry.surface && <span className="opacity-60">{entry.surface}</span>}
+                          <span className="opacity-75">{entry.diagnoses.slice(0, 2).join(', ')}{entry.diagnoses.length > 2 ? ` +${entry.diagnoses.length - 2}` : ''}</span>
+                          {entry.treatment && <span className="text-[9px] text-emerald-500 dark:text-emerald-400 font-medium">{entry.treatment}</span>}
+                          {entry.severity && <span className={`text-[9px] font-medium ${entry.severity === 'severe' ? 'text-red-500' : entry.severity === 'moderate' ? 'text-orange-500' : 'text-amber-500'}`}>{entry.severity}</span>}
+                          <X className="w-3 h-3 ml-0.5 opacity-40 hover:opacity-100" onClick={(e) => {
+                            e.stopPropagation();
+                            setForm(f => ({ ...f, toothDiagnoses: f.toothDiagnoses.filter(t => t.tooth !== entry.tooth) }));
+                            if (selectedTooth === entry.tooth) setSelectedTooth(null);
+                          }} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Diagnosis */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><FileText className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Diagnosis / Observations</h2>
+              <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><FileText className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Diagnosis / Observations</h2>
             </div>
             <textarea value={form.diagnosis} onChange={e => setForm(f => ({ ...f, diagnosis: e.target.value }))}
               rows={3} className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
               placeholder="Describe the diagnosis, observations, and any clinical notes..." />
           </div>
+
+          {/* ── Medical & Dental History (Editable) ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30"><Heart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Medical & Dental History</h2>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Update as needed</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Allergies</label>
+                  <input type="text" value={medicalHistory.allergies} onChange={e => setMedicalHistory(h => ({ ...h, allergies: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200 dark:focus:ring-red-800 focus:border-red-400 dark:focus:border-red-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. Penicillin, Latex" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chronic Conditions</label>
+                  <input type="text" value={medicalHistory.chronicConditions} onChange={e => setMedicalHistory(h => ({ ...h, chronicConditions: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. Diabetes, Hypertension" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Blood Group</label>
+                  <input type="text" value={medicalHistory.bloodGroup} onChange={e => setMedicalHistory(h => ({ ...h, bloodGroup: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. O+" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">BP</label>
+                  <input type="text" value={medicalHistory.bp} onChange={e => setMedicalHistory(h => ({ ...h, bp: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. 120/80" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Weight</label>
+                  <input type="text" value={medicalHistory.weight} onChange={e => setMedicalHistory(h => ({ ...h, weight: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. 70 kg" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Current Medications</label>
+                  <input type="text" value={medicalHistory.medications} onChange={e => setMedicalHistory(h => ({ ...h, medications: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-400 dark:focus:border-violet-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. Metformin 500mg, Amlodipine 5mg" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Right side items: Attachments + Follow-up + Notes */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1502,7 +2061,7 @@ function VisitPageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
                 <div className="flex items-center gap-2.5 mb-4">
                   <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30"><Upload className="w-4 h-4 text-purple-500 dark:text-purple-400" /></div>
-                  <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Attachments</h2>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Attachments</h2>
                   <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">(optional)</span>
                 </div>
                 <input
@@ -1523,7 +2082,7 @@ function VisitPageInner() {
                   <span className="text-xs font-medium">
                     {uploadingMedia ? 'Uploading...' : 'Click to upload'}
                   </span>
-                  <span className="text-[10px]">Photos, documents, audio</span>
+                  <span className="text-xs">Photos, documents, audio</span>
                 </button>
                 {mediaFiles.length > 0 && (
                   <div className="mt-2.5 space-y-1.5">
@@ -1549,7 +2108,7 @@ function VisitPageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><Calendar className="w-4 h-4 text-amber-500 dark:text-amber-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Follow-up</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Follow-up</h2>
               </div>
               <div className="space-y-3">
                 <div>
@@ -1570,7 +2129,7 @@ function VisitPageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800"><FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" /></div>
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Additional Notes</h2>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Additional Notes</h2>
               </div>
               <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                 rows={3} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
@@ -1582,7 +2141,7 @@ function VisitPageInner() {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-4">
               <div className="p-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30"><Pill className="w-4 h-4 text-violet-500 dark:text-violet-400" /></div>
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-base">Prescribed Medicines</h2>
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Prescribed Medicines</h2>
               <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Tap a salt to add</span>
             </div>
 
@@ -1606,7 +2165,7 @@ function VisitPageInner() {
                 const isSelected = form.medicines.some(m => m.name === salt);
                 return (
                   <button key={salt} type="button" onClick={() => toggleSalt(salt)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all active:scale-95 ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
                       isSelected
                         ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-600 text-violet-800 dark:text-violet-200 ring-1 ring-violet-200 dark:ring-violet-700'
                         : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-violet-200 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20'
@@ -1640,34 +2199,92 @@ function VisitPageInner() {
                       className="absolute -top-2 -right-2 w-6 h-6 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-700 transition-all opacity-0 group-hover:opacity-100 shadow-sm">
                       <Trash2 className="w-3 h-3" />
                     </button>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                      <div>
-                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Medicine</label>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+                      <div className="md:col-span-1">
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Medicine</label>
                         <input type="text" value={med.name} onChange={e => updateMedicine(idx, 'name', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
                           placeholder="e.g. Amoxicillin" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Dosage</label>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Dosage</label>
                         <input type="text" value={med.dosage} onChange={e => updateMedicine(idx, 'dosage', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
                           placeholder="e.g. 500mg" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Frequency</label>
-                        <input type="text" value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
-                          placeholder="e.g. Twice daily" />
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Frequency</label>
+                        <select value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all appearance-none">
+                          <option value="">Select</option>
+                          {FREQUENCY_OPTIONS.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400 mb-1">Duration</label>
-                        <input type="text" value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
-                          placeholder="e.g. 5 days" />
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Duration</label>
+                        <select value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all appearance-none">
+                          <option value="">Select</option>
+                          {DURATION_OPTIONS.map(d => (
+                            <option key={d} value={`${d} days`}>{d} days</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">When</label>
+                        <select value={med.timing || 'after'} onChange={e => updateMedicine(idx, 'timing', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all appearance-none">
+                          {TIMING_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Diet & Advice */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="p-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/30">
+                <svg className="w-4 h-4 text-orange-500 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+              </div>
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Diet & Advice</h2>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Select relevant advice for this patient</span>
+            </div>
+            {adviceOptions.length === 0 ? (
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4 italic">
+                No advice items configured. Add them in{' '}
+                <Link href="/dashboard/settings" className="text-blue-500 hover:text-blue-600 underline">Settings</Link>.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {adviceOptions.map((item, i) => {
+                  const selected = form.adviceSelected.includes(item);
+                  return (
+                    <button key={i} type="button" onClick={() => {
+                      setForm(f => ({
+                        ...f,
+                        adviceSelected: selected
+                          ? f.adviceSelected.filter(a => a !== item)
+                          : [...f.adviceSelected, item],
+                      }));
+                    }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
+                        selected
+                          ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-600 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200 dark:ring-emerald-700'
+                          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-emerald-200 dark:hover:border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                      }`}>
+                      {item}
+                      {selected && <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">✓</span>}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1687,6 +2304,17 @@ function VisitPageInner() {
             )}
           </button>
         </form>
+        {showPreview && (
+          <div className="fixed right-0 top-14 z-40 h-[calc(100vh-3.5rem)]">
+            <PrescriptionPreview
+              form={form}
+              patientProfile={patientProfile}
+              treatmentFees={treatmentFees}
+              consultationFee={consultationFee}
+              onClose={() => { setShowPreview(false); setSidebarCollapsed(false); }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

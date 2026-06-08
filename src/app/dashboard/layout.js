@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import dynamic from 'next/dynamic';
-import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Bell, Sun, Moon, X, Menu } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Bell, Settings, Sun, Moon, X, Menu } from 'lucide-react';
 
 const NotificationPanel = dynamic(() => import('@/components/NotificationPanel'), { ssr: false });
 
 export const DateContext = createContext();
 export const ThemeContext = createContext();
 export const ToastContext = createContext();
+export const SidebarContext = createContext();
 
 const NAV = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -22,6 +23,7 @@ const NAV = [
   { href: '/dashboard/feedback', label: 'Feedback', icon: Star },
   { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
   { href: '/dashboard/due-reminders', label: 'Due Reminders', icon: Bell },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 function ThemeToggle({ compact }) {
@@ -88,7 +90,7 @@ function GlobalSearch() {
           onChange={e => { setQuery(e.target.value); if (e.target.value.length < 2) { setResults([]); } }}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder="Search patients..."
-          className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 outline-none text-xs text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"
+          className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 outline-none text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -132,12 +134,12 @@ function SidebarContent({ pathname, onNavClick }) {
       {/* Logo */}
       <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800">
         <Link href="/dashboard" onClick={onNavClick} className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gray-900 dark:bg-white rounded-lg flex items-center justify-center flex-shrink-0 transition-colors duration-200">
-            <span className="text-white dark:text-gray-900 text-xs font-bold tracking-tight">SB</span>
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
+            <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-9 h-9 rounded-lg object-contain" />
           </div>
           <div>
             <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500">Dental Clinic</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
           </div>
         </Link>
       </div>
@@ -219,19 +221,20 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState([]);
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dashboard-dark-mode');
-      return saved === 'true';
-    }
-    return false;
-  });
+  const [darkMode, setDarkMode] = useState(false);
   // Shared selectedDate state persists across page navigations
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
+
+  // Hydrate dark mode from localStorage after first mount (avoids hydration mismatch)
+  useEffect(() => {
+    const saved = localStorage.getItem('dashboard-dark-mode');
+    if (saved === 'true') setDarkMode(true);
+  }, []);
 
   // Apply/remove dark class on <html> and persist to localStorage
   useEffect(() => {
@@ -270,12 +273,13 @@ export default function DashboardLayout({ children }) {
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
 
-  if (pathname === '/dashboard/login') {
+  if (pathname === '/dashboard/login' || pathname === '/dashboard/prescription-preview') {
     return children;
   }
 
   return (
     <ThemeContext.Provider value={{ darkMode, setDarkMode }}>
+      <SidebarContext.Provider value={{ sidebarCollapsed, setSidebarCollapsed }}>
       <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
         <ToastContext.Provider value={{ showToast }}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
@@ -289,8 +293,8 @@ export default function DashboardLayout({ children }) {
               <Menu className="w-5 h-5" />
             </button>
             <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-gray-900 dark:bg-white rounded-md flex items-center justify-center">
-                <span className="text-white dark:text-gray-900 text-[10px] font-bold">SB</span>
+              <div className="w-7 h-7 rounded-md flex items-center justify-center">
+                <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-7 h-7 rounded-md object-contain" />
               </div>
               <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shri Balaji</span>
             </Link>
@@ -323,12 +327,27 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Desktop Sidebar */}
-          <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-colors duration-200">
-            <SidebarContent pathname={pathname} />
+          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64'}`}>
+            <div className="min-w-64 flex-1 flex flex-col">
+              <SidebarContent pathname={pathname} />
+            </div>
           </aside>
 
+          {/* Sidebar expand tab (visible when collapsed) */}
+          {sidebarCollapsed && (
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-20 w-5 h-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-r-lg items-center justify-center shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-400 dark:text-gray-500"
+              title="Expand sidebar"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
           {/* Main Content */}
-          <main className="md:ml-64 pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-colors duration-200" key={pathname}>
+          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-64'}`}>
             <div className="animate-fade-in mx-auto">
               {children}
             </div>
@@ -337,6 +356,7 @@ export default function DashboardLayout({ children }) {
         <Toasts toasts={toasts} removeToast={removeToast} />
       </ToastContext.Provider>
       </DateContext.Provider>
+      </SidebarContext.Provider>
     </ThemeContext.Provider>
   );
 }

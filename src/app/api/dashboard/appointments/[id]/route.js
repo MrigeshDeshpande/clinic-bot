@@ -18,7 +18,9 @@ export async function PATCH(req, { params }) {
 
     const allowed = ['patient_name', 'patient_phone', 'treatment', 'status',
       'consultation_fee', 'treatment_charges', 'medicine_charges', 'location',
-      'diagnosis', 'notes', 'follow_up_date', 'follow_up_instructions', 'treatments'];
+      'diagnosis', 'medicines', 'notes', 'follow_up_date', 'follow_up_instructions',
+      'treatments', 'advice_selected', 'diagnosis_selected',
+      'payment_status', 'payment_method', 'transaction_id', 'paid_amount'];
 
     const setClauses = [];
     const values = [];
@@ -42,15 +44,19 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    setClauses.push(`updated_at = NOW()`);
+    setClauses.push(`prescription_key = NULL`, `updated_at = NOW()`);
     values.push(id);
 
     await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${idx}`, values);
 
     const updated = await sql`
-      SELECT id, patient_name, patient_phone, treatment, treatments, status,
+      SELECT id, logical_id, wa_id, patient_name, patient_phone, patient_id,
+             date, time, treatment, treatments, diagnosis, medicines, status,
              consultation_fee, treatment_charges, medicine_charges, location,
-             arrival_status, is_priority, notes, chit_media
+             arrival_status, is_priority, notes, chit_media,
+             follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected,
+             payment_status, payment_method, transaction_id, paid_amount,
+             prescription_key, created_at, updated_at
       FROM appointments WHERE id = ${id}
     `;
 
