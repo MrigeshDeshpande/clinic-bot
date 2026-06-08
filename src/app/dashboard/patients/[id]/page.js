@@ -537,6 +537,27 @@ export default function PatientDetailPage() {
                         <Printer className="w-4 h-4" />
                         Print
                       </button>
+                      <button
+                        onClick={async () => {
+                          const latest = completedVisits[0];
+                          if (!latest) { showToast('No completed visits', 'error'); return; }
+                          try {
+                            const res = await fetch(`/api/dashboard/visits/${latest.id}/chart`, { method: 'POST' });
+                            const data = await res.json();
+                            if (res.ok && data.url) {
+                              window.open(data.url, '_blank');
+                            } else {
+                              showToast(data.error || 'Failed to generate chart', 'error');
+                            }
+                          } catch {
+                            showToast('Network error', 'error');
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 border border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 text-sm font-medium rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all active:scale-95"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                        Chart
+                      </button>
                     </>
                   )}
                 </div>
@@ -764,6 +785,18 @@ export default function PatientDetailPage() {
                               </button>
                               <button onClick={async (e) => {
                                 e.stopPropagation();
+                                try {
+                                  const res = await fetch(`/api/dashboard/visits/${visit.id}/chart`, { method: 'POST' });
+                                  const data = await res.json();
+                                  if (res.ok && data.url) window.open(data.url, '_blank');
+                                  else showToast(data.error || 'Failed to generate chart', 'error');
+                                } catch { showToast('Network error', 'error'); }
+                              }}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95 cursor-pointer">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> Chart
+                              </button>
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
                                 setSendingMessage(true);
                                 try {
                                   showToast('⏳ Compiling & sending...', 'info', { duration: 6000 });
@@ -827,10 +860,20 @@ export default function PatientDetailPage() {
                               <div className="flex flex-wrap gap-1.5">
                                 {visit.tooth_diagnoses.map((td, ti) => (
                                   <span key={ti} className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-sm">
-                                    🦷 #{td.tooth}
+                                    #{td.tooth}
                                     {td.surface && <span className="text-[10px] opacity-60">{td.surface}</span>}
                                     <span className="text-gray-400">—</span>
                                     {td.diagnoses.join(', ')}
+                                    {td.treatment && <><span className="text-gray-300 dark:text-gray-600">|</span><span className="text-emerald-600 dark:text-emerald-400">{td.treatment}</span></>}
+                                    {td.severity && (
+                                      <span className={`text-[9px] font-medium px-1 py-0.5 rounded ${
+                                        td.severity === 'severe' ? 'text-red-600 bg-red-50 dark:bg-red-900/30' :
+                                        td.severity === 'moderate' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30' :
+                                        'text-amber-600 bg-amber-50 dark:bg-amber-900/30'
+                                      }`}>{td.severity}</span>
+                                    )}
+                                    {td.status === 'treated' && <span className="text-[9px] text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-1 py-0.5 rounded">✓ Treated</span>}
+                                    {td.status === 'wip' && <span className="text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded">In Progress</span>}
                                   </span>
                                 ))}
                               </div>
@@ -896,6 +939,66 @@ export default function PatientDetailPage() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">Visit history will appear here once appointments are completed</p>
               </div>
             )}
+
+            {/* Per-tooth history timeline */}
+            {completedVisits.some(v => v.tooth_diagnoses?.length > 0) && (() => {
+              // Build per-tooth timeline from all visits
+              const toothTimeline = {};
+              for (const v of completedVisits) {
+                if (!v.tooth_diagnoses?.length) continue;
+                for (const td of v.tooth_diagnoses) {
+                  if (!toothTimeline[td.tooth]) toothTimeline[td.tooth] = [];
+                  toothTimeline[td.tooth].push({
+                    date: v.date,
+                    visitId: v.id,
+                    surface: td.surface,
+                    diagnoses: td.diagnoses,
+                    treatment: td.treatment,
+                    severity: td.severity,
+                    status: td.status,
+                  });
+                }
+              }
+              const toothKeys = Object.keys(toothTimeline).sort((a, b) => Number(a) - Number(b));
+              if (toothKeys.length === 0) return null;
+              return (
+                <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm mt-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Per-Tooth History Timeline</h3>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">({toothKeys.length} teeth)</span>
+                  </div>
+                  <div className="space-y-3">
+                    {toothKeys.map(tooth => {
+                      const entries = toothTimeline[tooth];
+                      const latest = entries[entries.length - 1];
+                      return (
+                        <div key={tooth} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">#{tooth}</span>
+                            {latest.treatment && <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">{latest.treatment}</span>}
+                            {latest.status === 'treated' && <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">Treated</span>}
+                            {latest.status === 'wip' && <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full">In Progress</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {entries.map((e, idx) => (
+                              <div key={idx} className="flex items-center gap-1 text-[10px]">
+                                {idx > 0 && <span className="text-gray-300 dark:text-gray-600 mx-0.5">→</span>}
+                                <span className="text-gray-400 dark:text-gray-500">{formatDate(e.date).slice(0, 6)}</span>
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{e.diagnoses.join(', ')}</span>
+                                {e.surface && <span className="text-gray-400">({e.surface})</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
 

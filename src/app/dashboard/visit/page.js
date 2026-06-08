@@ -1727,6 +1727,20 @@ function VisitPageInner() {
                   onToothSelect={setSelectedTooth}
                   selectedTooth={selectedTooth}
                   diagnosisOptions={diagnosisOptions}
+                  onQuickDiagnosis={(tooth, diag) => {
+                    setForm(f => {
+                      const existing = f.toothDiagnoses.filter(t => t.tooth !== tooth);
+                      if (diag === null) return { ...f, toothDiagnoses: existing };
+                      const prev = f.toothDiagnoses.find(t => t.tooth === tooth);
+                      const diagnoses = prev?.diagnoses?.includes(diag)
+                        ? prev.diagnoses.filter(d => d !== diag)
+                        : [...(prev?.diagnoses || []), diag];
+                      const next = diagnoses.length > 0
+                        ? [...existing, { tooth, diagnoses, surface: prev?.surface || '', treatment: prev?.treatment || '', severity: prev?.severity || '', status: prev?.status || 'active' }]
+                        : existing;
+                      return { ...f, toothDiagnoses: next };
+                    });
+                  }}
                 />
 
                 {selectedTooth && (
@@ -1767,9 +1781,11 @@ function VisitPageInner() {
                               : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-200'
                           }`}
                         >
-                          <span>🦷 #{entry.tooth}</span>
+                          <span>#{entry.tooth}</span>
                           {entry.surface && <span className="opacity-60">{entry.surface}</span>}
                           <span className="opacity-75">{entry.diagnoses.slice(0, 2).join(', ')}{entry.diagnoses.length > 2 ? ` +${entry.diagnoses.length - 2}` : ''}</span>
+                          {entry.treatment && <span className="text-[9px] text-emerald-500 dark:text-emerald-400 font-medium">{entry.treatment}</span>}
+                          {entry.severity && <span className={`text-[9px] font-medium ${entry.severity === 'severe' ? 'text-red-500' : entry.severity === 'moderate' ? 'text-orange-500' : 'text-amber-500'}`}>{entry.severity}</span>}
                           <X className="w-3 h-3 ml-0.5 opacity-40 hover:opacity-100" onClick={(e) => {
                             e.stopPropagation();
                             setForm(f => ({ ...f, toothDiagnoses: f.toothDiagnoses.filter(t => t.tooth !== entry.tooth) }));
