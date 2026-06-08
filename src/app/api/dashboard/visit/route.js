@@ -25,7 +25,7 @@ export async function POST(req) {
   try {
     const sql = getSql();
     const body = await req.json();
-    const { appointmentId, treatment, treatments, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, advice_selected, diagnosis_selected, status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount, patient_age, patient_sex, patient_location } = body;
+    const { appointmentId, treatment, treatments, tooth_diagnoses, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, advice_selected, diagnosis_selected, status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount, patient_age, patient_sex, patient_location } = body;
 
     // ── Update existing appointment ──
     if (appointmentId) {
@@ -82,6 +82,10 @@ export async function POST(req) {
         setClauses.push(`diagnosis_selected = $${p++}`);
         params.push(toPgTextArray(diagnosis_selected));
       }
+      if (tooth_diagnoses !== undefined) {
+        setClauses.push(`tooth_diagnoses = $${p++}`);
+        params.push(JSON.stringify(tooth_diagnoses));
+      }
       if (newStatus !== undefined) {
         setClauses.push(`status = $${p++}`);
         params.push(newStatus);
@@ -124,7 +128,7 @@ export async function POST(req) {
       const updated = await sql`
          SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,
                 treatments, diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
-                notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected, prescription_key,
+                notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected, tooth_diagnoses, prescription_key,
                status, arrival_status, arrived_at, payment_status, payment_method, transaction_id, paid_amount, paid_at,
                created_at, updated_at
         FROM appointments WHERE id = ${appointmentId}
@@ -193,7 +197,8 @@ export async function POST(req) {
         date, time, treatment, treatments, status,
         consultation_fee, treatment_charges, medicine_charges,
         diagnosis, medicines, notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected,
-        arrival_status, arrived_at,
+        tooth_diagnoses,
+        arrival_status,
         payment_status, payment_method, transaction_id, paid_at, paid_amount
       ) VALUES (
         gen_random_uuid(), 1, ${patient_phone || null}, ${patient_name}, ${patient_phone || null}, ${patientId},
@@ -202,7 +207,8 @@ export async function POST(req) {
         ${diagnosis || ''}, ${JSON.stringify(medicines || [])}, ${notes || ''},
         ${followUpDate || null}, ${followUpInstructions || ''},
         ${advice_selected || []}, ${diagnosis_selected || []},
-        'arrived', NOW(),
+        ${JSON.stringify(tooth_diagnoses || [])},
+        'arrived',
         ${pStatus}, ${pMethod}, ${txnId}, ${paidAt}, ${paidAmt}
       )
       RETURNING *

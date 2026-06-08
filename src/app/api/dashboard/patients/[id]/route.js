@@ -34,7 +34,9 @@ export async function GET(req, { params }) {
         SELECT a.id, a.date, a.time, a.treatment, a.treatments, a.diagnosis, a.medicines,
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
                a.notes, a.follow_up_date, a.follow_up_instructions,
+               a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
                a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at,
+               a.payment_status, a.paid_amount,
                COALESCE(p.name, a.patient_name) AS patient_name
         FROM appointments a
         LEFT JOIN patients p ON p.id = a.patient_id

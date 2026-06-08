@@ -19,7 +19,7 @@ export async function POST(req, { params }) {
       SELECT a.id, a.logical_id, a.wa_id, a.patient_name, a.patient_phone,
              a.patient_id, a.date, a.treatment, a.treatments,
              a.consultation_fee, a.treatment_charges, a.medicine_charges,
-             a.diagnosis, a.medicines, a.notes, a.advice_selected, a.diagnosis_selected,
+             a.diagnosis, a.medicines, a.notes, a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
              a.follow_up_date, a.follow_up_instructions,
              a.prescription_key,
              p.name AS p_name, p.age AS p_age, p.sex AS p_sex
@@ -55,6 +55,7 @@ export async function POST(req, { params }) {
     const visit = {
       treatment: a.treatment,
       treatments: Array.isArray(a.treatments) ? a.treatments : [],
+      tooth_diagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
       diagnosis: a.diagnosis,
       medicines: Array.isArray(a.medicines) ? a.medicines : [],
       advice_selected: Array.isArray(a.advice_selected) ? a.advice_selected : [],

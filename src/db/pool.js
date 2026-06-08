@@ -388,6 +388,12 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS follow_up_reminder_sent_at TIMESTAMPTZ;
     `;
 
+    // tooth_diagnoses — per-tooth diagnosis data (JSONB array of { tooth, diagnoses[], surface? })
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS tooth_diagnoses JSONB DEFAULT '[]';
+    `;
+
     // due_reminder_log — history of due reminder triggers (manual + cron)
     await db`
       CREATE TABLE IF NOT EXISTS due_reminder_log (

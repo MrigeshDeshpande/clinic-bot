@@ -819,6 +819,23 @@ export default function PatientDetailPage() {
                               <p className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 leading-relaxed">{visit.diagnosis}</p>
                             </div>
                           )}
+                          {Array.isArray(visit.tooth_diagnoses) && visit.tooth_diagnoses.length > 0 && (
+                            <div className="mb-3">
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> Per-Tooth Diagnosis
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {visit.tooth_diagnoses.map((td, ti) => (
+                                  <span key={ti} className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+                                    🦷 #{td.tooth}
+                                    {td.surface && <span className="text-[10px] opacity-60">{td.surface}</span>}
+                                    <span className="text-gray-400">—</span>
+                                    {td.diagnoses.join(', ')}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           {Array.isArray(visit.medicines) && visit.medicines.length > 0 && (
                             <div className="mb-3">
                               <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">

@@ -133,8 +133,8 @@ function SidebarContent({ pathname, onNavClick }) {
       {/* Logo */}
       <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800">
         <Link href="/dashboard" onClick={onNavClick} className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gray-900 dark:bg-white rounded-lg flex items-center justify-center flex-shrink-0 transition-colors duration-200">
-            <span className="text-white dark:text-gray-900 text-xs font-bold tracking-tight">SB</span>
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
+            <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-9 h-9 rounded-lg object-contain" />
           </div>
           <div>
             <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
@@ -290,8 +290,8 @@ export default function DashboardLayout({ children }) {
               <Menu className="w-5 h-5" />
             </button>
             <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-gray-900 dark:bg-white rounded-md flex items-center justify-center">
-                <span className="text-white dark:text-gray-900 text-xs font-bold">SB</span>
+              <div className="w-7 h-7 rounded-md flex items-center justify-center">
+                <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-7 h-7 rounded-md object-contain" />
               </div>
               <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shri Balaji</span>
             </Link>
