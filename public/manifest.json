@@ -1,6 +1,6 @@
 {
-  "name": "Shri Balaji Dental Clinic",
-  "short_name": "Dental Clinic",
+  "name": "Shri Balaji",
+  "short_name": "Shri Balaji",
   "description": "Dental clinic management & patient records",
   "start_url": "/dashboard",
   "display": "standalone",
