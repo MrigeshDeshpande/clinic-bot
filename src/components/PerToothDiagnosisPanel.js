@@ -13,23 +13,25 @@ const SURFACE_OPTIONS = [
   { id: 'BL', label: 'BL' },
 ];
 
-const QUADRANT_LABEL = {
-  1: 'UR', 2: 'UR', 3: 'UR', 4: 'UR', 5: 'UR', 6: 'UR', 7: 'UR', 8: 'UR',
-  9: 'UL', 10: 'UL', 11: 'UL', 12: 'UL', 13: 'UL', 14: 'UL', 15: 'UL', 16: 'UL',
-  17: 'LL', 18: 'LL', 19: 'LL', 20: 'LL', 21: 'LL', 22: 'LL', 23: 'LL', 24: 'LL',
-  25: 'LR', 26: 'LR', 27: 'LR', 28: 'LR', 29: 'LR', 30: 'LR', 31: 'LR', 32: 'LR',
+const TOOTH_NAMES = {
+  1: 'Central Incisor', 2: 'Lateral Incisor', 3: 'Canine',
+  4: 'First Premolar', 5: 'Second Premolar',
+  6: 'First Molar', 7: 'Second Molar', 8: 'Third Molar',
 };
 
-const TOOTH_NAMES = {
-  1: 'Third Molar', 2: 'Second Molar', 3: 'First Molar', 4: 'Second Premolar',
-  5: 'First Premolar', 6: 'Canine', 7: 'Lateral Incisor', 8: 'Central Incisor',
-  9: 'Central Incisor', 10: 'Lateral Incisor', 11: 'Canine', 12: 'First Premolar',
-  13: 'Second Premolar', 14: 'First Molar', 15: 'Second Molar', 16: 'Third Molar',
-  17: 'Third Molar', 18: 'Second Molar', 19: 'First Molar', 20: 'Second Premolar',
-  21: 'First Premolar', 22: 'Canine', 23: 'Lateral Incisor', 24: 'Central Incisor',
-  25: 'Central Incisor', 26: 'Lateral Incisor', 27: 'Canine', 28: 'First Premolar',
-  29: 'Second Premolar', 30: 'First Molar', 31: 'Second Molar', 32: 'Third Molar',
-};
+function toothQuadrant(num) {
+  const q = Math.floor(num / 10);
+  if (q === 1) return 'UR';
+  if (q === 2) return 'UL';
+  if (q === 3) return 'LL';
+  if (q === 4) return 'LR';
+  return '';
+}
+
+function toothName(num) {
+  const pos = num % 10;
+  return TOOTH_NAMES[pos] || '';
+}
 
 export default function PerToothDiagnosisPanel({
   toothNumber,
@@ -68,7 +70,7 @@ export default function PerToothDiagnosisPanel({
               Tooth #{toothNumber}
             </h3>
             <p className="text-[10px] text-gray-500 dark:text-gray-400">
-              {QUADRANT_LABEL[toothNumber]} &middot; {TOOTH_NAMES[toothNumber] || ''}
+              {toothQuadrant(toothNumber)} &middot; {toothName(toothNumber)}
             </p>
           </div>
         </div>

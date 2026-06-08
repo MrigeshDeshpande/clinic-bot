@@ -1,17 +1,8 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 
-const UPPER_R = [1,2,3,4,5,6,7,8];
-const UPPER_L = [9,10,11,12,13,14,15,16];
-const LOWER_R = [32,31,30,29,28,27,26,25];
-const LOWER_L = [24,23,22,21,20,19,18,17];
-
-const QUADRANT = {
-  1: 'UR', 2: 'UR', 3: 'UR', 4: 'UR', 5: 'UR', 6: 'UR', 7: 'UR', 8: 'UR',
-  9: 'UL', 10: 'UL', 11: 'UL', 12: 'UL', 13: 'UL', 14: 'UL', 15: 'UL', 16: 'UL',
-  17: 'LL', 18: 'LL', 19: 'LL', 20: 'LL', 21: 'LL', 22: 'LL', 23: 'LL', 24: 'LL',
-  25: 'LR', 26: 'LR', 27: 'LR', 28: 'LR', 29: 'LR', 30: 'LR', 31: 'LR', 32: 'LR',
-};
+const UPPER = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+const LOWER = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
 
 const DIAG_COLORS = {
   'Caries': '#f59e0b',
@@ -45,23 +36,21 @@ const PREMOLAR_PATH = `M7.5 4c2-1 3.5-1 4.5 1 1-2 2.5-2 4.5-1 1.5.8 2 2 2 3.5v3.
 const CANINE_PATH = `M12 2l4 4.5v3.5c0 3.5-1.5 6-3 8l-2.5 3.5a1 1 0 0 1-1.6 0L6.5 18C5 16 3.5 13.5 3.5 10V6.5L12 2Z`;
 const INCISOR_PATH = `M7 4h10c1.1 0 2 .9 2 2v4c0 3.5-1.5 6-3 8l-2.5 3.5a1 1 0 0 1-1.6 0L9.5 18C8 16 6.5 13.5 6.5 10V6c0-1.1.9-2 2-2Z`;
 
-const TOOTH_VIEWBOX = {
-  molar: '0 0 24 24',
-  premolar: '0 0 24 24',
-  canine: '0 0 24 24',
-  incisor: '0 0 24 24',
-};
-
 function toothType(num) {
-  const n = num % 16;
-  if (n >= 1 && n <= 3) return 'molar';
-  if (n === 4 || n === 5) return 'premolar';
-  if (n === 6) return 'canine';
-  if (n >= 7 && n <= 10) return 'incisor';
-  if (n === 11) return 'canine';
-  if (n === 12 || n === 13) return 'premolar';
-  if (n >= 14 || n === 0) return 'molar';
-  return 'molar';
+  const pos = num % 10;
+  if (pos >= 6 || pos === 0) return 'molar';
+  if (pos === 4 || pos === 5) return 'premolar';
+  if (pos === 3) return 'canine';
+  return 'incisor';
+}
+
+function toothQuadrant(num) {
+  const q = Math.floor(num / 10);
+  if (q === 1) return 'UR';
+  if (q === 2) return 'UL';
+  if (q === 3) return 'LL';
+  if (q === 4) return 'LR';
+  return '';
 }
 
 function toothPath(num) {
@@ -72,9 +61,9 @@ function toothPath(num) {
   return INCISOR_PATH;
 }
 
-export default function ToothGrid({ toothData = [], onToothSelect, selectedTooth }) {
-  const [hoveredTooth, setHoveredTooth] = useState(null);
+const MID_INDEX = 8;
 
+export default function ToothGrid({ toothData = [], onToothSelect, selectedTooth }) {
   const toothMap = useMemo(() => {
     const map = {};
     for (const entry of toothData) map[entry.tooth] = entry;
@@ -91,32 +80,26 @@ export default function ToothGrid({ toothData = [], onToothSelect, selectedTooth
     const diagnoses = diagnosesOnTooth(num);
     const color = toothColor(diagnoses);
     const isActive = selectedTooth === num;
-    const isHovered = hoveredTooth === num;
     const isMissing = diagnoses.includes('Missing');
-    const path = toothPath(num);
     const tType = toothType(num);
-    const vb = TOOTH_VIEWBOX[tType];
+    const path = toothPath(num);
     const strokeColor = color || (isActive ? '#3b82f6' : '#9ca3af');
+    const showDiagDot = diagnoses.length > 0 && !isMissing;
 
     return (
       <button
         key={num}
         type="button"
         onClick={() => handleToothClick(num)}
-        onMouseEnter={() => setHoveredTooth(num)}
-        onMouseLeave={() => setHoveredTooth(null)}
         className={`
-          relative flex flex-col items-center justify-center w-full aspect-square
-          rounded-lg transition-all duration-200 cursor-pointer
-          ${isActive
-            ? 'ring-2 ring-blue-500/50 ring-offset-1 dark:ring-offset-gray-900 scale-110 z-10 bg-blue-50 dark:bg-blue-900/15'
-            : ''}
-          ${isHovered && !isActive ? 'bg-gray-100 dark:bg-gray-800/60' : ''}
-          ${isMissing ? 'opacity-45' : ''}
+          relative flex flex-col items-center justify-center
+          p-px rounded transition-all duration-200 cursor-pointer
+          ${isActive ? 'ring-1 ring-blue-500/40 z-10' : ''}
+          ${isMissing ? 'opacity-40' : ''}
         `}
-        title={`Tooth #${num} (${QUADRANT[num]})${diagnoses.length ? `\n${diagnoses.join(', ')}` : ''}`}
+        title={`Tooth #${num} (${toothQuadrant(num)})${diagnoses.length ? `\n${diagnoses.join(', ')}` : ''}`}
       >
-        <svg viewBox={vb} className={'w-6 h-6 sm:w-7 sm:h-7 transition-all duration-200 overflow-visible drop-shadow-sm'}>
+        <svg viewBox="0 0 24 24" className="w-full transition-all duration-200 overflow-visible drop-shadow-sm">
           <defs>
             <linearGradient id={`gr-${num}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color || '#e5e7eb'} stopOpacity="0.4" />
@@ -149,15 +132,15 @@ export default function ToothGrid({ toothData = [], onToothSelect, selectedTooth
           />
         </svg>
         <span className={`
-          text-[7px] font-semibold leading-none select-none transition-colors mt-0.5
+          text-[7px] sm:text-[8px] font-semibold leading-none select-none transition-colors mt-px
           ${isActive ? 'text-blue-600 dark:text-blue-400' : ''}
           ${color && !isActive && !isMissing ? 'text-gray-600 dark:text-gray-300' : ''}
           ${(!color || isMissing) && !isActive ? 'text-gray-400 dark:text-gray-500' : ''}
         `}>
           {num}
         </span>
-        {diagnoses.length > 0 && !isMissing && (
-          <div className="flex items-center gap-[1.5px] mt-[1px] h-[3px]">
+        {showDiagDot && (
+          <div className="flex items-center gap-[1.5px] mt-[2px] h-[3px]">
             {diagnoses.slice(0, 3).map((d, i) => (
               <span key={i} className="w-[3px] h-[3px] rounded-full" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
             ))}
@@ -168,85 +151,42 @@ export default function ToothGrid({ toothData = [], onToothSelect, selectedTooth
     );
   }
 
+  function renderRow(teeth, labelLeft, labelRight) {
+    return (
+      <div className="flex items-start gap-0">
+        <div className="flex flex-col items-center pt-6 w-5 shrink-0">
+          <span className="text-[8px] font-bold text-gray-400 dark:text-gray-500">{labelLeft}</span>
+        </div>
+        <div className="flex-1 grid" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))', gap: 0 }}>
+          {teeth.map(renderTooth)}
+        </div>
+        <div className="flex flex-col items-center pt-6 w-5 shrink-0">
+          <span className="text-[8px] font-bold text-gray-400 dark:text-gray-500">{labelRight}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 sm:p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-blue-500" />
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Dental Chart</span>
-        </div>
-        <span className="text-[9px] text-gray-400 dark:text-gray-500 font-medium">Universal #1-32</span>
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 sm:p-4">
+      <div className="flex items-center justify-between mb-2 px-0.5">
+        <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Dental Chart</span>
+        <span className="text-[8px] text-gray-400 dark:text-gray-500 font-medium">FDI</span>
       </div>
 
-      {/* Upper jaw */}
-      <div className="flex items-start gap-0.5">
-        <div className="flex flex-col items-center pt-4 gap-2 w-5 shrink-0">
-          <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">UR</span>
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
-        </div>
-        <div className="flex-1 flex flex-col items-center">
-          <div className="grid grid-cols-8 gap-[1px] sm:gap-0.5 w-full">
-            {UPPER_R.map(renderTooth)}
-          </div>
-          <div className="relative w-full flex justify-center my-1.5 sm:my-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-px bg-gray-200 dark:bg-gray-700" />
-              <span className="text-[7px] font-semibold uppercase tracking-[0.2em] text-gray-300 dark:text-gray-600">Maxilla</span>
-              <div className="w-8 h-px bg-gray-200 dark:bg-gray-700" />
-            </div>
-          </div>
-          <div className="grid grid-cols-8 gap-[1px] sm:gap-0.5 w-full">
-            {UPPER_L.map(renderTooth)}
-          </div>
-        </div>
-        <div className="flex flex-col items-center pt-4 gap-2 w-5 shrink-0">
-          <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">UL</span>
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
-        </div>
+      {renderRow(UPPER, 'UR', 'UL')}
+
+      <div className="flex items-center justify-center my-1">
+        <div className="w-10 h-px bg-gray-200 dark:bg-gray-700" />
       </div>
 
-      {/* Midline gap with arch indicator */}
-      <div className="h-3 sm:h-4 flex items-center justify-center">
-        <svg viewBox="0 0 40 12" className="w-10 h-3 text-gray-200 dark:text-gray-700" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M2,10 C10,2 20,2 30,10 C32,12 34,12 36,12 L38,12" />
-          <path d="M38,10 C30,2 20,2 10,10 C8,12 6,12 4,12 L2,12" />
-        </svg>
-      </div>
+      {renderRow(LOWER, 'LR', 'LL')}
 
-      {/* Lower jaw */}
-      <div className="flex items-start gap-0.5">
-        <div className="flex flex-col items-center pt-4 gap-2 w-5 shrink-0">
-          <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">LR</span>
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
-        </div>
-        <div className="flex-1 flex flex-col items-center">
-          <div className="grid grid-cols-8 gap-[1px] sm:gap-0.5 w-full">
-            {LOWER_R.map(renderTooth)}
-          </div>
-          <div className="relative w-full flex justify-center my-1.5 sm:my-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-px bg-gray-200 dark:bg-gray-700" />
-              <span className="text-[7px] font-semibold uppercase tracking-[0.2em] text-gray-300 dark:text-gray-600">Mandible</span>
-              <div className="w-8 h-px bg-gray-200 dark:bg-gray-700" />
-            </div>
-          </div>
-          <div className="grid grid-cols-8 gap-[1px] sm:gap-0.5 w-full">
-            {LOWER_L.map(renderTooth)}
-          </div>
-        </div>
-        <div className="flex flex-col items-center pt-4 gap-2 w-5 shrink-0">
-          <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500">LL</span>
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
-        </div>
-      </div>
-
-      {/* Diagnosis legend */}
       {toothData.flatMap(d => d.diagnoses).filter(d => d !== 'Missing').length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 text-[10px] text-gray-500 dark:text-gray-400 justify-center">
+        <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800 text-[9px] text-gray-500 dark:text-gray-400 justify-center">
           {Array.from(new Set(toothData.flatMap(d => d.diagnoses).filter(d => d !== 'Missing'))).slice(0, 5).map(d => (
-            <span key={d} className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
+            <span key={d} className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
               {d}
             </span>
           ))}
@@ -254,16 +194,15 @@ export default function ToothGrid({ toothData = [], onToothSelect, selectedTooth
         </div>
       )}
 
-      {/* Type guide */}
-      <div className="flex items-center justify-center gap-4 mt-2.5 text-[8px] text-gray-400 dark:text-gray-500">
+      <div className="flex items-center justify-center gap-3 mt-2 text-[7px] text-gray-400 dark:text-gray-500">
         {[
-          { path: MOLAR_PATH, label: 'Molar', vb: '0 0 24 24', cls: 'w-2.5 h-2.5' },
-          { path: PREMOLAR_PATH, label: 'Premolar', vb: '0 0 24 24', cls: 'w-2.5 h-2.5' },
-          { path: CANINE_PATH, label: 'Canine', vb: '0 0 24 24', cls: 'w-2.5 h-2.5' },
-          { path: INCISOR_PATH, label: 'Incisor', vb: '0 0 24 24', cls: 'w-2.5 h-2.5' },
-        ].map(({ path, label, vb, cls }) => (
+          { path: MOLAR_PATH, label: 'Molar' },
+          { path: PREMOLAR_PATH, label: 'Premolar' },
+          { path: CANINE_PATH, label: 'Canine' },
+          { path: INCISOR_PATH, label: 'Incisor' },
+        ].map(({ path, label }) => (
           <span key={label} className="flex items-center gap-1">
-            <svg viewBox={vb} className={`${cls} inline-block`}>
+            <svg viewBox="0 0 24 24" className="w-2 h-2 inline-block">
               <path d={path} fill="none" stroke="currentColor" strokeWidth="0.8" />
             </svg>
             {label}
