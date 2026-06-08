@@ -1009,12 +1009,21 @@ function VisitPageInner() {
                     <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">₹{Number(patientProfile.total_spent).toLocaleString('en-IN')}</p>
                   </div>
                 )}
-                {appointmentMeta?.chit_media?.length > 0 && (
+                {appointmentMeta?.chit_media?.length > 0 ? (
                   <div className="col-span-full">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">Media Shared ({appointmentMeta.chit_media.length})</span>
                     <MediaViewer mediaKeys={appointmentMeta.chit_media} getSignedUrl={getSignedUrl} />
                   </div>
-                )}
+                ) : !appointmentMeta && (() => {
+                  const latestWithMedia = patientVisits.find(v => Array.isArray(v.chit_media) && v.chit_media.length > 0);
+                  if (!latestWithMedia) return null;
+                  return (
+                    <div className="col-span-full">
+                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">Media from Previous Visits ({latestWithMedia.chit_media.length})</span>
+                      <MediaViewer mediaKeys={latestWithMedia.chit_media} getSignedUrl={getSignedUrl} />
+                    </div>
+                  );
+                })()}
                 {appointmentMeta?.status === 'completed' && (
                   <div>
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription</span>
@@ -1093,152 +1102,93 @@ function VisitPageInner() {
             </div>
           )}
 
-          {/* ── Visit History + WhatsApp Snippets ── */}
-          {patientProfile && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Visit History */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
-                  <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><Clock className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" /></div>
-                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Visit History</h2>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Past {Math.min(patientVisits.length, 5)} visits</span>
+          {/* ── Medical & Dental History (Compact) ── */}
+          {patientProfile && (() => {
+            const hasEntries = medicalHistory.allergies || medicalHistory.chronicConditions || medicalHistory.bloodGroup || medicalHistory.bp || medicalHistory.weight || medicalHistory.medications;
+            if (!hasEntries) return null;
+            return (
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30"><Heart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /></div>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-sm">Medical & Dental History</h2>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">Reference — editable below</span>
                 </div>
-                <div className="px-5 py-3 space-y-0 max-h-[300px] overflow-y-auto">
-                  {patientVisits.length === 0 ? (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-6">No past visits recorded</p>
-                  ) : (
-                    patientVisits.slice(0, 5).map((v, i) => (
-                      <div key={v.id} className="flex gap-3 py-2.5 border-b border-gray-50 dark:border-gray-800 last:border-0">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className={`w-2 h-2 rounded-full ${v.status === 'completed' ? 'bg-emerald-400' : v.status === 'no_show' ? 'bg-red-400' : 'bg-blue-400'}`} />
-                          {i < Math.min(patientVisits.length, 5) - 1 && <div className="w-px flex-1 bg-gray-100 dark:bg-gray-800" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-gray-900 dark:text-gray-100">{v.date?.slice(0, 10)}{v.time ? ` ${v.time?.slice(0, 5)}` : ''}</p>
-                            <div className="flex items-center gap-1">
-                              {v.status === 'completed' && (
-                                <button onClick={() => {
-                                  fetch(`/api/dashboard/visits/${v.id}/prescription`, { method: 'POST' })
-                                    .then(r => r.json())
-                                    .then(data => {
-                                      if (data.url) {
-                                        showToast('PDF generated successfully', 'success');
-                                        window.open(data.url, '_blank');
-                                      }
-                                    })
-                                    .catch(() => {});
-                                }}
-                                  className="p-0.5 rounded text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
-                                  title="View prescription">
-                                  <FileText className="w-3 h-3" />
-                                </button>
-                              )}
-                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                                v.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
-                                v.status === 'no_show' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
-                                'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                              }`}>{!v.time && v.status === 'completed' ? 'Walk-in' : v.status === 'completed' ? 'Done' : v.status === 'no_show' ? 'Missed' : 'Scheduled'}</span>
-                            </div>
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{Array.isArray(v.treatments) && v.treatments.length ? v.treatments.join(', ') : (v.treatment || 'Visit')}{v.diagnosis ? ` — ${v.diagnosis.slice(0, 60)}${v.diagnosis.length > 60 ? '...' : ''}` : ''}</p>
-                          {(v.consultation_fee || v.treatment_charges || v.medicine_charges) ? (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">₹{((v.consultation_fee || 0) + (v.treatment_charges || 0) + (v.medicine_charges || 0)).toLocaleString('en-IN')}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    ))
+                <div className="flex flex-wrap gap-2">
+                  {medicalHistory.allergies && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-medium border border-red-100 dark:border-red-800">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Allergies: {medicalHistory.allergies}
+                    </span>
+                  )}
+                  {medicalHistory.chronicConditions && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-medium border border-orange-100 dark:border-orange-800">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Chronic: {medicalHistory.chronicConditions}
+                    </span>
+                  )}
+                  {medicalHistory.bloodGroup && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium border border-blue-100 dark:border-blue-800">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                      Blood: {medicalHistory.bloodGroup}
+                    </span>
+                  )}
+                  {(medicalHistory.bp || medicalHistory.weight) && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-xs font-medium border border-teal-100 dark:border-teal-800">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      {[medicalHistory.bp, medicalHistory.weight].filter(Boolean).join(' / ')}
+                    </span>
+                  )}
+                  {medicalHistory.medications && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-xs font-medium border border-violet-100 dark:border-violet-800">
+                      <Pill className="w-3 h-3" />
+                      Meds: {medicalHistory.medications}
+                    </span>
                   )}
                 </div>
               </div>
+            );
+          })()}
 
-              {/* WhatsApp Conversation Snippets */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
-                  <div className="p-1.5 rounded-lg bg-green-50 dark:bg-green-900/30"><MessageSquare className="w-3.5 h-3.5 text-green-500 dark:text-green-400" /></div>
-                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">WhatsApp Conversation</h2>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Recent messages</span>
-                </div>
-                <div className="px-5 py-3 max-h-[300px] overflow-y-auto">
-                  {loadingExtra ? (
-                    <div className="flex items-center justify-center py-6">
-                      <div className="w-4 h-4 border-2 border-gray-200 dark:border-gray-700 border-t-emerald-500 rounded-full animate-spin" />
-                    </div>
-                  ) : patientMessages.length === 0 ? (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-6">No WhatsApp messages found</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {patientMessages.filter(m => m.role === 'user' || m.intent).slice(-6).reverse().map((m, i) => (
-                        <div key={m.id || i} className={`flex ${m.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-                          <div className={`max-w-[85%] px-3 py-2 rounded-xl text-xs ${
-                            m.role === 'user'
-                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-bl-sm'
-                              : 'bg-emerald-50 dark:bg-emerald-900/30 text-gray-700 dark:text-gray-300 rounded-br-sm'
-                          }`}>
-                            <p className="leading-relaxed">{m.content || '(no content)'}</p>
-                            <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">
-                              {m.role === 'user' ? 'Patient' : 'Clinic'} · {m.created_at ? new Date(m.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
-                              {m.intent && <span className="ml-1 px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-[8px]">{m.intent}</span>}
-                            </p>
-                          </div>
+          {/* ── WhatsApp Conversation ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
+                <div className="p-1.5 rounded-lg bg-green-50 dark:bg-green-900/30"><MessageSquare className="w-3.5 h-3.5 text-green-500 dark:text-green-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">WhatsApp Conversation</h2>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Recent messages</span>
+              </div>
+              <div className="px-5 py-3 max-h-[300px] overflow-y-auto">
+                {loadingExtra ? (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="w-4 h-4 border-2 border-gray-200 dark:border-gray-700 border-t-emerald-500 rounded-full animate-spin" />
+                  </div>
+                ) : patientMessages.length === 0 ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-6">No WhatsApp messages found</p>
+                ) : (
+                  <div className="space-y-2">
+                    {patientMessages.filter(m => m.role === 'user' || m.intent).slice(-6).reverse().map((m, i) => (
+                      <div key={m.id || i} className={`flex ${m.role === 'user' ? 'justify-start' : 'justify-end'}`}>
+                        <div className={`max-w-[85%] px-3 py-2 rounded-xl text-xs ${
+                          m.role === 'user'
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-bl-sm'
+                            : 'bg-emerald-50 dark:bg-emerald-900/30 text-gray-700 dark:text-gray-300 rounded-br-sm'
+                        }`}>
+                          <p className="leading-relaxed">{m.content || '(no content)'}</p>
+                          <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">
+                            {m.role === 'user' ? 'Patient' : 'Clinic'} · {m.created_at ? new Date(m.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                            {m.intent && <span className="ml-1 px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-[8px]">{m.intent}</span>}
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* ── Medical History + Family ── */}
+          {/* ── Family Members ── */}
           {patientProfile && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Medical History Flags */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30"><Heart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /></div>
-                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Medical History</h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Allergies</label>
-                    <input type="text" value={medicalHistory.allergies} onChange={e => setMedicalHistory(h => ({ ...h, allergies: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200 dark:focus:ring-red-800 focus:border-red-400 dark:focus:border-red-500 transition-all placeholder-gray-400"
-                      placeholder="e.g. Penicillin, Latex" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chronic Conditions</label>
-                    <input type="text" value={medicalHistory.chronicConditions} onChange={e => setMedicalHistory(h => ({ ...h, chronicConditions: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all placeholder-gray-400"
-                      placeholder="e.g. Diabetes, Hypertension" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Blood Group</label>
-                    <input type="text" value={medicalHistory.bloodGroup} onChange={e => setMedicalHistory(h => ({ ...h, bloodGroup: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
-                      placeholder="e.g. O+" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">BP / Weight</label>
-                    <div className="flex gap-2">
-                      <input type="text" value={medicalHistory.bp} onChange={e => setMedicalHistory(h => ({ ...h, bp: e.target.value }))}
-                        className="w-1/2 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
-                        placeholder="BP" />
-                      <input type="text" value={medicalHistory.weight} onChange={e => setMedicalHistory(h => ({ ...h, weight: e.target.value }))}
-                        className="w-1/2 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
-                        placeholder="Weight" />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Current Medications</label>
-                  <input type="text" value={medicalHistory.medications} onChange={e => setMedicalHistory(h => ({ ...h, medications: e.target.value }))}
-                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-400 dark:focus:border-violet-500 transition-all placeholder-gray-400"
-                    placeholder="e.g. Metformin 500mg, Amlodipine 5mg" />
-                </div>
-              </div>
-
-              {/* Family Members */}
               <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
                 <div className="flex items-center gap-2.5 mb-4">
                   <div className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/30"><Users className="w-3.5 h-3.5 text-teal-500 dark:text-teal-400" /></div>
@@ -1276,7 +1226,6 @@ function VisitPageInner() {
                   </div>
                 )}
               </div>
-            </div>
           )}
 
           {/* Patient Info — for walk-ins (no appointmentId, no patient selected yet) */}
@@ -1741,6 +1690,55 @@ function VisitPageInner() {
               rows={3} className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
               placeholder="Describe the diagnosis, observations, and any clinical notes..." />
           </div>
+
+          {/* ── Medical & Dental History (Editable) ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30"><Heart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Medical & Dental History</h2>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Update as needed</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Allergies</label>
+                  <input type="text" value={medicalHistory.allergies} onChange={e => setMedicalHistory(h => ({ ...h, allergies: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200 dark:focus:ring-red-800 focus:border-red-400 dark:focus:border-red-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. Penicillin, Latex" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Chronic Conditions</label>
+                  <input type="text" value={medicalHistory.chronicConditions} onChange={e => setMedicalHistory(h => ({ ...h, chronicConditions: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. Diabetes, Hypertension" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Blood Group</label>
+                  <input type="text" value={medicalHistory.bloodGroup} onChange={e => setMedicalHistory(h => ({ ...h, bloodGroup: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. O+" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">BP</label>
+                  <input type="text" value={medicalHistory.bp} onChange={e => setMedicalHistory(h => ({ ...h, bp: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. 120/80" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Weight</label>
+                  <input type="text" value={medicalHistory.weight} onChange={e => setMedicalHistory(h => ({ ...h, weight: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. 70 kg" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Current Medications</label>
+                  <input type="text" value={medicalHistory.medications} onChange={e => setMedicalHistory(h => ({ ...h, medications: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-400 dark:focus:border-violet-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. Metformin 500mg, Amlodipine 5mg" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Right side items: Attachments + Follow-up + Notes */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

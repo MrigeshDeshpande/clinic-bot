@@ -324,6 +324,20 @@ export default function PatientDetailPage() {
   const completedVisits = useMemo(() => visits.filter(v => v.status === 'completed'), [visits]);
   const totalRevenue = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0), [completedVisits]);
   const totalCollected = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.paid_amount || 0), 0), [completedVisits]);
+
+  // All images across all visits, grouped by visit date
+  const allVisitMedia = useMemo(() => {
+    return visits
+      .filter(v => Array.isArray(v.chit_media) && v.chit_media.some(k => k.includes('_photo.')))
+      .map(v => ({
+        visitId: v.id,
+        date: v.date,
+        treatment: v.treatment || 'Visit',
+        images: v.chit_media.filter(k => k.includes('_photo.')),
+      }));
+  }, [visits]);
+  const totalImages = useMemo(() => allVisitMedia.reduce((sum, g) => sum + g.images.length, 0), [allVisitMedia]);
+  const [expandedImage, setExpandedImage] = useState(null);
   const totalDue = useMemo(() => totalRevenue - totalCollected, [totalRevenue, totalCollected]);
   const upcomingFollowUp = useMemo(() => completedVisits.find(v => v.follow_up_date && v.follow_up_date >= new Date().toISOString().slice(0, 10)), [completedVisits]);
 
@@ -629,6 +643,51 @@ export default function PatientDetailPage() {
           )}
         </div>
 
+        {/* All Media Gallery */}
+        {totalImages > 0 && (
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">All Images ({totalImages})</span>
+              </div>
+              <span className="text-xs text-gray-400 dark:text-gray-500">{allVisitMedia.length} visit{allVisitMedia.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="space-y-3">
+              {allVisitMedia.map(group => (
+                <div key={group.visitId}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="w-3 h-3 text-gray-400" />
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{formatDate(group.date)} — {group.treatment}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">({group.images.length})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {group.images.map(key => (
+                      <button
+                        key={key}
+                        onClick={() => setExpandedImage(key)}
+                        className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md transition-all duration-200 shrink-0 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                      >
+                        <img
+                          src={getSignedUrl(key)}
+                          alt=""
+                          className="w-20 h-20 sm:w-24 sm:h-24 object-cover transition-transform duration-300 group-hover:scale-110"
+                          loading="lazy"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tab Navigation */}
         <div className="flex gap-1 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-1 shadow-sm">
           {tabs.map(tab => (
@@ -705,19 +764,24 @@ export default function PatientDetailPage() {
                               </button>
                               <button onClick={async (e) => {
                                 e.stopPropagation();
+                                setSendingMessage(true);
                                 try {
-                                  const res = await fetch(`/api/dashboard/visits/${visit.id}/compile`, { method: 'POST' });
+                                  showToast('⏳ Compiling & sending...', 'info', { duration: 6000 });
+                                  const res = await fetch(`/api/dashboard/visits/${visit.id}/compile/send`, { method: 'POST' });
                                   const data = await res.json();
-                                  if (res.ok && data.url) {
+                                  if (res.ok && data.success) {
+                                    showToast('✅ Compiled & sent to patient on WhatsApp', 'success');
+                                  } else if (data.url) {
                                     window.open(data.url, '_blank');
-                                    showToast('✅ Document compiled successfully', 'success');
+                                    showToast('⚠️ Compiled but WhatsApp send failed. PDF opened in new tab.', 'info');
                                   } else {
                                     showToast(data.error || 'Failed to compile', 'error');
                                   }
                                 } catch { showToast('Network error', 'error'); }
+                                setSendingMessage(false);
                               }}
-                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-all active:scale-95 cursor-pointer">
-                                <Download className="w-3 h-3" /> Compile
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all active:scale-95 cursor-pointer shadow-sm">
+                                <Download className="w-3 h-3" /> Compile & Send
                               </button>
                               <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`); }}
                                 className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95 cursor-pointer">
@@ -1129,6 +1193,29 @@ export default function PatientDetailPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Expanded Image Lightbox */}
+        {expandedImage && (
+          <>
+            <div className="fixed inset-0 bg-black/70 dark:bg-black/80 z-50 backdrop-blur-md" onClick={() => setExpandedImage(null)} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+              <div className="relative max-w-3xl w-full max-h-[90vh] flex items-center justify-center animate-scale-in">
+                <button
+                  onClick={() => setExpandedImage(null)}
+                  className="absolute -top-3 -right-3 z-10 w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all hover:scale-110"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <img
+                  src={getSignedUrl(expandedImage)}
+                  alt=""
+                  className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain bg-white dark:bg-gray-900"
+                  onClick={(e) => e.stopPropagation()}
+                />
               </div>
             </div>
           </>
