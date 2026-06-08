@@ -43,6 +43,49 @@ const COLOR_MAP = {
   revenue: { text: 'text-emerald-700 dark:text-emerald-400', icon: 'text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30', ring: 'ring-emerald-100 dark:ring-emerald-800' },
 };
 
+const CARD_STYLE_MAP = {
+  total: {
+    hoverBg: 'hover:bg-gray-500/[0.02] dark:hover:bg-gray-400/[0.01]',
+    hoverBorder: 'hover:border-gray-300 dark:hover:border-gray-700',
+    hoverGlow: 'hover:shadow-lg hover:shadow-gray-200/20 dark:hover:shadow-gray-950/20',
+    accentBar: 'bg-gray-400 dark:bg-gray-600',
+    accentText: 'text-gray-500 dark:text-gray-400',
+    iconColor: 'text-gray-400 dark:text-gray-500'
+  },
+  waiting: {
+    hoverBg: 'hover:bg-amber-500/[0.03] dark:hover:bg-amber-400/[0.015]',
+    hoverBorder: 'hover:border-amber-300 dark:hover:border-amber-800/60',
+    hoverGlow: 'hover:shadow-lg hover:shadow-amber-200/10 dark:hover:shadow-amber-950/10',
+    accentBar: 'bg-amber-500 dark:bg-amber-400',
+    accentText: 'text-amber-600 dark:text-amber-400',
+    iconColor: 'text-amber-500 dark:text-amber-400'
+  },
+  in_session: {
+    hoverBg: 'hover:bg-blue-500/[0.03] dark:hover:bg-blue-400/[0.015]',
+    hoverBorder: 'hover:border-blue-300 dark:hover:border-blue-800/60',
+    hoverGlow: 'hover:shadow-lg hover:shadow-blue-200/10 dark:hover:shadow-blue-950/10',
+    accentBar: 'bg-blue-500 dark:bg-blue-400',
+    accentText: 'text-blue-600 dark:text-blue-400',
+    iconColor: 'text-blue-500 dark:text-blue-400'
+  },
+  completed: {
+    hoverBg: 'hover:bg-green-500/[0.03] dark:hover:bg-green-400/[0.015]',
+    hoverBorder: 'hover:border-green-300 dark:hover:border-green-800/60',
+    hoverGlow: 'hover:shadow-lg hover:shadow-green-200/10 dark:hover:shadow-green-950/10',
+    accentBar: 'bg-green-500 dark:bg-green-400',
+    accentText: 'text-green-600 dark:text-green-400',
+    iconColor: 'text-green-500 dark:text-green-400'
+  },
+  revenue: {
+    hoverBg: 'hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-400/[0.015]',
+    hoverBorder: 'hover:border-emerald-300 dark:hover:border-emerald-800/60',
+    hoverGlow: 'hover:shadow-lg hover:shadow-emerald-200/10 dark:hover:shadow-emerald-950/10',
+    accentBar: 'bg-emerald-500 dark:bg-emerald-400',
+    accentText: 'text-emerald-700 dark:text-emerald-400',
+    iconColor: 'text-emerald-500 dark:text-emerald-400'
+  }
+};
+
 // Default slot definitions (fallback if API doesn't return them)
 const DEFAULT_SLOTS = {
   weekday: ['10:00','10:30','11:00','11:30','12:00','12:30',
@@ -715,33 +758,53 @@ export default function DashboardPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         {[...STAT_CARDS, REVENUE_CARD].map(card => {
-          const c = COLOR_MAP[card.key];
+          const style = CARD_STYLE_MAP[card.key];
           let value;
           if (card.key === 'total') value = appointments.length;
           else if (card.key === 'revenue') value = formatCurrency(todayRevenue);
           else value = totals[card.key] || 0;
           return (
-            <button key={card.key} onClick={() => {
-              const links = {
-                total: '/dashboard/appointments',
-                waiting: '/dashboard/appointments?arrival=arrived',
-                in_session: '/dashboard/appointments?arrival=called',
-                completed: '/dashboard/appointments?status=completed',
-                revenue: '/dashboard/stats',
-              };
-              router.push(links[card.key] || '/dashboard/appointments');
-            }} className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:shadow-md dark:hover:shadow-gray-900/50 hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer active:scale-[0.98]">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{card.label}</p>
-                <div className={`w-9 h-9 rounded-lg ${c.bg} flex items-center justify-center ring-1 ${c.ring} group-hover:scale-110 transition-transform duration-200`}>
-                  {card.key === 'revenue' ? (
-                    <div className={`${c.icon}`}>{REVENUE_CARD.icon}</div>
-                  ) : (
-                    <svg className={`w-5 h-5 ${c.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">{card.icon}</svg>
-                  )}
+            <button
+              key={card.key}
+              onClick={() => {
+                const links = {
+                  total: '/dashboard/appointments',
+                  waiting: '/dashboard/appointments?arrival=arrived',
+                  in_session: '/dashboard/appointments?arrival=called',
+                  completed: '/dashboard/appointments?status=completed',
+                  revenue: '/dashboard/stats',
+                };
+                router.push(links[card.key] || '/dashboard/appointments');
+              }}
+              className={`relative overflow-hidden w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:-translate-y-0.5 transition-all duration-300 group cursor-pointer active:scale-[0.98] ${style.hoverBg} ${style.hoverBorder} ${style.hoverGlow}`}
+            >
+              {/* Watermark Icon */}
+              <div className={`absolute -right-3 -bottom-3 w-20 h-20 pointer-events-none transition-all duration-500 ease-out group-hover:scale-125 group-hover:rotate-12 ${style.iconColor}`}>
+                {card.key === 'revenue' ? (
+                  <div className="w-full h-full opacity-[0.12] dark:opacity-[0.06] flex items-center justify-center">
+                    <DollarSign className="w-14 h-14" />
+                  </div>
+                ) : (
+                  <svg className="w-full h-full opacity-[0.12] dark:opacity-[0.06]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    {card.icon}
+                  </svg>
+                )}
+              </div>
+
+              {/* Card Contents */}
+              <div className="relative z-10 flex flex-col h-full justify-between">
+                <div>
+                  <span className={`text-[11px] font-bold tracking-wider uppercase ${style.accentText}`}>
+                    {card.label}
+                  </span>
+                  <p className="text-3xl font-extrabold tracking-tight mt-2 text-gray-900 dark:text-gray-100">
+                    {value}
+                  </p>
                 </div>
               </div>
-              <p className={`text-3xl font-bold ${c.text}`}>{value}</p>
+
+              {/* Bottom Accent Bar */}
+              <div className={`absolute bottom-0 left-0 right-0 h-1 ${style.accentBar} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
             </button>
           );
         })}
