@@ -87,37 +87,42 @@ function surfaceLabel(id, num) {
   if (id === 'D') return 'Distal';
   if (id === 'B') return 'Buccal';
   if (id === 'L') return isUpper ? 'Palatal' : 'Lingual';
+  if (id === 'R') return 'Root';
   return '';
 }
 
 const ZONE_POSITIONS = {
   molar: [
     { id: 'O', x: 20, y: 3 },
-    { id: 'M', x: 5, y: 20 },
+    { id: 'M', x: 5, y: 17 },
     { id: 'B', x: 20, y: 19 },
-    { id: 'D', x: 35, y: 20 },
-    { id: 'L', x: 20, y: 34 },
+    { id: 'D', x: 35, y: 17 },
+    { id: 'L', x: 10, y: 33 },
+    { id: 'R', x: 30, y: 33 },
   ],
   premolar: [
     { id: 'O', x: 20, y: 3 },
-    { id: 'M', x: 7, y: 20 },
-    { id: 'B', x: 20, y: 18 },
-    { id: 'D', x: 33, y: 20 },
-    { id: 'L', x: 20, y: 34 },
+    { id: 'M', x: 7, y: 17 },
+    { id: 'B', x: 20, y: 19 },
+    { id: 'D', x: 33, y: 17 },
+    { id: 'L', x: 10, y: 33 },
+    { id: 'R', x: 30, y: 33 },
   ],
   canine: [
-    { id: 'O', x: 18, y: 4 },
-    { id: 'M', x: 7, y: 21 },
-    { id: 'B', x: 18, y: 21 },
-    { id: 'D', x: 29, y: 21 },
-    { id: 'L', x: 18, y: 34 },
+    { id: 'O', x: 18, y: 3 },
+    { id: 'M', x: 6, y: 17 },
+    { id: 'B', x: 18, y: 20 },
+    { id: 'D', x: 30, y: 17 },
+    { id: 'L', x: 8, y: 33 },
+    { id: 'R', x: 28, y: 33 },
   ],
   incisor: [
     { id: 'O', x: 20, y: 3 },
-    { id: 'M', x: 8, y: 19 },
-    { id: 'B', x: 20, y: 17 },
-    { id: 'D', x: 32, y: 19 },
-    { id: 'L', x: 20, y: 33 },
+    { id: 'M', x: 8, y: 17 },
+    { id: 'B', x: 20, y: 19 },
+    { id: 'D', x: 32, y: 17 },
+    { id: 'L', x: 10, y: 33 },
+    { id: 'R', x: 30, y: 33 },
   ],
 };
 

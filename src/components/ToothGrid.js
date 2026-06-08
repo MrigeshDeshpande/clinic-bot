@@ -136,6 +136,11 @@ const ToothButton = memo(function ToothButton({
         {!color && <path d={path} fill="#374151" stroke="none" className="hidden dark:block" />}
         {color && !isMissing && <path d={path} fill={`url(#gr-${num})`} stroke="none" />}
         {color && !isMissing && <path d={path} fill={color} opacity={opacity} stroke="none" />}
+        {!isMissing && diagnoses.slice(1).map((d, i) => {
+          const ringColor = DIAG_COLORS[d] || FALLBACK_COLOR;
+          const s = 1 - (i + 1) * 0.12;
+          return <path key={i} d={path} fill="none" stroke={ringColor} strokeWidth={0.7} opacity={0.5} transform={`translate(12,12) scale(${s}) translate(-12,-12)`} />;
+        })}
         {severity && color && !isMissing && (
           <path d={path} fill={`url(#p-${severity}-${num})`} stroke="none" style={{ color }} />
         )}
