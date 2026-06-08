@@ -206,12 +206,6 @@ export default function ToothGrid({
               <line x1="19" y1="4" x2="5" y2="22" stroke={strokeColor} strokeWidth="1.8" strokeLinecap="round" opacity="0.5" />
             </>
           )}
-          {!isMissing && status === 'treated' && (
-            <circle cx="18" cy="5" r="2" fill="#22c55e" opacity="0.5" />
-          )}
-          {!isMissing && status === 'wip' && (
-            <circle cx="18" cy="5" r="2" fill="#3b82f6" opacity="0.5" />
-          )}
           <path
             d={path}
             fill="none"
@@ -221,6 +215,12 @@ export default function ToothGrid({
             strokeLinejoin="round"
             className={diagnoses.length === 0 || isMissing ? 'dark:stroke-gray-600' : ''}
           />
+          {!isMissing && status === 'treated' && (
+            <circle cx="18" cy="5" r="2" fill="#22c55e" opacity="0.7" />
+          )}
+          {!isMissing && status === 'wip' && (
+            <circle cx="18" cy="5" r="2" fill="#3b82f6" opacity="0.7" />
+          )}
         </svg>
         <span className={`
           text-[7px] sm:text-[8px] font-semibold leading-none select-none transition-colors mt-px

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { X } from 'lucide-react';
 
 const TOOTH_NAMES = {
@@ -143,18 +143,11 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
       <div className="text-[9px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">
         #{toothNumber} — {toothTypeLabel(toothNumber)} ({toothQuadrant(toothNumber)})
       </div>
-      <div className="flex gap-1 mt-1">
-        {zones.map(z => (
-          <button
-            key={z.id}
-            type="button"
-            onClick={() => onChange(z.id)}
-            className={`text-[7px] font-medium px-1.5 py-0.5 rounded transition-all ${selected === z.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-          >
-            {z.id}={surfaceLabel(z.id, toothNumber).slice(0, 4)}
-          </button>
-        ))}
-      </div>
+      {selected && (
+        <div className="text-[9px] font-medium text-blue-600 dark:text-blue-400 mt-0.5">
+          {selected} = {surfaceLabel(selected, toothNumber)}
+        </div>
+      )}
     </div>
   );
 }
@@ -173,6 +166,7 @@ export default function PerToothDiagnosisPanel({
   const selectedStatus = currentEntry?.status || 'active';
   const [showTreatmentInput, setShowTreatmentInput] = useState(false);
   const [customTreatment, setCustomTreatment] = useState('');
+  const diagnosesRef = useRef(null);
 
   function toggleDiagnosis(item) {
     const exists = selectedDiagnoses.includes(item);
@@ -184,6 +178,7 @@ export default function PerToothDiagnosisPanel({
 
   function setSurface(surface) {
     onSave({ tooth: toothNumber, diagnoses: selectedDiagnoses, surface: surface === selectedSurface ? '' : surface, treatment: selectedTreatment, severity: selectedSeverity, status: selectedStatus });
+    diagnosesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function setTreatment(treatment) {
@@ -243,7 +238,7 @@ export default function PerToothDiagnosisPanel({
         </div>
 
         {/* Diagnosis checklist */}
-        <div>
+        <div ref={diagnosesRef}>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Conditions</label>
           </div>
