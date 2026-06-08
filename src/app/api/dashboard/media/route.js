@@ -57,6 +57,7 @@ export async function POST(req) {
       await sql`
         UPDATE appointments
         SET chit_media = array_append(coalesce(chit_media, '{}'), ${key}),
+            compiled_document_key = NULL,
             updated_at = NOW()
         WHERE id = ${appointmentId}
       `;

@@ -77,7 +77,7 @@ export async function PUT(req) {
 
     // Invalidate all cached prescriptions when clinic/doctor/prescription settings change
     if (['clinic', 'doctor', 'prescription'].includes(key)) {
-      await sql`UPDATE appointments SET prescription_key = NULL WHERE prescription_key IS NOT NULL`;
+      await sql`UPDATE appointments SET prescription_key = NULL, compiled_document_key = NULL WHERE prescription_key IS NOT NULL`;
       logger.info('PRESCRIPTION_CACHE_INVALIDATED', { reason: `settings:${key}` });
     }
 

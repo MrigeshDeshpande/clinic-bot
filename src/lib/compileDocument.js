@@ -10,11 +10,14 @@ const IMG_MARGIN = 18;
 
 async function embedImageOnPage(page, buffer, pdfDoc) {
   const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8;
   let image;
   if (isPng) {
     image = await pdfDoc.embedPng(buffer);
-  } else {
+  } else if (isJpeg) {
     image = await pdfDoc.embedJpg(buffer);
+  } else {
+    throw new Error('Unsupported image format (only PNG/JPEG supported)');
   }
   const maxW = A4_W - IMG_MARGIN * 2;
   const maxH = A4_H - IMG_MARGIN * 2;
@@ -146,8 +149,12 @@ export async function compileVisitDocument(appointmentId) {
 
   // Add one page per photo
   for (const img of images) {
-    const page = mergedDoc.addPage([A4_W, A4_H]);
-    await embedImageOnPage(page, img.buffer, mergedDoc);
+    try {
+      const page = mergedDoc.addPage([A4_W, A4_H]);
+      await embedImageOnPage(page, img.buffer, mergedDoc);
+    } catch (imgErr) {
+      logger.warn('COMPILE_IMAGE_EMBED_SKIPPED', { key: img.key, error: imgErr.message });
+    }
   }
 
   const pdfBuffer = Buffer.from(await mergedDoc.save());
