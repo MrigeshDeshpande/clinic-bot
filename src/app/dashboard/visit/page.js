@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef, useContext, useCallback } from '
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext, SidebarContext } from '../layout';
-import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
+import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download, Camera } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import MediaViewer from '@/components/MediaViewer';
@@ -13,6 +13,7 @@ import { fetchCached } from '@/lib/clientFetchCache';
 import ToothGrid from '@/components/ToothGrid';
 import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
+import CameraViewfinder from '@/components/CameraViewfinder';
 
 const DRAFT_KEY = 'visit_draft';
 const TEMPLATES_KEY = 'visit_templates';
@@ -138,6 +139,7 @@ function VisitPageInner() {
   const [showSearch, setShowSearch] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaFiles, setMediaFiles] = useState([]);
+  const [showCamera, setShowCamera] = useState(false);
   const [compiling, setCompiling] = useState(false);
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [sendingReviewLink, setSendingReviewLink] = useState(false);
@@ -771,6 +773,11 @@ function VisitPageInner() {
       setUploadingMedia(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  }
+
+  function handleCameraCapture(file) {
+    setMediaFiles(prev => [...prev, file]);
+    showToast('Photo captured', 'success');
   }
 
   function removeMediaFile(idx) {
@@ -2072,18 +2079,29 @@ function VisitPageInner() {
                   onChange={handleMediaUpload}
                   className="hidden"
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingMedia}
-                  className="w-full py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span className="text-xs font-medium">
-                    {uploadingMedia ? 'Uploading...' : 'Click to upload'}
-                  </span>
-                  <span className="text-xs">Photos, documents, audio</span>
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingMedia}
+                    className="flex-1 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span className="text-xs font-medium">
+                      {uploadingMedia ? 'Uploading...' : 'Click to upload'}
+                    </span>
+                    <span className="text-xs">Photos, documents, audio</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCamera(true)}
+                    disabled={uploadingMedia}
+                    className="w-24 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 shrink-0"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span className="text-xs font-medium">Camera</span>
+                  </button>
+                </div>
                 {mediaFiles.length > 0 && (
                   <div className="mt-2.5 space-y-1.5">
                     {mediaFiles.map((file, idx) => (
@@ -2314,6 +2332,12 @@ function VisitPageInner() {
               onClose={() => { setShowPreview(false); setSidebarCollapsed(false); }}
             />
           </div>
+        )}
+        {showCamera && (
+          <CameraViewfinder
+            onCapture={handleCameraCapture}
+            onClose={() => setShowCamera(false)}
+          />
         )}
       </div>
     </div>
