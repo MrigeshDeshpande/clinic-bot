@@ -11,6 +11,7 @@ const NotificationPanel = dynamic(() => import('@/components/NotificationPanel')
 export const DateContext = createContext();
 export const ThemeContext = createContext();
 export const ToastContext = createContext();
+export const SidebarContext = createContext();
 
 const NAV = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -220,6 +221,7 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [darkMode, setDarkMode] = useState(false);
   // Shared selectedDate state persists across page navigations
@@ -277,6 +279,7 @@ export default function DashboardLayout({ children }) {
 
   return (
     <ThemeContext.Provider value={{ darkMode, setDarkMode }}>
+      <SidebarContext.Provider value={{ sidebarCollapsed, setSidebarCollapsed }}>
       <DateContext.Provider value={{ selectedDate, setSelectedDate }}>
         <ToastContext.Provider value={{ showToast }}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
@@ -324,12 +327,27 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Desktop Sidebar */}
-          <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-colors duration-200">
-            <SidebarContent pathname={pathname} />
+          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64'}`}>
+            <div className="min-w-64 flex-1 flex flex-col">
+              <SidebarContent pathname={pathname} />
+            </div>
           </aside>
 
+          {/* Sidebar expand tab (visible when collapsed) */}
+          {sidebarCollapsed && (
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-20 w-5 h-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-r-lg items-center justify-center shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-400 dark:text-gray-500"
+              title="Expand sidebar"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
           {/* Main Content */}
-          <main className="md:ml-64 pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-colors duration-200">
+          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-64'}`}>
             <div className="animate-fade-in mx-auto">
               {children}
             </div>
@@ -338,6 +356,7 @@ export default function DashboardLayout({ children }) {
         <Toasts toasts={toasts} removeToast={removeToast} />
       </ToastContext.Provider>
       </DateContext.Provider>
+      </SidebarContext.Provider>
     </ThemeContext.Provider>
   );
 }

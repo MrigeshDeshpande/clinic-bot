@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useRef, useContext, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ToastContext } from '../layout';
+import { ToastContext, SidebarContext } from '../layout';
 import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
@@ -11,6 +11,7 @@ import MediaViewer from '@/components/MediaViewer';
 import { fetchCached } from '@/lib/clientFetchCache';
 import ToothGrid from '@/components/ToothGrid';
 import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
+import PrescriptionPreview from '@/components/PrescriptionPreview';
 
 const DRAFT_KEY = 'visit_draft';
 const TEMPLATES_KEY = 'visit_templates';
@@ -96,6 +97,7 @@ export default function VisitPage() {
 
 function VisitPageInner() {
   const { showToast } = useContext(ToastContext);
+  const { setSidebarCollapsed } = useContext(SidebarContext);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -140,6 +142,17 @@ function VisitPageInner() {
   const [sendingReviewLink, setSendingReviewLink] = useState(false);
   const [patientRatings, setPatientRatings] = useState({});
   const [savingRatings, setSavingRatings] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Escape closes preview
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape' && showPreview) { setShowPreview(false); setSidebarCollapsed(false); } }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showPreview, setSidebarCollapsed]);
+
+  // Restore sidebar on unmount
+  useEffect(() => () => setSidebarCollapsed(false), [setSidebarCollapsed]);
 
   // Load google maps review URL from settings
   useEffect(() => {
@@ -1158,11 +1171,26 @@ function VisitPageInner() {
           <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50">
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{isEdit ? 'Edit Visit' : 'Log Visit'}</h1>              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               {isEdit ? `Editing visit for ${prefillName || 'patient'}` : appointmentId ? `Completing appointment for ${prefillName}` : patientProfile ? `Logging visit for ${patientProfile.name}` : 'Record a patient consultation'}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowPreview(s => { const next = !s; setSidebarCollapsed(next); return next; })}
+            className={`px-4 py-2 text-xs font-medium rounded-xl border transition-all active:scale-95 flex items-center gap-1.5 ${
+              showPreview
+                ? 'bg-blue-500 text-white border-blue-500 hover:bg-blue-600 shadow-sm'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            {showPreview ? 'Hide Preview' : 'Preview'}
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -2275,6 +2303,17 @@ function VisitPageInner() {
             )}
           </button>
         </form>
+        {showPreview && (
+          <div className="fixed right-0 top-14 z-40 h-[calc(100vh-3.5rem)]">
+            <PrescriptionPreview
+              form={form}
+              patientProfile={patientProfile}
+              treatmentFees={treatmentFees}
+              consultationFee={consultationFee}
+              onClose={() => { setShowPreview(false); setSidebarCollapsed(false); }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
