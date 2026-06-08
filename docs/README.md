@@ -1,48 +1,88 @@
 # Documentation Index
 
-This folder contains both current behavior docs and historical design/audit records.
+> **Last updated:** June 8, 2026
+> **Bot version:** Production — full patient, doctor, and receptionist flows with web dashboard
 
-## Read In This Order
+This folder contains documentation for the Shri Balaji Dental Clinic WhatsApp bot and web dashboard.
 
-1. `user-flow-guide.md` - comprehensive end-user conversation guide (34 states, all patient + doctor flows).
-2. `user-flows.md` - detailed patient intent/state catalog and enhancement backlog.
-3. `patient-flow-improvements.md` - patient-facing changes (reminder replies, patient name, feedback, time filtering).
-4. `robustness-layer-changes.md` - correction handling, overwrite policy, replay testing.
-5. `doctor-flow.md` - technical doctor flow design (all 22 doctor states, registration, visit logging, chit media).
-6. `doctor-flow-simple.md` - non-technical doctor command quick reference.
-7. `testing-update-2026-05-31.md` - replay test coverage (28 fixtures, Devanagari, evening check-in).
-8. `daily-flow-patient-doctor.md` - simple day-to-day flow for both users (all cron schedules).
-9. `daily-flow-patient-doctor-visual.md` - visual flowcharts (patient + doctor journeys).
-10. `india-edge-cases-hardening-2026-05-31.md` - India/Hinglish/Devanagari edge cases.
-11. `chit-media-flow.md` - technical design for chit photo/voice note storage.
-12. `chit-media-for-clinic.md` - non-technical guide for clinic staff.
+---
 
-## Architecture and Deep Design
+## Primary Reference Docs (Read These First)
 
-- `architecture.md` - foundational architecture spec (historical — implementation has evolved).
-- `truth-and-mutation-model.md` - mutation safety model and state-truth guidance.
-- `entity-extraction-design.md` - current extraction strategy details (validators.js implementation).
+| Doc | What It Covers |
+|-----|----------------|
+| **`architecture.md`** | Current architecture: state machine (36+ states), pipeline engine, session model, intent routing, entity extraction, correction detection, overwrite policy, web dashboard, cron jobs, database schema, environment variables |
+| **`user-flow-guide.md`** | Complete end-user guide — all patient states, doctor flows, booking walkthroughs, intent catalog, entity extraction capabilities, validation rules |
+| **`user-flows.md`** | Developer-level flow catalog — every conversational path with exact bot responses, state transition table, validation rules, escape hatches, edge case design decisions |
+| **`doctor-flow.md`** | Doctor-specific flow design — 22 doctor states, registration, visit logging, chit media, queue management, proactive notifications |
 
-## Roadmap / Planning
+## Feature & Enhancement Documentation
 
-- `enhancements-roadmap.md` - upcoming features: receptionist role, queue management, and future enhancements.
+| Doc | What It Covers |
+|-----|----------------|
+| **`current-enhancement-status.md`** | Status of all enhancements across all phases (completed vs pending) |
+| **`enhancements-roadmap.md`** | Future feature roadmap — receptionist role, queue management, walk-in shortcut, voice transcription, etc. |
+| **`clinic-automation-vision.md`** | North star vision, current feature map, gap analysis, enhancement preference table |
+| **`web-vs-bot-feature-gap-analysis.md`** | Feature comparison between web dashboard and WhatsApp bot |
+| **`feature-gap-analysis.md`** | Comprehensive feature-by-feature matrix between web and bot |
 
-## Audits and Historical Notes
+## Deep Design Docs
 
-- `audit-report-2026-05-26.md` - point-in-time audit snapshot (mostly fixed).
-- `audit-and-improvements.md` - bug analysis from earlier phase (mostly resolved).
+| Doc | What It Covers |
+|-----|----------------|
+| **`truth-and-mutation-model.md`** | Mutation safety model: historical/operational/draft/committed truth types, versioned identity, correction handling |
+| **`robustness-layer-changes.md`** | Correction detection (14 patterns), overwrite policy engine (4 tiers), entity accumulation, replay test suite (15+ fixtures) |
+| **`entity-extraction-design.md`** | Current entity extraction implementation — date/time/treatment/phone parsing with Hinglish/Devanagari support |
+| **`ai-evolution-plan.md`** | Principal architect review — AI readiness assessment, Gemini integration strategy, component-by-component migration plan |
+| **`whatsapp-templates-setup.md`** | WhatsApp template message setup guide for Meta Business Manager approval |
 
-## Cron Schedule Summary
+## Flow Documentation
 
-All crons run via Vercel Cron Jobs (`vercel.json`):
+| Doc | What It Covers |
+|-----|----------------|
+| **`user-flow-guide.md`** | Comprehensive patient + doctor flow guide (primary reference) |
+| **`doctor-flow-simple.md`** | Non-technical doctor command quick reference |
+| **`patient-flow-improvements.md`** | Patient-facing changes (reminder replies, patient name collection, feedback, time filtering, multi-treatment) |
+| **`daily-flow-patient-doctor.md`** | Simple day-to-day flow for both users with all cron schedules |
+| **`daily-flow-patient-doctor-visual.md`** | Visual flowcharts (patient + doctor journeys) |
+| **`reception-desk-flow.md`** | Reception desk flow design |
+| **`chit-media-flow.md`** | Technical design for chit photo/voice note storage |
+| **`chit-media-for-clinic.md`** | Non-technical guide for clinic staff |
+| **`dashboard-ux-ideas.md`** | Dashboard UX brainstorming |
 
-| Cron | Schedule (UTC) | IST | Purpose |
-|---|---|---|---|
-| Morning summary | `50 3 * * *` | 9:20 AM | Doctor's daily appointment list |
-| Evening check-in | `0 14 * * *` | 7:30 PM | Doctor's end-of-day recap + no-show marking |
-| Patient reminders | `30 17 * * *` | 11:00 PM | Night-before reminder for next day's patients |
+## Audit & Historical Notes
+
+| Doc | What It Covers |
+|-----|----------------|
+| **`full-architectural-audit.md`** | Comprehensive architectural audit — all features, data model, API surface, security, debt, agentic readiness assessment |
+| **`audit-report-2026-05-26.md`** | Point-in-time audit snapshot (mostly fixed) |
+| **`audit-and-improvements.md`** | Bug analysis from earlier phase (mostly resolved) |
+| **`backend-interview-report.md`** | Backend interview prep — 20 stories, system design topics, debugging stories |
+
+---
+
+## Current Architecture at a Glance
+
+| Component | Implementation |
+|-----------|---------------|
+| **Framework** | Next.js 16 (App Router), JavaScript |
+| **Database** | PostgreSQL (Neon serverless) with in-memory LRU session cache |
+| **Messaging** | Meta Cloud API v19.0 (WhatsApp) |
+| **State Machine** | 36+ states — patient (14), doctor (22+), receptionist (3) |
+| **Intent Classification** | Rule-based (keyword/regex) with AI shadow mode (Gemini 2.5 Flash) |
+| **Entity Extraction** | Regex-based with Hinglish/Devanagari support |
+| **Correction Detection** | 14 pattern markers + overwrite policy (4 tiers) |
+| **Media Storage** | Cloudflare R2 (signed URLs for access) |
+| **Audio Transcription** | OpenAI Whisper (for doctor voice notes) |
+| **Auth** | Custom JWT (HMAC-SHA256) + CSRF double-submit |
+| **Deployment** | Vercel (serverless) |
+| **Web Dashboard** | 11 pages, 30+ API routes (Next.js App Router) |
+| **Cron Jobs** | 5 scheduled functions (daily summary, reminders, evening check-in, feedback, due reminders) |
+
+---
 
 ## Source-of-Truth Notes
 
-- `docs/user-flow-guide.md` and `docs/user-flows.md` are the primary current-behavior references.
-- `docs/architecture.md`, `docs/audit-report-2026-05-26.md`, and `docs/audit-and-improvements.md` contain historical/design context — not strict current-state truth.
+- **`docs/architecture.md`** and **`docs/user-flow-guide.md`** are the primary current-behavior references.
+- **`docs/architecture.md`** in this version has been updated to reflect the actual implementation (not just the foundational design).
+- Historical docs (`audit-report-2026-05-26.md`, `audit-and-improvements.md`) contain context from earlier phases — cross-check with current code for latest behavior.

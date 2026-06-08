@@ -104,6 +104,10 @@ export default function PatientDetailPage() {
   const [linkType, setLinkType] = useState('other');
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(null);
+  const [patientRatings, setPatientRatings] = useState({});
+  const [savingRatings, setSavingRatings] = useState(false);
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [sendingReviewLink, setSendingReviewLink] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -122,6 +126,7 @@ export default function PatientDetailPage() {
           return;
         }
         setPatient(data.patient);
+        setPatientRatings(data.patient?.patient_ratings || {});
         setVisits(data.visits || []);
         setEditForm({
           name: data.patient?.name || '',
@@ -152,6 +157,14 @@ export default function PatientDetailPage() {
         secondaryPromises.push(
           fetchCached(`/api/dashboard/patients/${id}/family`, {}, 30_000)
             .then(famData => setFamily(famData.family || []))
+            .catch(() => {})
+        );
+        secondaryPromises.push(
+          fetch('/api/dashboard/settings')
+            .then(r => r.json())
+            .then(data => {
+              if (data.settings?.google_maps?.review_url) setGoogleMapsUrl(data.settings.google_maps.review_url);
+            })
             .catch(() => {})
         );
 
@@ -321,9 +334,76 @@ export default function PatientDetailPage() {
     { id: 'messages', label: 'Messages', count: null },
   ], [visits.length, feedback]);
 
+  const RATING_CATEGORIES = [
+    { key: 'payment_time', label: 'Payment on Time' },
+    { key: 'timely_appointment', label: 'Timely Appointment' },
+    { key: 'behaviour', label: 'Behaviour' },
+    { key: 'cooperative_treatment', label: 'Cooperative to Treatment' },
+  ];
+
+  async function saveRatings() {
+    setSavingRatings(true);
+    try {
+      const res = await fetch(`/api/dashboard/patients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_ratings: patientRatings }),
+      });
+      if (res.ok) {
+        showToast('Ratings saved', 'success');
+        invalidateFetchCache(`/api/dashboard/patients/${id}`);
+      } else {
+        showToast('Failed to save ratings', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    }
+    setSavingRatings(false);
+  }
+
+  async function sendGoogleReview() {
+    if (!googleMapsUrl) { showToast('Set Google Maps review URL in settings first', 'error'); return; }
+    setSendingReviewLink(true);
+    try {
+      const phone = patient?.phone;
+      if (!phone) { showToast('No phone number on file', 'error'); setSendingReviewLink(false); return; }
+      const waId = phone.startsWith('+') ? phone.slice(1) : phone;
+      const message = `Dear ${patient.name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
+      const res = await fetch('/api/dashboard/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: waId, message }),
+      });
+      if (res.ok) {
+        showToast('Google review link sent on WhatsApp', 'success');
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to send', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    }
+    setSendingReviewLink(false);
+  }
+
   const completedVisits = useMemo(() => visits.filter(v => v.status === 'completed'), [visits]);
   const totalRevenue = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0), [completedVisits]);
   const totalCollected = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.paid_amount || 0), 0), [completedVisits]);
+
+  // All images across all visits, grouped by visit date
+  const allVisitMedia = useMemo(() => {
+    return visits
+      .filter(v => Array.isArray(v.chit_media) && v.chit_media.some(k => k.includes('_photo.')))
+      .map(v => ({
+        visitId: v.id,
+        date: v.date,
+        treatment: v.treatment || 'Visit',
+        images: v.chit_media.filter(k => k.includes('_photo.')),
+      }));
+  }, [visits]);
+  const totalImages = useMemo(() => allVisitMedia.reduce((sum, g) => sum + g.images.length, 0), [allVisitMedia]);
+  const [expandedImage, setExpandedImage] = useState(null);
+  const [expandedTooth, setExpandedTooth] = useState(null);
   const totalDue = useMemo(() => totalRevenue - totalCollected, [totalRevenue, totalCollected]);
   const upcomingFollowUp = useMemo(() => completedVisits.find(v => v.follow_up_date && v.follow_up_date >= new Date().toISOString().slice(0, 10)), [completedVisits]);
 
@@ -523,6 +603,35 @@ export default function PatientDetailPage() {
                         <Printer className="w-4 h-4" />
                         Print
                       </button>
+                      <button
+                        onClick={async () => {
+                          const latest = completedVisits[0];
+                          if (!latest) { showToast('No completed visits', 'error'); return; }
+                          try {
+                            const res = await fetch(`/api/dashboard/visits/${latest.id}/chart`, { method: 'POST' });
+                            const data = await res.json();
+                            if (res.ok && data.url) {
+                              window.open(data.url, '_blank');
+                            } else {
+                              showToast(data.error || 'Failed to generate chart', 'error');
+                            }
+                          } catch {
+                            showToast('Network error', 'error');
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 border border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 text-sm font-medium rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all active:scale-95"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                        Chart
+                      </button>
+                      <button
+                        onClick={sendGoogleReview}
+                        disabled={sendingReviewLink}
+                        className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-orange-500 text-white text-sm font-medium rounded-xl hover:bg-orange-600 transition-all active:scale-95 shadow-md disabled:opacity-50"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1H12v3h5.46c-.69 2.01-2.43 3.46-4.96 3.46-3.04 0-5.5-2.46-5.5-5.5s2.46-5.5 5.5-5.5c1.46 0 2.68.53 3.67 1.42l2.52-2.52C16.87 3.96 14.57 3 12 3 7.03 3 3 7.03 3 12s4.03 9 9 9c4.54 0 8.29-3.22 8.99-7.5l.36-2.4z" /></svg>
+                        {sendingReviewLink ? 'Sending...' : 'Google Review'}
+                      </button>
                     </>
                   )}
                 </div>
@@ -629,6 +738,51 @@ export default function PatientDetailPage() {
           )}
         </div>
 
+        {/* All Media Gallery */}
+        {totalImages > 0 && (
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">All Images ({totalImages})</span>
+              </div>
+              <span className="text-xs text-gray-400 dark:text-gray-500">{allVisitMedia.length} visit{allVisitMedia.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="space-y-3">
+              {allVisitMedia.map(group => (
+                <div key={group.visitId}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="w-3 h-3 text-gray-400" />
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{formatDate(group.date)} — {group.treatment}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">({group.images.length})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {group.images.map(key => (
+                      <button
+                        key={key}
+                        onClick={() => setExpandedImage(key)}
+                        className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md transition-all duration-200 shrink-0 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                      >
+                        <img
+                          src={getSignedUrl(key)}
+                          alt=""
+                          className="w-20 h-20 sm:w-24 sm:h-24 object-cover transition-transform duration-300 group-hover:scale-110"
+                          loading="lazy"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tab Navigation */}
         <div className="flex gap-1 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-1 shadow-sm">
           {tabs.map(tab => (
@@ -706,18 +860,35 @@ export default function PatientDetailPage() {
                               <button onClick={async (e) => {
                                 e.stopPropagation();
                                 try {
-                                  const res = await fetch(`/api/dashboard/visits/${visit.id}/compile`, { method: 'POST' });
+                                  const res = await fetch(`/api/dashboard/visits/${visit.id}/chart`, { method: 'POST' });
                                   const data = await res.json();
-                                  if (res.ok && data.url) {
+                                  if (res.ok && data.url) window.open(data.url, '_blank');
+                                  else showToast(data.error || 'Failed to generate chart', 'error');
+                                } catch { showToast('Network error', 'error'); }
+                              }}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95 cursor-pointer">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> Chart
+                              </button>
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
+                                setSendingMessage(true);
+                                try {
+                                  showToast('⏳ Compiling & sending...', 'info', { duration: 6000 });
+                                  const res = await fetch(`/api/dashboard/visits/${visit.id}/compile/send`, { method: 'POST' });
+                                  const data = await res.json();
+                                  if (res.ok && data.success) {
+                                    showToast('✅ Compiled & sent to patient on WhatsApp', 'success');
+                                  } else if (data.url) {
                                     window.open(data.url, '_blank');
-                                    showToast('✅ Document compiled successfully', 'success');
+                                    showToast('⚠️ Compiled but WhatsApp send failed. PDF opened in new tab.', 'info');
                                   } else {
                                     showToast(data.error || 'Failed to compile', 'error');
                                   }
                                 } catch { showToast('Network error', 'error'); }
+                                setSendingMessage(false);
                               }}
-                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-all active:scale-95 cursor-pointer">
-                                <Download className="w-3 h-3" /> Compile
+                                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all active:scale-95 cursor-pointer shadow-sm">
+                                <Download className="w-3 h-3" /> Compile & Send
                               </button>
                               <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`); }}
                                 className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all active:scale-95 cursor-pointer">
@@ -753,6 +924,33 @@ export default function PatientDetailPage() {
                                 <FileText className="w-3 h-3" /> Diagnosis
                               </div>
                               <p className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 leading-relaxed">{visit.diagnosis}</p>
+                            </div>
+                          )}
+                          {Array.isArray(visit.tooth_diagnoses) && visit.tooth_diagnoses.length > 0 && (
+                            <div className="mb-3">
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> Per-Tooth Diagnosis
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {visit.tooth_diagnoses.map((td, ti) => (
+                                  <span key={ti} className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 shadow-sm">
+                                    #{td.tooth}
+                                    {td.surface && <span className="text-[10px] opacity-60">{td.surface}</span>}
+                                    <span className="text-gray-400">—</span>
+                                    {td.diagnoses.join(', ')}
+                                    {td.treatment && <><span className="text-gray-300 dark:text-gray-600">|</span><span className="text-emerald-600 dark:text-emerald-400">{td.treatment}</span></>}
+                                    {td.severity && (
+                                      <span className={`text-[9px] font-medium px-1 py-0.5 rounded ${
+                                        td.severity === 'severe' ? 'text-red-600 bg-red-50 dark:bg-red-900/30' :
+                                        td.severity === 'moderate' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30' :
+                                        'text-amber-600 bg-amber-50 dark:bg-amber-900/30'
+                                      }`}>{td.severity}</span>
+                                    )}
+                                    {td.status === 'treated' && <span className="text-[9px] text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-1 py-0.5 rounded">✓ Treated</span>}
+                                    {td.status === 'wip' && <span className="text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded">In Progress</span>}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           )}
                           {Array.isArray(visit.medicines) && visit.medicines.length > 0 && (
@@ -815,55 +1013,229 @@ export default function PatientDetailPage() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">Visit history will appear here once appointments are completed</p>
               </div>
             )}
+
+            {/* Per-tooth history timeline */}
+            {completedVisits.some(v => v.tooth_diagnoses?.length > 0) && (() => {
+              const toothTimeline = {};
+              for (const v of completedVisits) {
+                if (!v.tooth_diagnoses?.length) continue;
+                for (const td of v.tooth_diagnoses) {
+                  if (!toothTimeline[td.tooth]) toothTimeline[td.tooth] = [];
+                  toothTimeline[td.tooth].push({
+                    date: v.date,
+                    visitId: v.id,
+                    surface: td.surface,
+                    diagnoses: td.diagnoses,
+                    treatment: td.treatment,
+                    severity: td.severity,
+                    status: td.status,
+                    outcome: td.outcome,
+                    notes: td.notes,
+                  });
+                }
+              }
+              const toothKeys = Object.keys(toothTimeline).sort((a, b) => Number(a) - Number(b));
+              if (toothKeys.length === 0) return null;
+
+              function outcomeColor(outcome) {
+                if (outcome === 'successful') return 'bg-emerald-400';
+                if (outcome === 'complication' || outcome === 'failed') return 'bg-red-400';
+                if (outcome === 'ongoing') return 'bg-blue-400';
+                return 'bg-gray-300 dark:bg-gray-600';
+              }
+
+              function outcomeIcon(outcome) {
+                if (outcome === 'successful') return '✓';
+                if (outcome === 'complication') return '⚠';
+                if (outcome === 'failed') return '✕';
+                if (outcome === 'ongoing') return '⟳';
+                return '';
+              }
+
+              return (
+                <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm mt-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Per-Tooth History Timeline</h3>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">({toothKeys.length} teeth)</span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {toothKeys.map(tooth => {
+                      const entries = toothTimeline[tooth];
+                      const latest = entries[entries.length - 1];
+                      const isExpanded = expandedTooth === tooth;
+                      return (
+                        <div key={tooth} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                          {/* Header bar */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedTooth(isExpanded ? null : tooth)}
+                            className="w-full flex items-center gap-2.5 p-3 hover:bg-white/50 dark:hover:bg-gray-800/70 transition-colors text-left"
+                          >
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100 shrink-0">#{tooth}</span>
+                            {/* Progress dots */}
+                            <div className="flex items-center gap-1 flex-1 min-w-0">
+                              {entries.map((e, idx) => (
+                                <div key={idx} className="flex items-center gap-0 flex-1">
+                                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-white dark:ring-gray-800 ${outcomeColor(e.outcome)}`} />
+                                  {idx < entries.length - 1 && <div className="h-0.5 flex-1 bg-gray-200 dark:bg-gray-700" />}
+                                </div>
+                              ))}
+                            </div>
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500 shrink-0">{entries.length} visit{entries.length > 1 ? 's' : ''}</span>
+                            {latest.outcome && (
+                              <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${
+                                latest.outcome === 'successful' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                latest.outcome === 'complication' || latest.outcome === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                              }`}>
+                                {outcomeIcon(latest.outcome)} {latest.outcome}
+                              </span>
+                            )}
+                            {!latest.outcome && latest.treatment && (
+                              <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full shrink-0">{latest.treatment}</span>
+                            )}
+                            <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                          {/* Expanded details */}
+                          {isExpanded && (
+                            <div className="px-3 pb-3 space-y-2">
+                              {entries.map((e, idx) => (
+                                <div key={idx} className="flex gap-3 text-[11px] bg-white dark:bg-gray-800/50 rounded-lg p-2 border border-gray-100 dark:border-gray-700">
+                                  <div className="flex flex-col items-center gap-1 shrink-0">
+                                    <span className={`w-3 h-3 rounded-full ring-1 ring-white dark:ring-gray-800 ${outcomeColor(e.outcome)}`} />
+                                    {idx < entries.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 dark:bg-gray-700" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0 space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(e.date).slice(0, 6)}</span>
+                                      {e.surface && <span className="text-gray-400">({e.surface})</span>}
+                                      {e.severity && (
+                                        <span className={`text-[9px] font-medium px-1 py-0.5 rounded ${
+                                          e.severity === 'severe' ? 'text-red-600 bg-red-50 dark:bg-red-900/30' :
+                                          e.severity === 'moderate' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30' :
+                                          'text-amber-600 bg-amber-50 dark:bg-amber-900/30'
+                                        }`}>{e.severity}</span>
+                                      )}
+                                    </div>
+                                    <p className="text-gray-700 dark:text-gray-300">
+                                      <span className="font-medium">{e.diagnoses.join(', ')}</span>
+                                    </p>
+                                    {e.treatment && <p className="text-emerald-600 dark:text-emerald-400">Plan: {e.treatment}</p>}
+                                    {e.outcome && <p className="font-medium" style={{ color: e.outcome === 'successful' ? '#059669' : e.outcome === 'complication' || e.outcome === 'failed' ? '#dc2626' : '#2563eb' }}>{outcomeIcon(e.outcome)} {e.outcome}</p>}
+                                    {e.notes && <p className="text-gray-400 dark:text-gray-500 italic">{e.notes}</p>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
 
         {/* Tab Content: Feedback */}
         {activeTab === 'feedback' && (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
-              <Star className="w-5 h-5 text-amber-500" />
-              Patient Feedback
-            </h2>
-            {feedback.filter(f => f.rating).length > 0 ? (
-              <>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
-                  {['great', 'okay', 'poor'].map(rating => {
-                    const entries = feedback.filter(f => f.rating === rating);
-                    if (entries.length === 0) return null;
-                    const r = ratingEmoji(rating);
-                    return (
-                      <div key={rating} className={`rounded-xl p-3 sm:p-4 text-center ${r.color} border border-current/20`}>
-                        <div className="text-xl sm:text-2xl mb-1">{r.emoji}</div>
-                        <div className="text-base sm:text-lg font-bold">{entries.length}</div>
-                        <div className="text-sm sm:text-base font-medium opacity-70">{r.label}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="space-y-3">
-                  {feedback.map((f, i) => (
-                    <div key={f.id || i} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ratingBadge(f.rating)}`}>
-                          {ratingIcon(f.rating)}
-                          {f.rating}
-                        </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          {new Date(f.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
-                      {f.comment && <p className="text-sm text-gray-700 dark:text-gray-300">{f.comment}</p>}
+          <div className="space-y-4">
+            {/* Doctor's Patient Ratings */}
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
+                <Star className="w-5 h-5 text-blue-500" />
+                Doctor's Patient Rating
+              </h2>
+              <div className="space-y-3">
+                {RATING_CATEGORIES.map(cat => (
+                  <div key={cat.key} className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[140px] sm:min-w-[180px]">{cat.label}</span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setPatientRatings(prev => ({ ...prev, [cat.key]: (prev[cat.key] || 0) === star ? 0 : star }))}
+                          className={`w-6 h-6 flex items-center justify-center rounded-md transition-all hover:scale-110 active:scale-90 ${
+                            (patientRatings[cat.key] || 0) >= star
+                              ? 'text-amber-400'
+                              : 'text-gray-300 dark:text-gray-600'
+                          }`}
+                        >
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        </button>
+                      ))}
+                      <span className="ml-2 text-xs font-medium text-gray-400 dark:text-gray-500 min-w-[24px]">
+                        {patientRatings[cat.key] || 0}/5
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <Star className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-400 dark:text-gray-500">No feedback yet from this patient.</p>
+                  </div>
+                ))}
               </div>
-            )}
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                <p className="text-xs text-gray-400 dark:text-gray-500">Rate the patient across these categories</p>
+                <button
+                  onClick={saveRatings}
+                  disabled={savingRatings}
+                  className="px-4 py-2 text-xs font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-all active:scale-95"
+                >
+                  {savingRatings ? 'Saving...' : 'Save Ratings'}
+                </button>
+              </div>
+            </div>
+
+            {/* Patient's Feedback (from WhatsApp) */}
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
+                <Star className="w-5 h-5 text-amber-500" />
+                Patient Feedback
+              </h2>
+              {feedback.filter(f => f.rating).length > 0 ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
+                    {['great', 'okay', 'poor'].map(rating => {
+                      const entries = feedback.filter(f => f.rating === rating);
+                      if (entries.length === 0) return null;
+                      const r = ratingEmoji(rating);
+                      return (
+                        <div key={rating} className={`rounded-xl p-3 sm:p-4 text-center ${r.color} border border-current/20`}>
+                          <div className="text-xl sm:text-2xl mb-1">{r.emoji}</div>
+                          <div className="text-base sm:text-lg font-bold">{entries.length}</div>
+                          <div className="text-sm sm:text-base font-medium opacity-70">{r.label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="space-y-3">
+                    {feedback.map((f, i) => (
+                      <div key={f.id || i} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ratingBadge(f.rating)}`}>
+                            {ratingIcon(f.rating)}
+                            {f.rating}
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            {new Date(f.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                        {f.comment && <p className="text-sm text-gray-700 dark:text-gray-300">{f.comment}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <Star className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-sm text-gray-400 dark:text-gray-500">No feedback yet from this patient.</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1129,6 +1501,29 @@ export default function PatientDetailPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Expanded Image Lightbox */}
+        {expandedImage && (
+          <>
+            <div className="fixed inset-0 bg-black/70 dark:bg-black/80 z-50 backdrop-blur-md" onClick={() => setExpandedImage(null)} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+              <div className="relative max-w-3xl w-full max-h-[90vh] flex items-center justify-center animate-scale-in">
+                <button
+                  onClick={() => setExpandedImage(null)}
+                  className="absolute -top-3 -right-3 z-10 w-8 h-8 rounded-full bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all hover:scale-110"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <img
+                  src={getSignedUrl(expandedImage)}
+                  alt=""
+                  className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain bg-white dark:bg-gray-900"
+                  onClick={(e) => e.stopPropagation()}
+                />
               </div>
             </div>
           </>

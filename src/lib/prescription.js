@@ -272,19 +272,79 @@ export async function generatePrescription({ patient, visit, appointment }) {
     y += doc.heightOfString(visit.diagnosis, { width: RW }) + 16;
   }
 
-  // ─── DIAGNOSIS SELECTED (checklist items) ───
-  const selectedDiagnoses = visit?.diagnosis_selected || [];
-  if (selectedDiagnoses.length > 0) {
+  // ─── TOOTH DIAGNOSIS TABLE ───
+  const toothDiagnoses = visit?.tooth_diagnoses || [];
+  if (toothDiagnoses.length > 0) {
     doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
-    doc.text('Diagnosis:', LM, y);
-    y += 16;
-    doc.fontSize(fontSize).font('Regular');
-    for (const item of selectedDiagnoses) {
-      const line = `\u2713  ${item}`;
-      doc.text(line, LM, y);
-      y += doc.heightOfString(line, { width: RW }) + 4;
+    doc.text('Tooth-wise Diagnosis:', LM, y);
+    y += 14;
+
+    const colX = [LM, LM + 36, LM + 66, LM + 108];
+    const colW = [30, 28, 40, RW - 108];
+    const tableW = RW;
+    const rh = 16;
+    const headerBg = '#1e3a5f';
+    const altBg = '#f3f4f6';
+
+    // Table header
+    doc.roundedRect(LM, y, tableW, rh, 3).fill(headerBg);
+    doc.fillColor('#ffffff').fontSize(Math.max(7.5, fontSize - 1)).font('Bold');
+    doc.text('Tooth', colX[0] + 4, y + 4, { width: colW[0] - 4 });
+    doc.text('Surf.', colX[1] + 4, y + 4, { width: colW[1] - 4 });
+    doc.text('Plan', colX[2] + 4, y + 4, { width: colW[2] - 4 });
+    doc.text('Diagnosis', colX[3] + 4, y + 4, { width: colW[3] - 4 });
+    y += rh;
+    doc.fillColor('#000000').fontSize(fontSize).font('Regular');
+
+    // Data rows
+    for (let i = 0; i < toothDiagnoses.length; i++) {
+      const td = toothDiagnoses[i];
+      const surface = td.surface || '\u2014';
+      const treatment = td.treatment || '\u2014';
+      const diagText = td.diagnoses.join(', ');
+      const rowH = Math.max(rh, doc.heightOfString(diagText, { width: colW[3] - 4 }) + 6);
+
+      // Row background
+      if (i % 2 === 1) {
+        doc.rect(LM, y, tableW, rowH).fill(altBg);
+      }
+
+      // Row separator
+      doc.moveTo(LM, y).lineTo(LM + tableW, y).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
+
+      // Vertical separators
+      for (let c = 1; c < 4; c++) {
+        doc.moveTo(colX[c], y).lineTo(colX[c], y + rowH).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
+      }
+
+      // Cell text
+      doc.fillColor('#000000');
+      doc.font('Bold').fontSize(Math.max(8, fontSize - 0.5));
+      doc.text(`#${td.tooth}`, colX[0] + 4, y + 4, { width: colW[0] - 4 });
+      doc.font('Regular').fontSize(Math.max(8, fontSize - 0.5));
+      doc.text(surface, colX[1] + 4, y + 4, { width: colW[1] - 4 });
+      doc.text(treatment, colX[2] + 4, y + 4, { width: colW[2] - 4 });
+      doc.font('Regular').fontSize(fontSize);
+      doc.text(diagText, colX[3] + 4, y + 4, { width: colW[3] - 4 });
+
+      y += rowH;
     }
-    y += 8;
+    y += 10;
+  } else {
+    // Fallback: plain diagnosis_selected list
+    const selectedDiagnoses = visit?.diagnosis_selected || [];
+    if (selectedDiagnoses.length > 0) {
+      doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
+      doc.text('Diagnosis:', LM, y);
+      y += 16;
+      doc.fontSize(fontSize).font('Regular');
+      for (const item of selectedDiagnoses) {
+        const line = `\u2713  ${item}`;
+        doc.text(line, LM, y);
+        y += doc.heightOfString(line, { width: RW }) + 4;
+      }
+      y += 8;
+    }
   }
 
   // ─── Rx + Generic Substitution ───
@@ -464,6 +524,235 @@ export async function generatePrescription({ patient, visit, appointment }) {
     });
     doc.on('error', (err) => {
       logger.error('PDF_GENERATION_ERROR', { error: err.message });
+      reject(err);
+    });
+  });
+}
+
+// ─── DENTAL CHART PDF ───
+export async function generateDentalChart({ patient, visit, appointment }) {
+  const settings = await loadSettings();
+  const primaryColor = pick(settings, 'prescription', 'primary_color', '#0d1b2a');
+
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: 'landscape',
+    margins: { top: 0, bottom: 0, left: 0, right: 0 },
+    info: {
+      Title: `Dental Chart - ${patient?.name || ''}`,
+      Author: CLINIC.doctor?.name || CLINIC.name,
+      Subject: 'Dental Chart',
+    },
+  });
+
+  doc.registerFont('Regular', FONT_REGULAR);
+  doc.registerFont('Bold', FONT_BOLD);
+
+  const buffers = [];
+  doc.on('data', (chunk) => buffers.push(chunk));
+
+  const PW = 841.89;
+  const PH = 595.28;
+  const LM = 40;
+  const RW = PW - LM * 2;
+
+  // Header
+  doc.rect(0, 0, PW, 50).fill(primaryColor);
+  doc.fillColor('#ffffff').font('Bold').fontSize(18);
+  doc.text('Dental Chart', LM, 14, { lineBreak: false });
+  doc.font('Regular').fontSize(10);
+  const dateStr = appointment?.date ? new Date(appointment.date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
+  doc.text(`${patient?.name || 'Patient'} | ${patient?.age || ''}${patient?.age && patient?.sex ? '/' : ''}${patient?.sex || ''} | ${dateStr}`, LM, 34, { lineBreak: false });
+
+  // Tooth data map
+  const toothMap = {};
+  const toothDiagnoses = visit?.tooth_diagnoses || [];
+  for (const td of toothDiagnoses) {
+    toothMap[td.tooth] = td;
+  }
+
+  const DIAG_COLORS = {
+    'Caries': '#f59e0b',
+    'Deep caries': '#ef4444',
+    'Pocket': '#8b5cf6',
+    'Periodontitis': '#7c3aed',
+    'Periapical Abscess': '#dc2626',
+    'Grossly Decayed': '#991b1b',
+    'Missing': '#6b7280',
+    'Mobility': '#f97316',
+    'Lesion': '#ec4899',
+    'Impacted': '#14b8a6',
+    'Fractured Tooth / Cusp': '#f43f5e',
+    'Gingivitis': '#22c55e',
+    'Calculus': '#94a3b8',
+    'Stains': '#d4d4d8',
+    'Abrasion / Attrition / Erosion': '#a855f7',
+    'Irregular Teeth': '#0ea5e9',
+  };
+
+  function toothColor(diagnoses) {
+    if (!diagnoses?.length) return null;
+    return DIAG_COLORS[diagnoses[0]] || '#3b82f6';
+  }
+
+  const UPPER = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+  const LOWER = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+
+  // Draw teeth
+  const startY = 80;
+  const cellW = (RW) / 16;
+  const cellH = 42;
+  const gap = 1;
+
+  const MOLAR_PATH = `M6 5c1.5-1.5 3-1.5 4.5 0 1-1 2-1 3 0 1.5-1.5 3-1.5 4.5 0 1.5 1.5 2 3 2 4.5v2.5c0 3-1.5 4.5-2.5 6l-1.5 4a1 1 0 0 1-1.9.2L12 16.5l-2.1 5.7a1 1 0 0 1-1.9-.2l-1.5-4C5.5 16.5 4 15 4 12V9.5C4 8 4.5 6.5 6 5Z`;
+  const PREMOLAR_PATH = `M7.5 4c2-1 3.5-1 4.5 1 1-2 2.5-2 4.5-1 1.5.8 2 2 2 3.5v3.5c0 3.5-1 5-2 7l-1.5 3.5a1 1 0 0 1-1.8 0L12 18l-1.2 3.5a1 1 0 0 1-1.8 0L7.5 18C6.5 16 5.5 14.5 5.5 11V7.5c0-1.5.5-2.7 2-3.5Z`;
+  const CANINE_PATH = `M12 2l4 4.5v3.5c0 3.5-1.5 6-3 8l-2.5 3.5a1 1 0 0 1-1.6 0L6.5 18C5 16 3.5 13.5 3.5 10V6.5L12 2Z`;
+  const INCISOR_PATH = `M7 4h10c1.1 0 2 .9 2 2v4c0 3.5-1.5 6-3 8l-2.5 3.5a1 1 0 0 1-1.6 0L9.5 18C8 16 6.5 13.5 6.5 10V6c0-1.1.9-2 2-2Z`;
+
+  function toothPath(num) {
+    const pos = num % 10;
+    const t = (pos >= 6 || pos === 0) ? 'molar' : (pos === 4 || pos === 5) ? 'premolar' : (pos === 3) ? 'canine' : 'incisor';
+    if (t === 'molar') return MOLAR_PATH;
+    if (t === 'premolar') return PREMOLAR_PATH;
+    if (t === 'canine') return CANINE_PATH;
+    return INCISOR_PATH;
+  }
+
+  function drawRow(teeth, y, label) {
+    doc.fontSize(7).font('Bold').fillColor(primaryColor);
+    doc.text(label, LM - 14, y + 6, { lineBreak: false });
+
+    for (let i = 0; i < teeth.length; i++) {
+      const num = teeth[i];
+      const entry = toothMap[num];
+      const diagnoses = entry?.diagnoses || [];
+      const isMissing = diagnoses.includes('Missing');
+      const color = toothColor(diagnoses);
+      const path = toothPath(num);
+      const x = LM + i * cellW;
+
+      // Cell background
+      if (color && !isMissing) {
+        doc.rect(x, y, cellW - gap, cellH).fill(color).opacity(0.12).fillOpacity(1);
+        doc.opacity(1);
+      }
+      if (entry?.severity === 'severe' && color && !isMissing) {
+        doc.rect(x, y, cellW - gap, cellH).fill(color).opacity(0.2).fillOpacity(1);
+        doc.opacity(1);
+      }
+
+      // Tooth outline
+      const svgW = cellW - gap - 6;
+      const svgH = cellH - 10;
+      const scale = Math.min(svgW / 24, svgH / 24);
+      const ox = x + (cellW - gap - 24 * scale) / 2;
+      const oy = y + 2;
+
+      doc.save();
+      doc.translate(ox, oy);
+      doc.scale(scale);
+
+      // Fill
+      if (!isMissing) {
+        doc.path(path).fill('#f9fafb', 1);
+      }
+
+      // Stroke
+      const strokeColor = color || '#9ca3af';
+      doc.path(path).lineWidth(isMissing ? 0.6 : 0.4).stroke(strokeColor);
+
+      // Cross for missing
+      if (isMissing) {
+        doc.lineWidth(0.6).strokeColor('#ef4444');
+        doc.moveTo(5, 4).lineTo(19, 22).stroke();
+        doc.moveTo(19, 4).lineTo(5, 22).stroke();
+      }
+
+      doc.restore();
+
+      // Tooth number
+      doc.fontSize(5).font('Bold').fillColor(isMissing ? '#ef4444' : '#374151');
+      doc.text(String(num), x + (cellW - gap) / 2, y + cellH - 7, { width: cellW - gap, align: 'center' });
+
+      // Treatment label
+      if (entry?.treatment && !isMissing) {
+        doc.fontSize(4.5).fillColor('#059669');
+        doc.text(entry.treatment, x + (cellW - gap) / 2, y - 7, { width: cellW - gap, align: 'center' });
+      }
+    }
+  }
+
+  // Upper jaw label
+  doc.fontSize(8).font('Bold').fillColor('#9ca3af');
+  doc.text('UPPER', LM, startY - 12, { lineBreak: false });
+  doc.text('UR', LM + 30, startY - 12, { lineBreak: false });
+  doc.text('UL', LM + RW - 30, startY - 12, { lineBreak: false });
+
+  drawRow(UPPER, startY, 'UR');
+
+  // Separator
+  const sepY = startY + cellH + 10;
+  doc.opacity(0.3);
+  doc.moveTo(LM, sepY).lineTo(LM + RW, sepY).stroke('#cccccc').opacity(1);
+
+  // Lower jaw label
+  doc.fillColor('#9ca3af').fontSize(8).font('Bold');
+  doc.text('LOWER', LM, sepY + 6, { lineBreak: false });
+  doc.text('LR', LM + 30, sepY + 6, { lineBreak: false });
+  doc.text('LL', LM + RW - 30, sepY + 6, { lineBreak: false });
+
+  drawRow(LOWER, sepY + 14, 'LR');
+
+  // ─── Legend ───
+  const legendY = Math.max(sepY + cellH + 40, 350);
+  doc.opacity(0.5);
+  doc.moveTo(LM, legendY).lineTo(LM + RW, legendY).stroke('#cccccc').opacity(1);
+
+  doc.fontSize(8).font('Bold').fillColor(primaryColor);
+  doc.text('Legend:', LM, legendY + 8, { lineBreak: false });
+
+  const legendColors = Object.entries(DIAG_COLORS);
+  let lx = LM;
+  let ly = legendY + 20;
+  for (const [name, hex] of legendColors) {
+    const label = `${name}`;
+    doc.rect(lx, ly, 6, 6).fill(hex).opacity(0.6).fillOpacity(1).opacity(1);
+    doc.fontSize(6).font('Regular').fillColor('#374151');
+    doc.text(label, lx + 9, ly, { lineBreak: false });
+    const w = doc.widthOfString(label) + 20;
+    lx += w;
+    if (lx + 80 > LM + RW) {
+      lx = LM;
+      ly += 12;
+    }
+  }
+
+  // Treatment and status legend
+  const statusY = ly + 16;
+  doc.fontSize(7).font('Regular').fillColor('#059669');
+  doc.text('Treatment shown above tooth', LM, statusY, { lineBreak: false });
+  doc.fillColor('#ef4444').fontSize(6);
+  doc.text('X = Missing', LM + 110, statusY, { lineBreak: false });
+
+  // Border
+  doc.rect(8, 8, PW - 16, PH - 16).strokeColor(primaryColor).lineWidth(0.5).stroke().strokeColor('#000000');
+
+  doc.end();
+
+  return new Promise((resolve, reject) => {
+    doc.on('end', async () => {
+      const pdfBuffer = Buffer.concat(buffers);
+      const key = `charts/${appointment?.id || Date.now()}_${Date.now()}.pdf`;
+      const uploaded = await uploadToR2({ key, buffer: pdfBuffer, contentType: 'application/pdf' });
+      if (uploaded) {
+        const signedUrl = await getR2SignedUrl(key, 604800);
+        resolve({ buffer: pdfBuffer, key, url: signedUrl });
+      } else {
+        resolve({ buffer: pdfBuffer, key: null, url: null });
+      }
+    });
+    doc.on('error', (err) => {
+      logger.error('CHART_GENERATION_ERROR', { error: err.message });
       reject(err);
     });
   });

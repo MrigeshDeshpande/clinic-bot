@@ -122,7 +122,7 @@ export async function GET(req) {
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
                a.diagnosis, a.medicines, a.notes, a.follow_up_date, a.follow_up_instructions,
                a.chit_media, a.prescription_key, a.location, a.created_at, a.updated_at,
-               a.advice_selected, a.diagnosis_selected,
+               a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
                a.payment_status, a.payment_method, a.transaction_id, a.paid_amount
         FROM appointments a
         LEFT JOIN patients p ON p.id = a.patient_id
@@ -150,7 +150,7 @@ export async function GET(req) {
                      a.consultation_fee, a.treatment_charges, a.medicine_charges,
                      a.diagnosis, a.medicines, a.notes,
                      a.follow_up_date, a.follow_up_instructions,
-                     a.advice_selected, a.diagnosis_selected,
+                     a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
                      a.location, p.location AS patient_location,
                      a.payment_status, a.payment_method, a.transaction_id, a.paid_amount, a.paid_at,
                      a.chit_media, a.prescription_key, a.created_at, a.updated_at
@@ -183,7 +183,7 @@ export async function GET(req) {
                      a.consultation_fee, a.treatment_charges, a.medicine_charges,
                      a.diagnosis, a.medicines, a.notes,
                      a.follow_up_date, a.follow_up_instructions,
-                     a.advice_selected, a.diagnosis_selected,
+                     a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
                      a.location, p.location AS patient_location,
                      a.payment_status, a.payment_method, a.transaction_id, a.paid_amount, a.paid_at,
                      a.chit_media, a.prescription_key, a.created_at, a.updated_at

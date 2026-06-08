@@ -26,6 +26,7 @@ export default function SettingsPage() {
     doctor: { qualifications: '', registration: '', designation: '' },
     prescription: { primary_color: DEFAULT_COLOR, accent_color: DEFAULT_ACCENT, watermark_text: '', show_watermark: true, font_size: 10, show_rx: true, generic_substitution: true, border_enabled: true },
     checklists: { diagnosis: [], treatments_hindi: [], treatments_english: [], advice: [] },
+    google_maps: { review_url: '' },
   });
 
   useEffect(() => {
@@ -192,6 +193,13 @@ export default function SettingsPage() {
                   <input className={inputClass()} value={settings.clinic.instagram || ''}
                     onChange={e => updateSetting('clinic', 'instagram', e.target.value)} placeholder="shribalaji_adc" />
                 </div>
+                <div className="md:col-span-2">
+                  <label className={labelClass()}>Google Maps Review URL</label>
+                  <input className={inputClass()} value={settings.google_maps?.review_url || ''}
+                    onChange={e => setSettings(prev => ({ ...prev, google_maps: { ...prev.google_maps, review_url: e.target.value } }))}
+                    placeholder="https://g.page/r/your-clinic-review-link" />
+                  <p className="text-[10px] text-gray-400 mt-1">Paste your Google Maps review short link. This will be sent via WhatsApp so patients can leave a review.</p>
+                </div>
                 <div>
                   <label className={labelClass()}>Timing — Mon–Sat</label>
                   <input className={inputClass()} value={settings.clinic.timing_mon_sat || ''}
@@ -204,7 +212,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end">
-                <button onClick={() => saveSettings('clinic')} disabled={saving}
+                <button onClick={async () => { await saveSettings('clinic'); await saveSettings('google_maps'); }} disabled={saving}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50">
                   <Save className="w-4 h-4" />
                   {saving ? 'Saving...' : 'Save Clinic Settings'}
