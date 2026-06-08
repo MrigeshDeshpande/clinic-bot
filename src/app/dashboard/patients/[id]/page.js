@@ -738,6 +738,83 @@ export default function PatientDetailPage() {
           )}
         </div>
 
+        {/* Medical History & Habits */}
+        {(patient.allergies || patient.chronic_conditions || patient.blood_group || patient.bp || patient.weight || patient.medications || patient.habits) && (
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center">
+                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </div>
+              <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">Medical History &amp; Habits</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {patient.allergies && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-medium border border-red-100 dark:border-red-800">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  Allergies: {patient.allergies}
+                </span>
+              )}
+              {patient.chronic_conditions && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-medium border border-orange-100 dark:border-orange-800">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  Chronic: {patient.chronic_conditions}
+                </span>
+              )}
+              {patient.blood_group && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium border border-blue-100 dark:border-blue-800">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                  Blood: {patient.blood_group}
+                </span>
+              )}
+              {(patient.bp || patient.weight) && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-xs font-medium border border-teal-100 dark:border-teal-800">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  {[patient.bp, patient.weight].filter(Boolean).join(' / ')}
+                </span>
+              )}
+              {patient.medications && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-xs font-medium border border-violet-100 dark:border-violet-800">
+                  <Pill className="w-3 h-3" />
+                  Meds: {patient.medications}
+                </span>
+              )}
+              {patient.habits && typeof patient.habits === 'object' && Object.keys(patient.habits).length > 0 && (() => {
+                const h = patient.habits;
+                const habitLabel = (key, val) => {
+                  const labels = {
+                    smoking: { never: 'Never', former: 'Former', current: 'Current' },
+                    tobaccoChewing: { never: 'Never', former: 'Former', current: 'Current' },
+                    panMasala: { never: 'Never', former: 'Former', current: 'Current' },
+                    alcohol: { never: 'Never', occasional: 'Occasional', regular: 'Regular' },
+                    brushingFrequency: { once: 'Once/day', twice: 'Twice/day', irregular: 'Irregular' },
+                    sugaryDiet: { low: 'Low', moderate: 'Moderate', high: 'High' },
+                  };
+                  const displayNames = {
+                    smoking: 'Smoking', tobaccoChewing: 'Tobacco', panMasala: 'Pan Masala',
+                    alcohol: 'Alcohol', brushingFrequency: 'Brushing', sugaryDiet: 'Sugary Diet',
+                  };
+                  const label = labels[key]?.[val];
+                  return label ? `${displayNames[key] || key}: ${label}` : null;
+                };
+                const items = Object.entries(h)
+                  .filter(([k, v]) => v && k !== 'other')
+                  .map(([k, v]) => habitLabel(k, v))
+                  .filter(Boolean);
+                if (items.length === 0 && h.other) items.push(`Other: ${h.other}`);
+                if (items.length === 0) return null;
+                return items.map((item, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-medium border border-amber-100 dark:border-amber-800">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    {item}
+                  </span>
+                ));
+              })()}
+            </div>
+          </div>
+        )}
+
         {/* All Media Gallery */}
         {totalImages > 0 && (
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-6 shadow-sm">

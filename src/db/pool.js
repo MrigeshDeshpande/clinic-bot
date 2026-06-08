@@ -527,6 +527,12 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS patient_ratings JSONB DEFAULT '{}';
     `;
 
+    // Dental habit / risk-factor tracking
+    await db`
+      ALTER TABLE patients
+        ADD COLUMN IF NOT EXISTS habits JSONB DEFAULT '{}';
+    `;
+
     // Settings table — key-value store for admin dashboard customization
     await db`
       CREATE TABLE IF NOT EXISTS settings (

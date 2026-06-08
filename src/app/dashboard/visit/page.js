@@ -215,7 +215,8 @@ function VisitPageInner() {
   const [patientVisits, setPatientVisits] = useState([]);
   const [patientMessages, setPatientMessages] = useState([]);
   const [patientFamily, setPatientFamily] = useState([]);
-  const [medicalHistory, setMedicalHistory] = useState({ allergies: '', chronicConditions: '', bloodGroup: '', bp: '', weight: '', medications: '' });
+  const [medicalHistory, setMedicalHistory] = useState({ allergies: '', chronicConditions: '', bloodGroup: '', bp: '', weight: '', medications: '', habits: {} });
+  const habits = medicalHistory.habits || {};
   const [loadingExtra, setLoadingExtra] = useState(false);
 
   // Multi-treatment state (book-style)
@@ -668,7 +669,7 @@ function VisitPageInner() {
         if (data.patient) {
           const profile = data.patient;
           setPatientProfile(profile);
-          if (profile.allergies !== undefined || profile.chronicConditions !== undefined || profile.bloodGroup !== undefined || profile.bp !== undefined || profile.weight !== undefined || profile.medications !== undefined) {
+          if (profile.allergies !== undefined || profile.chronicConditions !== undefined || profile.bloodGroup !== undefined || profile.bp !== undefined || profile.weight !== undefined || profile.medications !== undefined || profile.habits !== undefined) {
             setMedicalHistory({
               allergies: profile.allergies || '',
               chronicConditions: profile.chronicConditions || '',
@@ -676,6 +677,7 @@ function VisitPageInner() {
               bp: profile.bp || '',
               weight: profile.weight || '',
               medications: profile.medications || '',
+              habits: profile.habits || {},
             });
           }
           if (data.visits) {
@@ -931,6 +933,7 @@ function VisitPageInner() {
         if (medicalHistory.bp) mhPayload.bp = medicalHistory.bp;
         if (medicalHistory.weight) mhPayload.weight = medicalHistory.weight;
         if (medicalHistory.medications) mhPayload.medications = medicalHistory.medications;
+        if (medicalHistory.habits && Object.keys(medicalHistory.habits).length > 0) mhPayload.habits = medicalHistory.habits;
         if (Object.keys(mhPayload).length > 0) {
           try {
             const mhRes = await fetch(`/api/dashboard/patients/${patientIdForHistory}/medical-history`, {
@@ -990,7 +993,7 @@ function VisitPageInner() {
     setPatientVisits([]);
     setPatientMessages([]);
     setPatientFamily([]);
-    setMedicalHistory({ allergies: '', chronicConditions: '', bloodGroup: '', bp: '', weight: '', medications: '' });
+    setMedicalHistory({ allergies: '', chronicConditions: '', bloodGroup: '', bp: '', weight: '', medications: '', habits: {} });
     setResult(null);
     setErrors({});
     setMediaFiles([]);
@@ -1447,6 +1450,52 @@ function VisitPageInner() {
               </div>
             </div>
           )}
+
+          {/* ── Habits & Risk Factors (Compact) ── */}
+          {patientProfile && (() => {
+            const h = medicalHistory.habits || {};
+            const hasHabits = Object.keys(h).length > 0 && Object.values(h).some(v => v);
+            if (!hasHabits) return null;
+            const habitLabels = {
+              smoking: { never: ['Smoking', 'Never', 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-100 dark:border-green-800'], former: ['Smoking', 'Former', 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-800'], current: ['Smoking', 'Current', 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-100 dark:border-red-800'] },
+              tobaccoChewing: { never: ['Tobacco', 'Never', 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-100 dark:border-green-800'], former: ['Tobacco', 'Former', 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-800'], current: ['Tobacco', 'Current', 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-100 dark:border-red-800'] },
+              panMasala: { never: ['Pan Masala', 'Never', 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-100 dark:border-green-800'], former: ['Pan Masala', 'Former', 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-800'], current: ['Pan Masala', 'Current', 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-100 dark:border-red-800'] },
+              alcohol: { never: ['Alcohol', 'Never', 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-100 dark:border-green-800'], occasional: ['Alcohol', 'Occasional', 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-800'], regular: ['Alcohol', 'Regular', 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-100 dark:border-red-800'] },
+              brushingFrequency: { once: ['Brushing', 'Once/day', 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-800'], twice: ['Brushing', 'Twice/day', 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-100 dark:border-green-800'], irregular: ['Brushing', 'Irregular', 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-100 dark:border-red-800'] },
+              sugaryDiet: { low: ['Sugary Diet', 'Low', 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-100 dark:border-green-800'], moderate: ['Sugary Diet', 'Moderate', 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-800'], high: ['Sugary Diet', 'High', 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-100 dark:border-red-800'] },
+            };
+            return (
+              <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /></div>
+                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-sm">Habits &amp; Risk Factors</h2>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">Editable below</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(habitLabels).map(([key, levels]) => {
+                    const val = h[key];
+                    if (!val || !levels[val]) return null;
+                    const [label, statusLabel, cls] = levels[val];
+                    const icon = statusLabel === 'Current' || statusLabel === 'Regular' || statusLabel === 'Irregular' || statusLabel === 'High'
+                      ? 'M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                      : 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z';
+                    return (
+                      <span key={key} className={'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ' + cls}>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} /></svg>
+                        {label}: {statusLabel}
+                      </span>
+                    );
+                  })}
+                  {h.other && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs font-medium border border-gray-200 dark:border-gray-700">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Other: {h.other}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── Medical & Dental History (Compact) ── */}
           {patientProfile && (() => {
@@ -2116,6 +2165,81 @@ function VisitPageInner() {
                   <input type="text" value={medicalHistory.medications} onChange={e => setMedicalHistory(h => ({ ...h, medications: e.target.value }))}
                     className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-400 dark:focus:border-violet-500 transition-all placeholder-gray-400"
                     placeholder="e.g. Metformin 500mg, Amlodipine 5mg" />
+                </div>
+              </div>
+              {/* ── Habits & Risk Factors (Editable) ── */}
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /></div>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Habits &amp; Risk Factors</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Smoking</label>
+                    <select value={habits.smoking || ''} onChange={e => setMedicalHistory(h => ({ ...h, habits: { ...h.habits, smoking: e.target.value || undefined } }))}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all">
+                      <option value="">Select</option>
+                      <option value="never">Never</option>
+                      <option value="former">Former</option>
+                      <option value="current">Current</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tobacco Chewing</label>
+                    <select value={habits.tobaccoChewing || ''} onChange={e => setMedicalHistory(h => ({ ...h, habits: { ...h.habits, tobaccoChewing: e.target.value || undefined } }))}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all">
+                      <option value="">Select</option>
+                      <option value="never">Never</option>
+                      <option value="former">Former</option>
+                      <option value="current">Current</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Pan Masala</label>
+                    <select value={habits.panMasala || ''} onChange={e => setMedicalHistory(h => ({ ...h, habits: { ...h.habits, panMasala: e.target.value || undefined } }))}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all">
+                      <option value="">Select</option>
+                      <option value="never">Never</option>
+                      <option value="former">Former</option>
+                      <option value="current">Current</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Alcohol</label>
+                    <select value={habits.alcohol || ''} onChange={e => setMedicalHistory(h => ({ ...h, habits: { ...h.habits, alcohol: e.target.value || undefined } }))}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all">
+                      <option value="">Select</option>
+                      <option value="never">Never</option>
+                      <option value="occasional">Occasional</option>
+                      <option value="regular">Regular</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Brushing Frequency</label>
+                    <select value={habits.brushingFrequency || ''} onChange={e => setMedicalHistory(h => ({ ...h, habits: { ...h.habits, brushingFrequency: e.target.value || undefined } }))}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all">
+                      <option value="">Select</option>
+                      <option value="twice">Twice a day</option>
+                      <option value="once">Once a day</option>
+                      <option value="irregular">Irregular</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Sugary Diet</label>
+                    <select value={habits.sugaryDiet || ''} onChange={e => setMedicalHistory(h => ({ ...h, habits: { ...h.habits, sugaryDiet: e.target.value || undefined } }))}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all">
+                      <option value="">Select</option>
+                      <option value="low">Low</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Other Habits / Notes</label>
+                    <input type="text" value={habits.other || ''} onChange={e => setMedicalHistory(h => ({ ...h, habits: { ...h.habits, other: e.target.value || undefined } }))}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:focus:ring-amber-800 focus:border-amber-400 dark:focus:border-amber-500 transition-all placeholder-gray-400"
+                      placeholder="e.g. Betel nut, Areca nut, Mouthwash use" />
+                  </div>
                 </div>
               </div>
             </div>
