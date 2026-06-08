@@ -229,7 +229,7 @@ function VisitPageInner() {
   const [consultationFee, setConsultationFee] = useState(CONSULTATION_DEFAULT);
 
   const selectedTreatments = Object.keys(treatmentFees);
-  const computedTreatmentCharges = Object.values(treatmentFees).reduce((sum, fee) => sum + fee, 0);
+  const computedTreatmentCharges = Object.values(treatmentFees).reduce((sum, fee) => sum + (Number(fee) || 0), 0);
   const totalFees = consultationFee + computedTreatmentCharges + (Number(form.medicineCharges) || 0);
 
   function toggleTreatment(name) {
@@ -598,18 +598,16 @@ function VisitPageInner() {
               if (lastVisit.consultation_fee) setConsultationFee(Number(lastVisit.consultation_fee));
               if (savedTreatments.length > 0) {
                 const fees = {};
-                savedTreatments.forEach(t => {
-                  const match = TREATMENTS.find(t2 => t2.name === t);
-                  fees[t] = match ? match.fee : '';
+                savedTreatments.forEach(name => {
+                  fees[name] = getDefaultFee(name);
                 });
                 setTreatmentFees(fees);
-                setSelectedTreatments(savedTreatments);
               }
             }
           }
             }
           }
-        } catch {}
+        } catch (e) { console.error('restoreDraft error:', e); }
         setLoadingExtra(false);
       }
       showToast('Draft restored', 'success');
@@ -680,7 +678,32 @@ function VisitPageInner() {
               medications: profile.medications || '',
             });
           }
-          if (data.visits) setPatientVisits(data.visits);
+          if (data.visits) {
+            setPatientVisits(data.visits);
+            const lastVisit = data.visits.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at))[0];
+            if (lastVisit) {
+              setForm(f => ({
+                ...f,
+                treatment: lastVisit.treatment || '',
+                diagnosis: lastVisit.diagnosis || '',
+                medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
+                adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
+                diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
+                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses : [],
+              }));
+              const savedTreatments = Array.isArray(lastVisit.treatments) && lastVisit.treatments.length > 0
+                ? lastVisit.treatments
+                : lastVisit.treatment ? [lastVisit.treatment] : [];
+              if (lastVisit.consultation_fee) setConsultationFee(Number(lastVisit.consultation_fee));
+              if (savedTreatments.length > 0) {
+                const fees = {};
+                savedTreatments.forEach(name => {
+                  fees[name] = getDefaultFee(name);
+                });
+                setTreatmentFees(fees);
+              }
+            }
+          }
           Promise.all([
             fetchCached(`/api/dashboard/patients/${p.id}/messages?limit=10`)
               .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
@@ -690,7 +713,7 @@ function VisitPageInner() {
               .catch(() => {}),
           ]);
         }
-      } catch {}
+      } catch (e) { console.error('selectPatient error:', e); }
       setLoadingExtra(false);
     }
   }

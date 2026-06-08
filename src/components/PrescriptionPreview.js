@@ -46,7 +46,7 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
   const ageSex = [pAge, pSex].filter(Boolean).join(' / ') || '__________';
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const selectedTreatments = Object.keys(treatmentFees || {});
-  const totalFees = (consultationFee || 0) + Object.values(treatmentFees || {}).reduce((s, v) => s + v, 0) + (Number(form.medicineCharges) || 0);
+  const totalFees = (consultationFee || 0) + Object.values(treatmentFees || {}).reduce((s, v) => s + (Number(v) || 0), 0) + (Number(form.medicineCharges) || 0);
   const scaledW = A4_W * scale;
   const scaledH = A4_H * scale;
 
@@ -72,7 +72,7 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
       {/* Scaled A4 page */}
       <div ref={containerRef} className="flex-1 overflow-y-auto flex items-start justify-center bg-white dark:bg-gray-900">
         <div style={{ width: scaledW, height: scaledH, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.12)', borderRadius: 2, flexShrink: 0 }}>
-          <div style={{ width: A4_W, height: A4_H, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff' }}>
+          <div style={{ width: A4_W, height: A4_H, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff', color: '#111827' }}>
             <PrescriptionHeader />
 
             {/* === PATIENT INFO === */}
