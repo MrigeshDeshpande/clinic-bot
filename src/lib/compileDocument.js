@@ -54,7 +54,7 @@ export async function compileVisitDocument(appointmentId) {
            a.diagnosis, a.medicines, a.notes,
            a.advice_selected, a.diagnosis_selected,
            a.follow_up_date, a.follow_up_instructions,
-           a.chit_media, a.prescription_key,
+           a.chit_media, a.prescription_key, a.tooth_diagnoses,
            p.name AS p_name, p.age AS p_age, p.sex AS p_sex
     FROM appointments a
     LEFT JOIN patients p ON p.id = a.patient_id
@@ -206,6 +206,36 @@ export async function compileVisitDocument(appointmentId) {
     const diagH = doc.heightOfString(a.diagnosis, { width: RW - 12 });
     doc.text(a.diagnosis, LM + 12, y, { width: RW - 12 });
     y += diagH + 12;
+  }
+
+  // Tooth Diagnosis
+  const toothDiags = Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [];
+  if (toothDiags.length > 0) {
+    if (y > 680) { doc.addPage(); y = 40; pageNum++; }
+    doc.font('Bold').fontSize(10);
+    doc.text('Tooth Diagnosis:', LM, y);
+    y += 14;
+    // Simple table header
+    const colX = [LM + 12, LM + 68, LM + 124, LM + 180];
+    const colW = [52, 52, 52, RW - 168];
+    doc.font('Bold').fontSize(8);
+    doc.text('Tooth', colX[0], y, { width: colW[0] });
+    doc.text('Surf.', colX[1], y, { width: colW[1] });
+    doc.text('Plan', colX[2], y, { width: colW[2] });
+    doc.text('Diagnosis', colX[3], y, { width: colW[3] });
+    y += 12;
+    doc.moveTo(LM + 12, y).lineTo(LM + RW, y).stroke('#cccccc');
+    y += 4;
+    doc.font('Regular').fontSize(8);
+    toothDiags.forEach(td => {
+      if (y > 800) { doc.addPage(); y = 40; pageNum++; }
+      doc.text(`#${td.tooth}`, colX[0], y, { width: colW[0] });
+      doc.text(td.surface || '—', colX[1], y, { width: colW[1] });
+      doc.text(td.treatment || '—', colX[2], y, { width: colW[2] });
+      doc.text(Array.isArray(td.diagnoses) ? td.diagnoses.join(', ') : td.diagnosis || '—', colX[3], y, { width: colW[3] });
+      y += 14;
+    });
+    y += 12;
   }
 
   // Fees

@@ -8,6 +8,7 @@ import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Ac
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import MediaViewer from '@/components/MediaViewer';
+import { apiFetch } from '@/lib/clientApi';
 import { fetchCached } from '@/lib/clientFetchCache';
 import ToothGrid from '@/components/ToothGrid';
 import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
@@ -1040,7 +1041,7 @@ function VisitPageInner() {
               try {
                 const id = result.appointment_id;
                 if (!id) { showToast('No appointment ID — cannot generate prescription', 'error'); return; }
-                const res = await fetch(`/api/dashboard/visits/${id}/prescription`, { method: 'POST' });
+                const res = await apiFetch(`/api/dashboard/visits/${id}/prescription`, { method: 'POST' });
                 const data = await res.json();
                 if (res.ok && data.url) {
                   showToast('PDF generated successfully', 'success');
@@ -1061,14 +1062,14 @@ function VisitPageInner() {
                 const id = result.appointment_id;
                 if (!id) { showToast('No appointment ID', 'error'); setCompiling(false); return; }
                 showToast('⏳ Compiling document with images...', 'info', { duration: 8000 });
-                const res = await fetch(`/api/dashboard/visits/${id}/compile`, { method: 'POST' });
+                const res = await apiFetch(`/api/dashboard/visits/${id}/compile`, { method: 'POST' });
                 const data = await res.json();
                 if (res.ok && data.url) {
                   showToast('✅ PDF compiled — opening in new tab', 'success', { duration: 4000 });
                   window.open(data.url, '_blank');
                   // Also send via WhatsApp if phone number exists
                   showToast('📤 Sending to patient via WhatsApp...', 'info', { duration: 6000 });
-                  const sendRes = await fetch(`/api/dashboard/visits/${id}/compile/send`, { method: 'POST' });
+                  const sendRes = await apiFetch(`/api/dashboard/visits/${id}/compile/send`, { method: 'POST' });
                   const sendData = await sendRes.json();
                   if (sendRes.ok && sendData.success) {
                     showToast('✅ Document sent to patient on WhatsApp', 'success');
