@@ -50,7 +50,7 @@ export async function POST(req) {
           params.push(patientId);
           await sql.query(`UPDATE patients SET ${setParts.join(', ')} WHERE id = $${idx}`, params);
           // Invalidate cached prescriptions for this patient
-          await sql`UPDATE appointments SET prescription_key = NULL, updated_at = NOW() WHERE patient_id = ${patientId} AND prescription_key IS NOT NULL`;
+          await sql`UPDATE appointments SET prescription_key = NULL, compiled_document_key = NULL, updated_at = NOW() WHERE patient_id = ${patientId} AND prescription_key IS NOT NULL`;
         }
       } else {
         const ageVal = patientAge ? parseInt(patientAge, 10) : null;

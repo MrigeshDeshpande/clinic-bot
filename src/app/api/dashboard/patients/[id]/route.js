@@ -127,12 +127,12 @@ export async function PATCH(req, { params }) {
     // Sync updated name and invalidate cached prescriptions for this patient
     if (name !== undefined) {
       await sql`
-        UPDATE appointments SET patient_name = ${name}, prescription_key = NULL, updated_at = NOW()
+        UPDATE appointments SET patient_name = ${name}, prescription_key = NULL, compiled_document_key = NULL, updated_at = NOW()
         WHERE patient_id = ${id}
       `;
     } else {
       await sql`
-        UPDATE appointments SET prescription_key = NULL, updated_at = NOW()
+        UPDATE appointments SET prescription_key = NULL, compiled_document_key = NULL, updated_at = NOW()
         WHERE patient_id = ${id}
       `;
     }

@@ -44,7 +44,7 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    setClauses.push(`prescription_key = NULL`, `updated_at = NOW()`);
+    setClauses.push(`prescription_key = NULL`, `compiled_document_key = NULL`, `updated_at = NOW()`);
     values.push(id);
 
     await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${idx}`, values);

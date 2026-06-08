@@ -120,7 +120,7 @@ export async function POST(req) {
 
       if (setClauses.length === 0) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
 
-      setClauses.push(`prescription_key = NULL`, `updated_at = NOW()`);
+      setClauses.push(`prescription_key = NULL`, `compiled_document_key = NULL`, `updated_at = NOW()`);
       params.push(appointmentId);
 
       await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${p}`, params);
