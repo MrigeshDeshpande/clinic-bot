@@ -221,18 +221,18 @@ export default function DashboardLayout({ children }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dashboard-dark-mode');
-      return saved === 'true';
-    }
-    return false;
-  });
+  const [darkMode, setDarkMode] = useState(false);
   // Shared selectedDate state persists across page navigations
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
+
+  // Hydrate dark mode from localStorage after first mount (avoids hydration mismatch)
+  useEffect(() => {
+    const saved = localStorage.getItem('dashboard-dark-mode');
+    if (saved === 'true') setDarkMode(true);
+  }, []);
 
   // Apply/remove dark class on <html> and persist to localStorage
   useEffect(() => {

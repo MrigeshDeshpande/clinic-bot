@@ -59,6 +59,13 @@ function getDefaultFee(name) {
   return preset?.fee || 0;
 }
 
+const RATING_CATEGORIES = [
+  { key: 'payment_time', label: 'Payment on Time' },
+  { key: 'timely_appointment', label: 'Timely Appointment' },
+  { key: 'behaviour', label: 'Behaviour' },
+  { key: 'cooperative_treatment', label: 'Cooperative to Treatment' },
+];
+
 function normalizeSex(sex) {
   if (!sex) return '';
   const lower = sex.toLowerCase();
@@ -124,6 +131,8 @@ function VisitPageInner() {
   const [compiling, setCompiling] = useState(false);
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [sendingReviewLink, setSendingReviewLink] = useState(false);
+  const [patientRatings, setPatientRatings] = useState({});
+  const [savingRatings, setSavingRatings] = useState(false);
 
   // Load google maps review URL from settings
   useEffect(() => {
@@ -172,6 +181,14 @@ function VisitPageInner() {
   // Full context data
   const [appointmentMeta, setAppointmentMeta] = useState(null);
   const [patientProfile, setPatientProfile] = useState(null);
+
+  // Sync patient ratings from patient profile
+  useEffect(() => {
+    if (patientProfile?.patient_ratings) {
+      setPatientRatings(patientProfile.patient_ratings);
+    }
+  }, [patientProfile]);
+
   const [patientVisits, setPatientVisits] = useState([]);
   const [patientMessages, setPatientMessages] = useState([]);
   const [patientFamily, setPatientFamily] = useState([]);
@@ -298,6 +315,7 @@ function VisitPageInner() {
             notes: a.notes || '',
             adviceSelected: Array.isArray(a.advice_selected) ? a.advice_selected : [],
             diagnosisSelected: Array.isArray(a.diagnosis_selected) ? a.diagnosis_selected : [],
+            toothDiagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
           });
           const savedTreatments = Array.isArray(a.treatments) && a.treatments.length > 0
             ? a.treatments
@@ -666,6 +684,25 @@ function VisitPageInner() {
     }
   }
 
+  async function saveRatings() {
+    const patientId = patientProfile?.id || appointmentMeta?.patient_id;
+    if (!patientId) { showToast('No patient selected — cannot save ratings', 'error'); return; }
+    setSavingRatings(true);
+    try {
+      const res = await fetch(`/api/dashboard/patients/${patientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_ratings: patientRatings }),
+      });
+      if (res.ok) showToast('Ratings saved', 'success');
+      else showToast('Failed to save ratings', 'error');
+    } catch {
+      showToast('Network error', 'error');
+    } finally {
+      setSavingRatings(false);
+    }
+  }
+
   async function sendPaymentLink() {
     const phone = patientProfile?.phone || appointmentMeta?.patient_phone || withPhonePrefix(form.patientPhone);
     if (!phone) { showToast('No patient phone number', 'error'); return; }
@@ -858,7 +895,7 @@ function VisitPageInner() {
   }
 
   function resetForm() {
-    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '' });
+    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '', adviceSelected: [], diagnosisSelected: [], toothDiagnoses: [] });
     setTreatmentFees({});
     setConsultationFee(CONSULTATION_DEFAULT);
     setPatientProfile(null);
@@ -904,7 +941,7 @@ function VisitPageInner() {
   if (result) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-8 md:p-12 max-w-md w-full text-center shadow-lg transition-colors duration-200">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-8 md:p-12 max-w-lg w-full text-center shadow-lg transition-colors duration-200">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30 mb-6">
             <ClipboardCheck className="w-10 h-10 text-emerald-500 dark:text-emerald-400" />
           </div>
@@ -912,7 +949,55 @@ function VisitPageInner() {
           <div className="text-gray-500 dark:text-gray-400 text-sm mb-6 space-y-1">
             <p><span className="font-medium text-gray-700 dark:text-gray-300">{result.patient_name}</span> — {result.treatment}</p>
           </div>
-          <div className="flex gap-3 justify-center">
+
+          {/* Doctor's Patient Rating */}
+          {(patientProfile?.id || appointmentMeta?.patient_id) && (
+            <div className="mb-6 text-left bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3 text-center">
+                Rate this Patient
+              </h3>
+              <div className="space-y-2.5">
+                {RATING_CATEGORIES.map(cat => (
+                  <div key={cat.key} className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 min-w-[110px] sm:min-w-[140px]">{cat.label}</span>
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setPatientRatings(prev => ({ ...prev, [cat.key]: (prev[cat.key] || 0) === star ? 0 : star }))}
+                          className={`w-5 h-5 flex items-center justify-center rounded-sm transition-all hover:scale-110 active:scale-90 ${
+                            (patientRatings[cat.key] || 0) >= star
+                              ? 'text-amber-400'
+                              : 'text-gray-300 dark:text-gray-600'
+                          }`}
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        </button>
+                      ))}
+                      <span className="ml-1.5 text-[10px] font-medium text-gray-400 dark:text-gray-500 min-w-[20px]">
+                        {patientRatings[cat.key] || 0}/5
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">Rate the patient across these categories</p>
+                <button
+                  onClick={saveRatings}
+                  disabled={savingRatings}
+                  className="px-3 py-1.5 text-[11px] font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-all active:scale-95"
+                >
+                  {savingRatings ? 'Saving...' : 'Save Ratings'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 justify-center flex-wrap">
               {isEdit ? (
                 <button onClick={() => router.push(`/dashboard/patients/${searchParams.get('patientId') || ''}`)} className="px-6 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all active:scale-95">
                   Back to Patient
