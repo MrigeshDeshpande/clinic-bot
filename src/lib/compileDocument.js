@@ -1,43 +1,44 @@
-import PDFDocument from 'pdfkit';
-import path from 'path';
+import { PDFDocument } from 'pdf-lib';
 import { getSql } from '@/db/pool';
 import { uploadToR2, getR2Object, getR2SignedUrl } from '@/lib/r2';
-import { CLINIC } from '@/config/clinic';
+import { generatePrescription } from '@/lib/prescription';
 import { logger } from '@/lib/logger';
 
-const PAGE_WIDTH = 595.28;
-const PAGE_HEIGHT = 842;
-const LM = 50;
-const RW = PAGE_WIDTH - LM * 2;
+const A4_W = 595.28;
+const A4_H = 842;
+const IMG_MARGIN = 18;
 
-const fontDir = path.join(process.cwd(), 'public', 'fonts');
-const FONT_REGULAR = path.join(fontDir, 'DejaVuSans.ttf');
-const FONT_BOLD = path.join(fontDir, 'DejaVuSans-Bold.ttf');
-
-function getMediaType(key) {
-  if (!key) return 'file';
-  if (key.includes('_photo.')) return 'photo';
-  if (key.includes('_audio.')) return 'audio';
-  return 'file';
-}
-
-function getMediaLabel(key) {
-  const parts = key?.split('/') || [];
-  return parts[parts.length - 1] || key || 'Unknown';
+async function embedImageOnPage(page, buffer, pdfDoc) {
+  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
+  let image;
+  if (isPng) {
+    image = await pdfDoc.embedPng(buffer);
+  } else {
+    image = await pdfDoc.embedJpg(buffer);
+  }
+  const maxW = A4_W - IMG_MARGIN * 2;
+  const maxH = A4_H - IMG_MARGIN * 2;
+  const scale = Math.min(maxW / image.width, maxH / image.height, 1);
+  const dw = image.width * scale;
+  const dh = image.height * scale;
+  page.drawImage(image, {
+    x: (A4_W - dw) / 2,
+    y: (A4_H - dh) / 2,
+    width: dw,
+    height: dh,
+  });
 }
 
 /**
- * Compile all visit documents (prescription summary + images) into a single PDF.
+ * Compile all visit documents (prescription + images) into a single PDF.
  *
  * Flow:
  *  1. Fetch appointment + patient data from DB
- *  2. Classify chit_media entries; download images from R2
- *  3. Build PDF: cover/summary page → one page per image
- *  4. Upload compiled PDF to R2, store key on appointment
- *  5. Return { key, url, buffer }
- *
- * NOTE: Existing PDFs and audio files are NOT merged — they are listed
- *       on the summary page with a note. Only raster images are embedded.
+ *  2. Download photos from R2
+ *  3. Obtain prescription PDF (from cache or generate via generatePrescription)
+ *  4. Merge prescription pages + image pages using pdf-lib
+ *  5. Upload compiled PDF to R2, store key on appointment
+ *  6. Return { key, url, buffer }
  */
 export async function compileVisitDocument(appointmentId) {
   try {
@@ -67,297 +68,114 @@ export async function compileVisitDocument(appointmentId) {
   }
 
   const a = rows[0];
-  const patientName = a.p_name || a.patient_name || 'Patient';
-
-  const dateStr = a.date
-    ? new Date(a.date).toLocaleDateString('en-IN', {
-        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-      })
-    : new Date().toLocaleDateString('en-IN');
-
-  const treatments = Array.isArray(a.treatments) && a.treatments.length > 0
-    ? a.treatments
-    : a.treatment
-      ? [a.treatment]
-      : [];
 
   // ─────────────────────────────────────────────
-  // 2. Classify & download media
+  // 2. Download photos from R2
   // ─────────────────────────────────────────────
   const mediaKeys = Array.isArray(a.chit_media) ? a.chit_media : [];
   const images = [];
-  const otherFiles = [];
 
   for (const key of mediaKeys) {
-    const type = getMediaType(key);
-    if (type === 'photo') {
+    if (key.includes('_photo.')) {
       const buffer = await getR2Object(key);
       if (buffer) {
         images.push({ key, buffer });
       } else {
         logger.warn('COMPILE_MEDIA_DOWNLOAD_FAILED', { key });
-        otherFiles.push({ key, label: getMediaLabel(key), note: '(download failed)' });
       }
-    } else {
-      otherFiles.push({ key, label: getMediaLabel(key), type });
     }
   }
 
   // ─────────────────────────────────────────────
-  // 3. Build PDF
+  // 3. Obtain prescription PDF
   // ─────────────────────────────────────────────
-  const doc = new PDFDocument({
-    size: 'A4',
-    layout: 'portrait',
-    margins: { top: 0, bottom: 0, left: 0, right: 0 },
-    info: {
-      Title: `Visit Summary - ${patientName}`,
-      Author: CLINIC.doctor?.name || CLINIC.name,
-      Subject: 'Compiled Visit Document',
-    },
-  });
+  let presBuffer = null;
 
-  doc.registerFont('Regular', FONT_REGULAR);
-  doc.registerFont('Bold', FONT_BOLD);
-
-  const chunks = [];
-  doc.on('data', (chunk) => chunks.push(chunk));
-
-  const PRIMARY = '#0d1b2a';
-  const ACCENT = '#3a86c8';
-  let y = 0;
-  let pageNum = 1;
-
-  // ── COVER / SUMMARY PAGE ──
-
-  // Banner header
-  const bannerH = 120;
-  doc.rect(0, 0, PAGE_WIDTH, bannerH).fill(PRIMARY);
-
-  const logoPath = path.join(process.cwd(), 'public', 'logo1.png');
-  try {
-    doc.image(logoPath, LM, 20, { fit: [60, 80], align: 'center', valign: 'center' });
-  } catch {
-    // skip logo if missing
+  if (a.prescription_key) {
+    presBuffer = await getR2Object(a.prescription_key);
   }
 
-  doc.fillColor('#ffffff').font('Bold').fontSize(28);
-  doc.text('Shri Balaji', LM + 72, 28, { lineBreak: false });
-
-  doc.fillColor(ACCENT).font('Regular').fontSize(10);
-  doc.text('DENTAL CLINIC & IMPLANT CENTER', LM + 72, 60, { lineBreak: false });
-
-  // Visit summary heading
-  y = bannerH + 28;
-  doc.fillColor(PRIMARY).font('Bold').fontSize(16);
-  doc.text('Visit Summary', LM, y);
-  y += 28;
-
-  // Patient info
-  doc.font('Bold').fontSize(10).fillColor('#000000');
-  doc.text('Patient:', LM, y);
-  doc.font('Regular');
-  doc.text(patientName, LM + 56, y);
-  doc.font('Bold');
-  doc.text('Date:', LM + 300, y);
-  doc.font('Regular');
-  doc.text(dateStr, LM + 336, y);
-  y += 18;
-
-  if (a.p_age || a.p_sex) {
-    doc.font('Bold');
-    doc.text('Age/Sex:', LM, y);
-    doc.font('Regular');
-    doc.text([a.p_age, a.p_sex].filter(Boolean).join(' / '), LM + 56, y);
-    y += 18;
-  }
-  if (a.patient_phone) {
-    doc.font('Bold');
-    doc.text('Phone:', LM, y);
-    doc.font('Regular');
-    doc.text(a.patient_phone, LM + 56, y);
-    y += 18;
+  if (!presBuffer) {
+    logger.info('COMPILE_GENERATING_PRESCRIPTION', { appointmentId });
+    const patient = {
+      name: a.p_name || a.patient_name,
+      phone: a.patient_phone,
+      age: a.p_age,
+      sex: a.p_sex,
+    };
+    const visit = {
+      treatment: a.treatment,
+      treatments: Array.isArray(a.treatments) ? a.treatments : [],
+      tooth_diagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
+      diagnosis: a.diagnosis,
+      medicines: Array.isArray(a.medicines) ? a.medicines : [],
+      advice_selected: Array.isArray(a.advice_selected) ? a.advice_selected : [],
+      diagnosis_selected: Array.isArray(a.diagnosis_selected) ? a.diagnosis_selected : [],
+      consultationFee: a.consultation_fee || 0,
+      treatmentCharges: a.treatment_charges || 0,
+      medicineCharges: a.medicine_charges || 0,
+      nextVisit: a.follow_up_date ? { date: a.follow_up_date, time: null } : null,
+      followUpInstructions: a.follow_up_instructions,
+      notes: a.notes,
+    };
+    const appointment = {
+      id: a.id,
+      date: a.date,
+      treatment: a.treatment,
+      treatments: Array.isArray(a.treatments) ? a.treatments : [],
+    };
+    const result = await generatePrescription({ patient, visit, appointment });
+    if (result?.buffer) presBuffer = result.buffer;
   }
 
-  // Separator
-  y += 8;
-  doc.moveTo(LM, y).lineTo(LM + RW, y).stroke('#cccccc');
-  y += 16;
-
-  // Treatments
-  if (treatments.length > 0) {
-    doc.font('Bold').fontSize(10);
-    doc.text('Treatment:', LM, y);
-    y += 16;
-    doc.font('Regular');
-    treatments.forEach((t, i) => {
-      doc.text(`${i + 1}. ${t}`, LM + 12, y);
-      y += 16;
-    });
-    y += 8;
+  if (!presBuffer) {
+    throw new Error('Failed to obtain prescription PDF');
   }
 
-  // Diagnosis
-  if (a.diagnosis) {
-    doc.font('Bold');
-    doc.text('Diagnosis:', LM, y);
-    y += 14;
-    doc.font('Regular');
-    const diagH = doc.heightOfString(a.diagnosis, { width: RW - 12 });
-    doc.text(a.diagnosis, LM + 12, y, { width: RW - 12 });
-    y += diagH + 12;
+  // ─────────────────────────────────────────────
+  // 4. Merge prescription PDF + image pages
+  // ─────────────────────────────────────────────
+  const presDoc = await PDFDocument.load(presBuffer);
+  const mergedDoc = await PDFDocument.create();
+
+  // Copy all prescription pages into merged document
+  const presPages = await mergedDoc.copyPages(presDoc, presDoc.getPageIndices());
+  for (const page of presPages) {
+    mergedDoc.addPage(page);
   }
 
-  // Tooth Diagnosis
-  const toothDiags = Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [];
-  if (toothDiags.length > 0) {
-    if (y > 680) { doc.addPage(); y = 40; pageNum++; }
-    doc.font('Bold').fontSize(10);
-    doc.text('Tooth Diagnosis:', LM, y);
-    y += 14;
-    // Simple table header
-    const colX = [LM + 12, LM + 68, LM + 124, LM + 180];
-    const colW = [52, 52, 52, RW - 168];
-    doc.font('Bold').fontSize(8);
-    doc.text('Tooth', colX[0], y, { width: colW[0] });
-    doc.text('Surf.', colX[1], y, { width: colW[1] });
-    doc.text('Plan', colX[2], y, { width: colW[2] });
-    doc.text('Diagnosis', colX[3], y, { width: colW[3] });
-    y += 12;
-    doc.moveTo(LM + 12, y).lineTo(LM + RW, y).stroke('#cccccc');
-    y += 4;
-    doc.font('Regular').fontSize(8);
-    toothDiags.forEach(td => {
-      if (y > 800) { doc.addPage(); y = 40; pageNum++; }
-      doc.text(`#${td.tooth}`, colX[0], y, { width: colW[0] });
-      doc.text(td.surface || '—', colX[1], y, { width: colW[1] });
-      doc.text(td.treatment || '—', colX[2], y, { width: colW[2] });
-      doc.text(Array.isArray(td.diagnoses) ? td.diagnoses.join(', ') : td.diagnosis || '—', colX[3], y, { width: colW[3] });
-      y += 14;
-    });
-    y += 12;
-  }
-
-  // Fees
-  const consFee = Number(a.consultation_fee) || 0;
-  const treatFee = Number(a.treatment_charges) || 0;
-  const medFee = Number(a.medicine_charges) || 0;
-  const totalFee = consFee + treatFee + medFee;
-
-  if (totalFee > 0) {
-    doc.font('Bold');
-    doc.text('Fees:', LM, y);
-    y += 14;
-    doc.font('Regular');
-    if (consFee > 0) { doc.text(`Consultation Fee:    Rs. ${consFee}`, LM + 12, y); y += 14; }
-    if (treatFee > 0) { doc.text(`Treatment Charges:  Rs. ${treatFee}`, LM + 12, y); y += 14; }
-    if (medFee > 0) { doc.text(`Medicine Charges:   Rs. ${medFee}`, LM + 12, y); y += 14; }
-    doc.moveTo(LM + 12, y).lineTo(LM + 200, y).stroke('#cccccc');
-    y += 8;
-    doc.font('Bold');
-    doc.text(`Total: Rs. ${totalFee}`, LM + 12, y);
-    y += 24;
-  }
-
-  // Attachments index
-  if (images.length > 0 || otherFiles.length > 0) {
-    if (y > 640) { doc.addPage(); y = 40; pageNum++; }
-
-    doc.moveTo(LM, y).lineTo(LM + RW, y).stroke('#cccccc');
-    y += 12;
-    doc.font('Bold').fontSize(10);
-    doc.text('Attachments in this document:', LM, y);
-    y += 18;
-
-    if (images.length > 0) {
-      doc.fontSize(9).font('Regular');
-      images.forEach((img, i) => {
-        const label = getMediaLabel(img.key);
-        doc.text(`\uD83D\uDDBC\uFE0F  Image ${i + 1}: ${label}`, LM + 12, y, { width: RW - 12, ellipsis: true });
-        y += 14;
-      });
-    }
-
-    if (otherFiles.length > 0) {
-      y += 6;
-      doc.fontSize(9).font('Regular').fillColor('#666666');
-      otherFiles.forEach((f) => {
-        const icon = f.type === 'audio' ? '\uD83C\uDFB5' : '\uD83D\uDCCE';
-        doc.text(`${icon}  ${f.label} ${f.note || '(not included in compilation)'}`, LM + 12, y, { width: RW - 12, ellipsis: true });
-        y += 14;
-      });
-      doc.fillColor('#000000');
-    }
-  }
-
-  // Doctor signature area
-  if (y < 700) y = Math.max(y + 40, 720);
-  doc.font('Bold').fontSize(9);
-  doc.text('Dr. ' + (CLINIC.doctor?.name || ''), PAGE_WIDTH - LM - 150, y, { width: 150, align: 'right' });
-  doc.fontSize(8).font('Regular').fillColor('#666666');
-  doc.text('(Digital Copy)', PAGE_WIDTH - LM - 150, y + 14, { width: 150, align: 'right' });
-  doc.fillColor('#000000');
-
-  // ── IMAGE PAGES ──
+  // Add one page per photo
   for (const img of images) {
-    doc.addPage();
-    pageNum++;
-
-    // Header bar
-    doc.rect(0, 0, PAGE_WIDTH, 28).fill(PRIMARY);
-    doc.fillColor('#ffffff').font('Regular').fontSize(7.5);
-    doc.text(`Shri Balaji Dental Clinic — ${patientName} — ${dateStr}`, LM, 8, { width: RW, align: 'center' });
-
-    // Embed image fitted to page
-    const imgMargin = 18;
-    const imgMaxW = PAGE_WIDTH - imgMargin * 2;
-    const imgMaxH = PAGE_HEIGHT - 28 - imgMargin * 2 - 18; // header(28) + margin + footer space
-
-    try {
-      doc.image(img.buffer, imgMargin, 28 + imgMargin, {
-        fit: [imgMaxW, imgMaxH],
-        align: 'center',
-        valign: 'center',
-      });
-    } catch (err) {
-      logger.error('COMPILE_IMAGE_EMBED_ERROR', { key: img.key, error: err.message });
-      doc.fillColor('#ff0000').fontSize(12).font('Regular');
-      doc.text('Failed to load this image.', imgMargin, 300, { width: imgMaxW, align: 'center' });
-    }
-
-    // Footer
-    doc.fillColor('#999999').fontSize(7).font('Regular');
-    doc.text(`Page ${pageNum}`, LM, PAGE_HEIGHT - 18, { width: RW, align: 'center' });
+    const page = mergedDoc.addPage([A4_W, A4_H]);
+    await embedImageOnPage(page, img.buffer, mergedDoc);
   }
 
-  // ── FINALIZE ──
-  return new Promise((resolve, reject) => {
-    doc.on('end', async () => {
-      const pdfBuffer = Buffer.concat(chunks);
-      const key = `compiled/${appointmentId}_${Date.now()}.pdf`;
-      const uploaded = await uploadToR2({ key, buffer: pdfBuffer, contentType: 'application/pdf' });
-      if (!uploaded) {
-        reject(new Error('Failed to upload compiled PDF to R2'));
-        return;
-      }
-      // Persist key on the appointment record for caching
-      try {
-        await sql`
-          UPDATE appointments
-          SET compiled_document_key = ${key}, updated_at = NOW()
-          WHERE id = ${appointmentId}
-        `;
-      } catch (dbErr) {
-        logger.warn('COMPILE_STORE_KEY_FAILED', { appointmentId, key, error: dbErr.message });
-      }
-      const signedUrl = await getR2SignedUrl(key, 604800);
-      resolve({ key, url: signedUrl, buffer: pdfBuffer });
-    });
-    doc.on('error', reject);
-    doc.end();
-  });
-    } catch (err) {
-      logger.error('COMPILE_UNEXPECTED_ERROR', { appointmentId, error: err.message, stack: err.stack });
-      throw new Error(`Compilation failed: ${err.message}`);
-    }
+  const pdfBuffer = Buffer.from(await mergedDoc.save());
+
+  // ─────────────────────────────────────────────
+  // 5. Upload to R2
+  // ─────────────────────────────────────────────
+  const key = `compiled/${appointmentId}_${Date.now()}.pdf`;
+  const uploaded = await uploadToR2({ key, buffer: pdfBuffer, contentType: 'application/pdf' });
+  if (!uploaded) {
+    throw new Error('Failed to upload compiled PDF to R2');
+  }
+
+  // Persist key on the appointment record for caching
+  try {
+    await sql`
+      UPDATE appointments
+      SET compiled_document_key = ${key}, updated_at = NOW()
+      WHERE id = ${appointmentId}
+    `;
+  } catch (dbErr) {
+    logger.warn('COMPILE_STORE_KEY_FAILED', { appointmentId, key, error: dbErr.message });
+  }
+
+  const signedUrl = await getR2SignedUrl(key, 604800);
+  return { key, url: signedUrl, buffer: pdfBuffer };
+  } catch (err) {
+    logger.error('COMPILE_UNEXPECTED_ERROR', { appointmentId, error: err.message, stack: err.stack });
+    throw new Error(`Compilation failed: ${err.message}`);
+  }
 }
