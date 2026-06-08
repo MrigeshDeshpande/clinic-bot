@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef, useContext, useCallback } from '
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext, SidebarContext } from '../layout';
-import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download, Camera } from 'lucide-react';
+import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download, Camera, Images } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import MediaViewer from '@/components/MediaViewer';
@@ -268,6 +268,7 @@ function VisitPageInner() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef(null);
   const fileInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
   const formReadyRef = useRef(false);
 
   // Auto-save draft
@@ -2096,12 +2097,29 @@ function VisitPageInner() {
                     type="button"
                     onClick={() => setShowCamera(true)}
                     disabled={uploadingMedia}
-                    className="w-24 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 shrink-0"
+                    className="w-20 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 shrink-0"
                   >
                     <Camera className="w-4 h-4" />
                     <span className="text-xs font-medium">Camera</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    disabled={uploadingMedia}
+                    className="w-20 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 shrink-0"
+                  >
+                    <Images className="w-4 h-4" />
+                    <span className="text-xs font-medium">Gallery</span>
+                  </button>
                 </div>
+                <input
+                  ref={galleryInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleMediaUpload}
+                  className="hidden"
+                />
                 {mediaFiles.length > 0 && (
                   <div className="mt-2.5 space-y-1.5">
                     {mediaFiles.map((file, idx) => (
