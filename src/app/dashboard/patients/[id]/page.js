@@ -338,6 +338,7 @@ export default function PatientDetailPage() {
   }, [visits]);
   const totalImages = useMemo(() => allVisitMedia.reduce((sum, g) => sum + g.images.length, 0), [allVisitMedia]);
   const [expandedImage, setExpandedImage] = useState(null);
+  const [expandedTooth, setExpandedTooth] = useState(null);
   const totalDue = useMemo(() => totalRevenue - totalCollected, [totalRevenue, totalCollected]);
   const upcomingFollowUp = useMemo(() => completedVisits.find(v => v.follow_up_date && v.follow_up_date >= new Date().toISOString().slice(0, 10)), [completedVisits]);
 
@@ -942,7 +943,6 @@ export default function PatientDetailPage() {
 
             {/* Per-tooth history timeline */}
             {completedVisits.some(v => v.tooth_diagnoses?.length > 0) && (() => {
-              // Build per-tooth timeline from all visits
               const toothTimeline = {};
               for (const v of completedVisits) {
                 if (!v.tooth_diagnoses?.length) continue;
@@ -956,11 +956,29 @@ export default function PatientDetailPage() {
                     treatment: td.treatment,
                     severity: td.severity,
                     status: td.status,
+                    outcome: td.outcome,
+                    notes: td.notes,
                   });
                 }
               }
               const toothKeys = Object.keys(toothTimeline).sort((a, b) => Number(a) - Number(b));
               if (toothKeys.length === 0) return null;
+
+              function outcomeColor(outcome) {
+                if (outcome === 'successful') return 'bg-emerald-400';
+                if (outcome === 'complication' || outcome === 'failed') return 'bg-red-400';
+                if (outcome === 'ongoing') return 'bg-blue-400';
+                return 'bg-gray-300 dark:bg-gray-600';
+              }
+
+              function outcomeIcon(outcome) {
+                if (outcome === 'successful') return '✓';
+                if (outcome === 'complication') return '⚠';
+                if (outcome === 'failed') return '✕';
+                if (outcome === 'ongoing') return '⟳';
+                return '';
+              }
+
               return (
                 <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm mt-4">
                   <div className="flex items-center gap-2 mb-4">
@@ -970,28 +988,76 @@ export default function PatientDetailPage() {
                     <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Per-Tooth History Timeline</h3>
                     <span className="text-xs text-gray-400 dark:text-gray-500">({toothKeys.length} teeth)</span>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {toothKeys.map(tooth => {
                       const entries = toothTimeline[tooth];
                       const latest = entries[entries.length - 1];
+                      const isExpanded = expandedTooth === tooth;
                       return (
-                        <div key={tooth} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">#{tooth}</span>
-                            {latest.treatment && <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">{latest.treatment}</span>}
-                            {latest.status === 'treated' && <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">Treated</span>}
-                            {latest.status === 'wip' && <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full">In Progress</span>}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {entries.map((e, idx) => (
-                              <div key={idx} className="flex items-center gap-1 text-[10px]">
-                                {idx > 0 && <span className="text-gray-300 dark:text-gray-600 mx-0.5">→</span>}
-                                <span className="text-gray-400 dark:text-gray-500">{formatDate(e.date).slice(0, 6)}</span>
-                                <span className="font-medium text-gray-700 dark:text-gray-300">{e.diagnoses.join(', ')}</span>
-                                {e.surface && <span className="text-gray-400">({e.surface})</span>}
-                              </div>
-                            ))}
-                          </div>
+                        <div key={tooth} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                          {/* Header bar */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedTooth(isExpanded ? null : tooth)}
+                            className="w-full flex items-center gap-2.5 p-3 hover:bg-white/50 dark:hover:bg-gray-800/70 transition-colors text-left"
+                          >
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100 shrink-0">#{tooth}</span>
+                            {/* Progress dots */}
+                            <div className="flex items-center gap-1 flex-1 min-w-0">
+                              {entries.map((e, idx) => (
+                                <div key={idx} className="flex items-center gap-0 flex-1">
+                                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-white dark:ring-gray-800 ${outcomeColor(e.outcome)}`} />
+                                  {idx < entries.length - 1 && <div className="h-0.5 flex-1 bg-gray-200 dark:bg-gray-700" />}
+                                </div>
+                              ))}
+                            </div>
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500 shrink-0">{entries.length} visit{entries.length > 1 ? 's' : ''}</span>
+                            {latest.outcome && (
+                              <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${
+                                latest.outcome === 'successful' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                latest.outcome === 'complication' || latest.outcome === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                              }`}>
+                                {outcomeIcon(latest.outcome)} {latest.outcome}
+                              </span>
+                            )}
+                            {!latest.outcome && latest.treatment && (
+                              <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full shrink-0">{latest.treatment}</span>
+                            )}
+                            <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                          {/* Expanded details */}
+                          {isExpanded && (
+                            <div className="px-3 pb-3 space-y-2">
+                              {entries.map((e, idx) => (
+                                <div key={idx} className="flex gap-3 text-[11px] bg-white dark:bg-gray-800/50 rounded-lg p-2 border border-gray-100 dark:border-gray-700">
+                                  <div className="flex flex-col items-center gap-1 shrink-0">
+                                    <span className={`w-3 h-3 rounded-full ring-1 ring-white dark:ring-gray-800 ${outcomeColor(e.outcome)}`} />
+                                    {idx < entries.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 dark:bg-gray-700" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0 space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(e.date).slice(0, 6)}</span>
+                                      {e.surface && <span className="text-gray-400">({e.surface})</span>}
+                                      {e.severity && (
+                                        <span className={`text-[9px] font-medium px-1 py-0.5 rounded ${
+                                          e.severity === 'severe' ? 'text-red-600 bg-red-50 dark:bg-red-900/30' :
+                                          e.severity === 'moderate' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30' :
+                                          'text-amber-600 bg-amber-50 dark:bg-amber-900/30'
+                                        }`}>{e.severity}</span>
+                                      )}
+                                    </div>
+                                    <p className="text-gray-700 dark:text-gray-300">
+                                      <span className="font-medium">{e.diagnoses.join(', ')}</span>
+                                    </p>
+                                    {e.treatment && <p className="text-emerald-600 dark:text-emerald-400">Plan: {e.treatment}</p>}
+                                    {e.outcome && <p className="font-medium" style={{ color: e.outcome === 'successful' ? '#059669' : e.outcome === 'complication' || e.outcome === 'failed' ? '#dc2626' : '#2563eb' }}>{outcomeIcon(e.outcome)} {e.outcome}</p>}
+                                    {e.notes && <p className="text-gray-400 dark:text-gray-500 italic">{e.notes}</p>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}

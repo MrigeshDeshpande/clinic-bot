@@ -20,6 +20,14 @@ const STATUS_OPTIONS = [
   { id: 'wip', label: 'In Progress', color: 'bg-blue-100 text-blue-700 border-blue-300' },
 ];
 
+const OUTCOME_OPTIONS = [
+  { id: '', label: 'Not set', color: 'text-gray-400' },
+  { id: 'successful', label: '✓ Successful', color: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  { id: 'complication', label: '⚠ Complication', color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
+  { id: 'ongoing', label: '⟳ Ongoing', color: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400' },
+  { id: 'failed', label: '✕ Failed', color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
+];
+
 const TREATMENT_OPTIONS = [
   'Filling', 'RCT', 'Extraction', 'Crown', 'Scaling',
   'Fluoride Application', 'Sealant', 'Pulpotomy',
@@ -164,26 +172,42 @@ export default function PerToothDiagnosisPanel({
   const selectedTreatment = currentEntry?.treatment || '';
   const selectedSeverity = currentEntry?.severity || '';
   const selectedStatus = currentEntry?.status || 'active';
+  const selectedOutcome = currentEntry?.outcome || '';
+  const selectedNotes = currentEntry?.notes || '';
   const [showTreatmentInput, setShowTreatmentInput] = useState(false);
   const [customTreatment, setCustomTreatment] = useState('');
   const diagnosesRef = useRef(null);
+
+  function buildEntry(overrides = {}) {
+    const e = {
+      tooth: toothNumber,
+      diagnoses: overrides.diagnoses !== undefined ? overrides.diagnoses : selectedDiagnoses,
+      surface: overrides.surface !== undefined ? overrides.surface : selectedSurface,
+      treatment: overrides.treatment !== undefined ? overrides.treatment : selectedTreatment,
+      severity: overrides.severity !== undefined ? overrides.severity : selectedSeverity,
+      status: overrides.status !== undefined ? overrides.status : selectedStatus,
+      outcome: overrides.outcome !== undefined ? overrides.outcome : selectedOutcome,
+      notes: overrides.notes !== undefined ? overrides.notes : selectedNotes,
+    };
+    return e;
+  }
 
   function toggleDiagnosis(item) {
     const exists = selectedDiagnoses.includes(item);
     const next = exists
       ? selectedDiagnoses.filter(d => d !== item)
       : [...selectedDiagnoses, item];
-    onSave({ tooth: toothNumber, diagnoses: next, surface: selectedSurface, treatment: selectedTreatment, severity: selectedSeverity, status: selectedStatus });
+    onSave(buildEntry({ diagnoses: next }));
   }
 
   function setSurface(surface) {
-    onSave({ tooth: toothNumber, diagnoses: selectedDiagnoses, surface: surface === selectedSurface ? '' : surface, treatment: selectedTreatment, severity: selectedSeverity, status: selectedStatus });
+    onSave(buildEntry({ surface: surface === selectedSurface ? '' : surface }));
     diagnosesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function setTreatment(treatment) {
     setShowTreatmentInput(false);
-    onSave({ tooth: toothNumber, diagnoses: selectedDiagnoses, surface: selectedSurface, treatment: treatment === selectedTreatment ? '' : treatment, severity: selectedSeverity, status: selectedStatus });
+    onSave(buildEntry({ treatment: treatment === selectedTreatment ? '' : treatment }));
   }
 
   function handleAddCustomTreatment() {
@@ -194,15 +218,23 @@ export default function PerToothDiagnosisPanel({
   }
 
   function setSeverity(severity) {
-    onSave({ tooth: toothNumber, diagnoses: selectedDiagnoses, surface: selectedSurface, treatment: selectedTreatment, severity: severity === selectedSeverity ? '' : severity, status: selectedStatus });
+    onSave(buildEntry({ severity: severity === selectedSeverity ? '' : severity }));
   }
 
   function setStatus(status) {
-    onSave({ tooth: toothNumber, diagnoses: selectedDiagnoses, surface: selectedSurface, treatment: selectedTreatment, severity: selectedSeverity, status });
+    onSave(buildEntry({ status }));
+  }
+
+  function setOutcome(outcome) {
+    onSave(buildEntry({ outcome: outcome === selectedOutcome ? '' : outcome }));
+  }
+
+  function setNotes(notes) {
+    onSave(buildEntry({ notes }));
   }
 
   function clearAll() {
-    onSave({ tooth: toothNumber, diagnoses: [], surface: '', treatment: '', severity: '', status: 'active' });
+    onSave({ tooth: toothNumber, diagnoses: [], surface: '', treatment: '', severity: '', status: 'active', outcome: '', notes: '' });
   }
 
   return (
@@ -357,6 +389,43 @@ export default function PerToothDiagnosisPanel({
           </div>
         )}
 
+        {/* Outcome */}
+        {selectedDiagnoses.length > 0 && (
+          <div>
+            <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">Outcome</label>
+            <div className="flex gap-1.5">
+              {OUTCOME_OPTIONS.filter(o => o.id).map(o => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => setOutcome(o.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all active:scale-95 ${
+                    selectedOutcome === o.id
+                      ? o.color + ' ring-1 ring-inset'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tooth Notes */}
+        {selectedDiagnoses.length > 0 && (
+          <div>
+            <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">Tooth Notes</label>
+            <textarea
+              value={selectedNotes}
+              onChange={e => setNotes(e.target.value)}
+              rows={2}
+              className="w-full px-2.5 py-1.5 text-[11px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
+              placeholder="e.g. patient reports pain on cold, tooth tender to percussion..."
+            />
+          </div>
+        )}
+
         {/* Summary */}
         {selectedDiagnoses.length > 0 && (
           <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl px-3 py-2 space-y-1">
@@ -377,6 +446,14 @@ export default function PerToothDiagnosisPanel({
               }`}>
                 {STATUS_OPTIONS.find(s => s.id === selectedStatus)?.label}
               </span>
+            )}
+            {selectedOutcome && (
+              <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                Outcome: {OUTCOME_OPTIONS.find(o => o.id === selectedOutcome)?.label}
+              </p>
+            )}
+            {selectedNotes && (
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 italic leading-relaxed">{selectedNotes}</p>
             )}
           </div>
         )}
