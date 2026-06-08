@@ -36,7 +36,7 @@ export const metadata = {
     "theme-color": "#111827",
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
-    "apple-mobile-web-app-title": "Dental Clinic",
+    "apple-mobile-web-app-title": "Shri Balaji",
     "mobile-web-app-capable": "yes",
   },
 };
