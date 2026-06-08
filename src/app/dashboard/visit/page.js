@@ -579,7 +579,34 @@ function VisitPageInner() {
             if (data.patient) {
               setPatientProfile(data.patient);
               setForm(f => ({ ...f, patientSex: normalizeSex(data.patient.sex) }));
-              if (data.visits) setPatientVisits(data.visits);
+          if (data.visits) {
+            setPatientVisits(data.visits);
+            const lastVisit = data.visits.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at))[0];
+            if (lastVisit) {
+              setForm(f => ({
+                ...f,
+                treatment: lastVisit.treatment || '',
+                diagnosis: lastVisit.diagnosis || '',
+                medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
+                adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
+                diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
+                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses : [],
+              }));
+              const savedTreatments = Array.isArray(lastVisit.treatments) && lastVisit.treatments.length > 0
+                ? lastVisit.treatments
+                : lastVisit.treatment ? [lastVisit.treatment] : [];
+              if (lastVisit.consultation_fee) setConsultationFee(Number(lastVisit.consultation_fee));
+              if (savedTreatments.length > 0) {
+                const fees = {};
+                savedTreatments.forEach(t => {
+                  const match = TREATMENTS.find(t2 => t2.name === t);
+                  fees[t] = match ? match.fee : '';
+                });
+                setTreatmentFees(fees);
+                setSelectedTreatments(savedTreatments);
+              }
+            }
+          }
             }
           }
         } catch {}
@@ -860,40 +887,48 @@ function VisitPageInner() {
             ...paymentPayload,
           };
 
-      const res = await fetch('/api/dashboard/visit', {
+      const res = await apiFetch('/api/dashboard/visit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (res.ok) {
-        // Save medical history
-        const patientIdForHistory = patientProfile?.id || appointmentMeta?.patient_id || data.appointment?.patient_id;
-        if (patientIdForHistory) {
-          const mhPayload = {};
-          if (medicalHistory.allergies) mhPayload.allergies = medicalHistory.allergies;
-          if (medicalHistory.chronicConditions) mhPayload.chronicConditions = medicalHistory.chronicConditions;
-          if (medicalHistory.bloodGroup) mhPayload.bloodGroup = medicalHistory.bloodGroup;
-          if (medicalHistory.bp) mhPayload.bp = medicalHistory.bp;
-          if (medicalHistory.weight) mhPayload.weight = medicalHistory.weight;
-          if (medicalHistory.medications) mhPayload.medications = medicalHistory.medications;
-          if (Object.keys(mhPayload).length > 0) {
-            await fetch(`/api/dashboard/patients/${patientIdForHistory}/medical-history`, {
+      if (!res.ok) {
+        showToast(data.error || 'Failed to log visit', 'error');
+        return;
+      }
+
+      // Post-save: medical history + media upload (failures don't block success)
+      const patientIdForHistory = patientProfile?.id || appointmentMeta?.patient_id || data.appointment?.patient_id;
+      if (patientIdForHistory) {
+        const mhPayload = {};
+        if (medicalHistory.allergies) mhPayload.allergies = medicalHistory.allergies;
+        if (medicalHistory.chronicConditions) mhPayload.chronicConditions = medicalHistory.chronicConditions;
+        if (medicalHistory.bloodGroup) mhPayload.bloodGroup = medicalHistory.bloodGroup;
+        if (medicalHistory.bp) mhPayload.bp = medicalHistory.bp;
+        if (medicalHistory.weight) mhPayload.weight = medicalHistory.weight;
+        if (medicalHistory.medications) mhPayload.medications = medicalHistory.medications;
+        if (Object.keys(mhPayload).length > 0) {
+          try {
+            const mhRes = await fetch(`/api/dashboard/patients/${patientIdForHistory}/medical-history`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(mhPayload),
             });
+            if (!mhRes.ok) console.error('[VISIT] Medical history save failed');
+          } catch (mhErr) {
+            console.error('[VISIT] Medical history network error:', mhErr);
           }
         }
+      }
 
-        const appointmentIdForMedia = data.appointment?.id || appointmentId;
-        console.log('[MEDIA] Visit saved, uploading', mediaFiles.length, 'file(s) for appointment', appointmentIdForMedia);
-        if (appointmentIdForMedia && mediaFiles.length > 0) {
-          for (const file of mediaFiles) {
+      const appointmentIdForMedia = data.appointment?.id || appointmentId;
+      if (appointmentIdForMedia && mediaFiles.length > 0) {
+        for (const file of mediaFiles) {
+          try {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('appointmentId', appointmentIdForMedia);
-            console.log('[MEDIA] Uploading:', file.name, file.type, file.size);
             const mediaRes = await fetch('/api/dashboard/media', {
               method: 'POST',
               body: formData,
@@ -905,16 +940,16 @@ function VisitPageInner() {
               console.error('[MEDIA] Upload failed:', mediaData);
               showToast(`Upload failed for ${file.name}: ${mediaData.error}`, 'error');
             }
+          } catch (mediaErr) {
+            console.error('[MEDIA] Upload network error:', mediaErr);
+            showToast(`Upload failed for ${file.name}`, 'error');
           }
-        } else {
-          console.log('[MEDIA] No files to upload or missing appointment ID');
         }
-        localStorage.removeItem(DRAFT_KEY);
-        const appointmentIdForResult = data.appointment?.id || appointmentId;
-        setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
-      } else {
-        showToast(data.error || 'Failed to log visit', 'error');
       }
+
+      localStorage.removeItem(DRAFT_KEY);
+      const appointmentIdForResult = data.appointment?.id || appointmentId;
+      setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
     } catch (err) {
       console.error('[VISIT] Submit error:', err);
       showToast('Network error — could not save visit', 'error');
