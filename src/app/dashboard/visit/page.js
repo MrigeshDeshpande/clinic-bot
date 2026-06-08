@@ -59,6 +59,13 @@ function getDefaultFee(name) {
   return preset?.fee || 0;
 }
 
+const FREQUENCY_OPTIONS = ['Daily one time', 'Twice a day', 'Thrice a day'];
+const DURATION_OPTIONS = [3, 5, 7, 10, 14, 21, 30];
+const TIMING_OPTIONS = [
+  { value: 'after', label: 'After meal' },
+  { value: 'before', label: 'Before meal' },
+];
+
 const RATING_CATEGORIES = [
   { key: 'payment_time', label: 'Payment on Time' },
   { key: 'timely_appointment', label: 'Timely Appointment' },
@@ -680,7 +687,7 @@ function VisitPageInner() {
     if (existing >= 0) {
       setForm(f => ({ ...f, medicines: f.medicines.filter((_, i) => i !== existing) }));
     } else {
-      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '' }] }));
+      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '', timing: 'after' }] }));
     }
   }
 
@@ -757,7 +764,7 @@ function VisitPageInner() {
   }
 
   function addMedicine() {
-    setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '' }] }));
+    setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '', timing: 'after' }] }));
   }
   function updateMedicine(idx, field, value) {
     setForm(f => { const meds = [...f.medicines]; meds[idx] = { ...meds[idx], [field]: value }; return { ...f, medicines: meds }; });
@@ -2163,8 +2170,8 @@ function VisitPageInner() {
                       className="absolute -top-2 -right-2 w-6 h-6 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-700 transition-all opacity-0 group-hover:opacity-100 shadow-sm">
                       <Trash2 className="w-3 h-3" />
                     </button>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                      <div>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+                      <div className="md:col-span-1">
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Medicine</label>
                         <input type="text" value={med.name} onChange={e => updateMedicine(idx, 'name', e.target.value)}
                           className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
@@ -2178,15 +2185,32 @@ function VisitPageInner() {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Frequency</label>
-                        <input type="text" value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
-                          placeholder="e.g. Twice daily" />
+                        <select value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all appearance-none">
+                          <option value="">Select</option>
+                          {FREQUENCY_OPTIONS.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Duration</label>
-                        <input type="text" value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
-                          placeholder="e.g. 5 days" />
+                        <select value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all appearance-none">
+                          <option value="">Select</option>
+                          {DURATION_OPTIONS.map(d => (
+                            <option key={d} value={`${d} days`}>{d} days</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">When</label>
+                        <select value={med.timing || 'after'} onChange={e => updateMedicine(idx, 'timing', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all appearance-none">
+                          {TIMING_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>
