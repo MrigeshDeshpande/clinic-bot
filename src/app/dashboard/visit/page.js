@@ -122,6 +122,18 @@ function VisitPageInner() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaFiles, setMediaFiles] = useState([]);
   const [compiling, setCompiling] = useState(false);
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [sendingReviewLink, setSendingReviewLink] = useState(false);
+
+  // Load google maps review URL from settings
+  useEffect(() => {
+    fetch('/api/dashboard/settings')
+      .then(r => r.json())
+      .then(data => {
+        if (data.settings?.google_maps?.review_url) setGoogleMapsUrl(data.settings.google_maps.review_url);
+      })
+      .catch(() => {});
+  }, []);
 
   // Stable callbacks for ToothGrid + PerToothDiagnosisPanel
   const stableSetSelectedTooth = useCallback(setSelectedTooth, []);
@@ -986,6 +998,54 @@ function VisitPageInner() {
               ) : (
                 'Compile & Send'
               )}
+            </button>
+            <button onClick={async () => {
+              if (!googleMapsUrl) { showToast('Set Google Maps review URL in settings first', 'error'); return; }
+              setSendingReviewLink(true);
+              try {
+                const phone = result?.patient_name ? (appointmentMeta?.patient_phone || form.patientPhone) : '';
+                const waId = appointmentMeta?.patient_phone?.startsWith('+') ? appointmentMeta.patient_phone.slice(1) : appointmentMeta?.patient_phone || '';
+                if (!waId && form.patientPhone) {
+                  const p = withPhonePrefix(form.patientPhone);
+                  const cleanWaId = p.startsWith('+') ? p.slice(1) : p;
+                  if (cleanWaId) {
+                    const msg = `Dear ${result.patient_name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
+                    const res = await fetch('/api/dashboard/send-whatsapp', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ to: cleanWaId, message: msg }),
+                    });
+                    if (res.ok) showToast('Google review link sent on WhatsApp', 'success');
+                    else showToast('Failed to send', 'error');
+                    setSendingReviewLink(false);
+                    return;
+                  }
+                }
+                if (waId) {
+                  const msg = `Dear ${result.patient_name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
+                  const res = await fetch('/api/dashboard/send-whatsapp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: waId, message: msg }),
+                  });
+                  if (res.ok) showToast('Google review link sent on WhatsApp', 'success');
+                  else showToast('Failed to send', 'error');
+                } else {
+                  showToast('No phone number available', 'error');
+                }
+              } catch { showToast('Network error', 'error'); }
+              setSendingReviewLink(false);
+            }}
+              disabled={sendingReviewLink}
+              className={`px-6 py-2.5 text-sm font-medium rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer ${
+                sendingReviewLink
+                  ? 'bg-gray-400 text-white cursor-not-allowed shadow-none'
+                  : 'bg-orange-500 text-white shadow-orange-200 dark:shadow-orange-900/50 hover:bg-orange-600'
+              }`}>
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1H12v3h5.46c-.69 2.01-2.43 3.46-4.96 3.46-3.04 0-5.5-2.46-5.5-5.5s2.46-5.5 5.5-5.5c1.46 0 2.68.53 3.67 1.42l2.52-2.52C16.87 3.96 14.57 3 12 3 7.03 3 3 7.03 3 12s4.03 9 9 9c4.54 0 8.29-3.22 8.99-7.5l.36-2.4z" /></svg>
+                {sendingReviewLink ? 'Sending...' : 'Google Review'}
+              </span>
             </button>
           </div>
         </div>

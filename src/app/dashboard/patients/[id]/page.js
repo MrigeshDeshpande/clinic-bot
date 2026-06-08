@@ -104,6 +104,10 @@ export default function PatientDetailPage() {
   const [linkType, setLinkType] = useState('other');
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(null);
+  const [patientRatings, setPatientRatings] = useState({});
+  const [savingRatings, setSavingRatings] = useState(false);
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [sendingReviewLink, setSendingReviewLink] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -122,6 +126,7 @@ export default function PatientDetailPage() {
           return;
         }
         setPatient(data.patient);
+        setPatientRatings(data.patient?.patient_ratings || {});
         setVisits(data.visits || []);
         setEditForm({
           name: data.patient?.name || '',
@@ -152,6 +157,14 @@ export default function PatientDetailPage() {
         secondaryPromises.push(
           fetchCached(`/api/dashboard/patients/${id}/family`, {}, 30_000)
             .then(famData => setFamily(famData.family || []))
+            .catch(() => {})
+        );
+        secondaryPromises.push(
+          fetch('/api/dashboard/settings')
+            .then(r => r.json())
+            .then(data => {
+              if (data.settings?.google_maps?.review_url) setGoogleMapsUrl(data.settings.google_maps.review_url);
+            })
             .catch(() => {})
         );
 
@@ -320,6 +333,58 @@ export default function PatientDetailPage() {
     { id: 'feedback', label: 'Feedback', count: feedback.filter(f => f.rating).length },
     { id: 'messages', label: 'Messages', count: null },
   ], [visits.length, feedback]);
+
+  const RATING_CATEGORIES = [
+    { key: 'payment_time', label: 'Payment on Time' },
+    { key: 'timely_appointment', label: 'Timely Appointment' },
+    { key: 'behaviour', label: 'Behaviour' },
+    { key: 'cooperative_treatment', label: 'Cooperative to Treatment' },
+  ];
+
+  async function saveRatings() {
+    setSavingRatings(true);
+    try {
+      const res = await fetch(`/api/dashboard/patients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_ratings: patientRatings }),
+      });
+      if (res.ok) {
+        showToast('Ratings saved', 'success');
+        invalidateFetchCache(`/api/dashboard/patients/${id}`);
+      } else {
+        showToast('Failed to save ratings', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    }
+    setSavingRatings(false);
+  }
+
+  async function sendGoogleReview() {
+    if (!googleMapsUrl) { showToast('Set Google Maps review URL in settings first', 'error'); return; }
+    setSendingReviewLink(true);
+    try {
+      const phone = patient?.phone;
+      if (!phone) { showToast('No phone number on file', 'error'); setSendingReviewLink(false); return; }
+      const waId = phone.startsWith('+') ? phone.slice(1) : phone;
+      const message = `Dear ${patient.name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
+      const res = await fetch('/api/dashboard/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: waId, message }),
+      });
+      if (res.ok) {
+        showToast('Google review link sent on WhatsApp', 'success');
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to send', 'error');
+      }
+    } catch {
+      showToast('Network error', 'error');
+    }
+    setSendingReviewLink(false);
+  }
 
   const completedVisits = useMemo(() => visits.filter(v => v.status === 'completed'), [visits]);
   const totalRevenue = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0), [completedVisits]);
@@ -558,6 +623,14 @@ export default function PatientDetailPage() {
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                         Chart
+                      </button>
+                      <button
+                        onClick={sendGoogleReview}
+                        disabled={sendingReviewLink}
+                        className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-orange-500 text-white text-sm font-medium rounded-xl hover:bg-orange-600 transition-all active:scale-95 shadow-md disabled:opacity-50"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1H12v3h5.46c-.69 2.01-2.43 3.46-4.96 3.46-3.04 0-5.5-2.46-5.5-5.5s2.46-5.5 5.5-5.5c1.46 0 2.68.53 3.67 1.42l2.52-2.52C16.87 3.96 14.57 3 12 3 7.03 3 3 7.03 3 12s4.03 9 9 9c4.54 0 8.29-3.22 8.99-7.5l.36-2.4z" /></svg>
+                        {sendingReviewLink ? 'Sending...' : 'Google Review'}
                       </button>
                     </>
                   )}
@@ -1070,50 +1143,99 @@ export default function PatientDetailPage() {
 
         {/* Tab Content: Feedback */}
         {activeTab === 'feedback' && (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
-              <Star className="w-5 h-5 text-amber-500" />
-              Patient Feedback
-            </h2>
-            {feedback.filter(f => f.rating).length > 0 ? (
-              <>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
-                  {['great', 'okay', 'poor'].map(rating => {
-                    const entries = feedback.filter(f => f.rating === rating);
-                    if (entries.length === 0) return null;
-                    const r = ratingEmoji(rating);
-                    return (
-                      <div key={rating} className={`rounded-xl p-3 sm:p-4 text-center ${r.color} border border-current/20`}>
-                        <div className="text-xl sm:text-2xl mb-1">{r.emoji}</div>
-                        <div className="text-base sm:text-lg font-bold">{entries.length}</div>
-                        <div className="text-sm sm:text-base font-medium opacity-70">{r.label}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="space-y-3">
-                  {feedback.map((f, i) => (
-                    <div key={f.id || i} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ratingBadge(f.rating)}`}>
-                          {ratingIcon(f.rating)}
-                          {f.rating}
-                        </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          {new Date(f.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
-                      {f.comment && <p className="text-sm text-gray-700 dark:text-gray-300">{f.comment}</p>}
+          <div className="space-y-4">
+            {/* Doctor's Patient Ratings */}
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
+                <Star className="w-5 h-5 text-blue-500" />
+                Doctor's Patient Rating
+              </h2>
+              <div className="space-y-3">
+                {RATING_CATEGORIES.map(cat => (
+                  <div key={cat.key} className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[140px] sm:min-w-[180px]">{cat.label}</span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setPatientRatings(prev => ({ ...prev, [cat.key]: (prev[cat.key] || 0) === star ? 0 : star }))}
+                          className={`w-6 h-6 flex items-center justify-center rounded-md transition-all hover:scale-110 active:scale-90 ${
+                            (patientRatings[cat.key] || 0) >= star
+                              ? 'text-amber-400'
+                              : 'text-gray-300 dark:text-gray-600'
+                          }`}
+                        >
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        </button>
+                      ))}
+                      <span className="ml-2 text-xs font-medium text-gray-400 dark:text-gray-500 min-w-[24px]">
+                        {patientRatings[cat.key] || 0}/5
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <Star className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-400 dark:text-gray-500">No feedback yet from this patient.</p>
+                  </div>
+                ))}
               </div>
-            )}
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                <p className="text-xs text-gray-400 dark:text-gray-500">Rate the patient across these categories</p>
+                <button
+                  onClick={saveRatings}
+                  disabled={savingRatings}
+                  className="px-4 py-2 text-xs font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-all active:scale-95"
+                >
+                  {savingRatings ? 'Saving...' : 'Save Ratings'}
+                </button>
+              </div>
+            </div>
+
+            {/* Patient's Feedback (from WhatsApp) */}
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
+                <Star className="w-5 h-5 text-amber-500" />
+                Patient Feedback
+              </h2>
+              {feedback.filter(f => f.rating).length > 0 ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
+                    {['great', 'okay', 'poor'].map(rating => {
+                      const entries = feedback.filter(f => f.rating === rating);
+                      if (entries.length === 0) return null;
+                      const r = ratingEmoji(rating);
+                      return (
+                        <div key={rating} className={`rounded-xl p-3 sm:p-4 text-center ${r.color} border border-current/20`}>
+                          <div className="text-xl sm:text-2xl mb-1">{r.emoji}</div>
+                          <div className="text-base sm:text-lg font-bold">{entries.length}</div>
+                          <div className="text-sm sm:text-base font-medium opacity-70">{r.label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="space-y-3">
+                    {feedback.map((f, i) => (
+                      <div key={f.id || i} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ratingBadge(f.rating)}`}>
+                            {ratingIcon(f.rating)}
+                            {f.rating}
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            {new Date(f.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                        {f.comment && <p className="text-sm text-gray-700 dark:text-gray-300">{f.comment}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <Star className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-sm text-gray-400 dark:text-gray-500">No feedback yet from this patient.</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
