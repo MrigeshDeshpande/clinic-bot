@@ -2,14 +2,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 
-const SURFACE_OPTIONS = [
-  { id: 'O', label: 'Occlusal' },
-  { id: 'M', label: 'Mesial' },
-  { id: 'D', label: 'Distal' },
-  { id: 'B', label: 'Buccal' },
-  { id: 'L', label: 'Lingual' },
-];
-
 const TOOTH_NAMES = {
   1: 'Central Incisor', 2: 'Lateral Incisor', 3: 'Canine',
   4: 'First Premolar', 5: 'Second Premolar',
@@ -54,24 +46,77 @@ const PREMOLAR_PATH = `M7.5 4c2-1 3.5-1 4.5 1 1-2 2.5-2 4.5-1 1.5.8 2 2 2 3.5v3.
 const CANINE_PATH = `M12 2l4 4.5v3.5c0 3.5-1.5 6-3 8l-2.5 3.5a1 1 0 0 1-1.6 0L6.5 18C5 16 3.5 13.5 3.5 10V6.5L12 2Z`;
 const INCISOR_PATH = `M7 4h10c1.1 0 2 .9 2 2v4c0 3.5-1.5 6-3 8l-2.5 3.5a1 1 0 0 1-1.6 0L9.5 18C8 16 6.5 13.5 6.5 10V6c0-1.1.9-2 2-2Z`;
 
-function toothPath(num) {
+function toothType(num) {
   const pos = num % 10;
-  if (pos >= 6 || pos === 0) return MOLAR_PATH;
-  if (pos === 4 || pos === 5) return PREMOLAR_PATH;
-  if (pos === 3) return CANINE_PATH;
+  if (pos >= 6 || pos === 0) return 'molar';
+  if (pos === 4 || pos === 5) return 'premolar';
+  if (pos === 3) return 'canine';
+  return 'incisor';
+}
+
+function toothTypeLabel(num) {
+  const t = toothType(num);
+  if (t === 'molar') return 'Molar';
+  if (t === 'premolar') return 'Premolar';
+  if (t === 'canine') return 'Canine';
+  return 'Incisor';
+}
+
+function toothPath(num) {
+  const t = toothType(num);
+  if (t === 'molar') return MOLAR_PATH;
+  if (t === 'premolar') return PREMOLAR_PATH;
+  if (t === 'canine') return CANINE_PATH;
   return INCISOR_PATH;
 }
 
+function surfaceLabel(id, num) {
+  const t = toothType(num);
+  const q = Math.floor(num / 10);
+  const isUpper = q === 1 || q === 2;
+  if (id === 'O') return t === 'incisor' || t === 'canine' ? 'Incisal' : 'Occlusal';
+  if (id === 'M') return 'Mesial';
+  if (id === 'D') return 'Distal';
+  if (id === 'B') return 'Buccal';
+  if (id === 'L') return isUpper ? 'Palatal' : 'Lingual';
+  return '';
+}
+
+const ZONE_POSITIONS = {
+  molar: [
+    { id: 'O', x: 20, y: 3 },
+    { id: 'M', x: 5, y: 20 },
+    { id: 'B', x: 20, y: 19 },
+    { id: 'D', x: 35, y: 20 },
+    { id: 'L', x: 20, y: 34 },
+  ],
+  premolar: [
+    { id: 'O', x: 20, y: 3 },
+    { id: 'M', x: 7, y: 20 },
+    { id: 'B', x: 20, y: 18 },
+    { id: 'D', x: 33, y: 20 },
+    { id: 'L', x: 20, y: 34 },
+  ],
+  canine: [
+    { id: 'O', x: 18, y: 4 },
+    { id: 'M', x: 7, y: 21 },
+    { id: 'B', x: 18, y: 21 },
+    { id: 'D', x: 29, y: 21 },
+    { id: 'L', x: 18, y: 34 },
+  ],
+  incisor: [
+    { id: 'O', x: 20, y: 3 },
+    { id: 'M', x: 8, y: 19 },
+    { id: 'B', x: 20, y: 17 },
+    { id: 'D', x: 32, y: 19 },
+    { id: 'L', x: 20, y: 33 },
+  ],
+};
+
 function SurfaceDiagram({ toothNumber, selected, onChange }) {
   const shape = toothPath(toothNumber);
-
-  const zones = [
-    { id: 'O', x: 20, y: 5 },
-    { id: 'M', x: 6, y: 20 },
-    { id: 'B', x: 20, y: 20 },
-    { id: 'D', x: 34, y: 20 },
-    { id: 'L', x: 20, y: 34 },
-  ];
+  const t = toothType(toothNumber);
+  const zones = ZONE_POSITIONS[t];
 
   return (
     <div className="flex flex-col items-center">
@@ -95,15 +140,18 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
           );
         })}
       </svg>
+      <div className="text-[9px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">
+        #{toothNumber} — {toothTypeLabel(toothNumber)} ({toothQuadrant(toothNumber)})
+      </div>
       <div className="flex gap-1 mt-1">
-        {SURFACE_OPTIONS.map(s => (
+        {zones.map(z => (
           <button
-            key={s.id}
+            key={z.id}
             type="button"
-            onClick={() => onChange(s.id)}
-            className={`text-[7px] font-medium px-1.5 py-0.5 rounded transition-all ${selected === s.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            onClick={() => onChange(z.id)}
+            className={`text-[7px] font-medium px-1.5 py-0.5 rounded transition-all ${selected === z.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
           >
-            {s.id}={s.label.slice(0, 4)}
+            {z.id}={surfaceLabel(z.id, toothNumber).slice(0, 4)}
           </button>
         ))}
       </div>
