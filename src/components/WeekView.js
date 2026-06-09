@@ -434,7 +434,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                             ${isDragging ? 'opacity-40 scale-95 z-30 ring-2 ring-blue-400 ring-offset-1' : 'z-10'}
                             ${getBlockColor(appt)}
                             ${past && !isDragging ? 'opacity-50 grayscale-[30%]' : ''}
-                            ${appt.status === 'confirmed' && !isDragging ? 'hover:shadow-md hover:z-20 active:scale-[0.97]' : ''}
+                            ${appt.status === 'confirmed' && !isDragging ? 'hover:shadow-md hover:scale-[1.005] hover:z-20 active:scale-[0.97]' : ''}
                           `}
                           style={{ top, height: SLOT_HEIGHT }}
                         >
@@ -482,12 +482,12 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                         <button
                           key={`book-${si}`}
                           onClick={() => handleSlotClick(dayStr, slotTime)}
-                          className="absolute left-0 right-0 z-5 opacity-0 group-hover/day:opacity-100 hover:!opacity-100 transition-opacity duration-150"
+                          className="absolute left-0 right-0 z-5 transition-all duration-200"
                           style={{ top: si * SLOT_HEIGHT, height: SLOT_HEIGHT }}
                         >
-                          <div className="h-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                            <span className="text-[9px] font-medium text-gray-300 dark:text-gray-600 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 px-1.5 py-0.5 rounded transition-all cursor-pointer">
-                              + {slotTime}
+                          <div className="h-full flex items-center justify-center opacity-0 group-hover/day:opacity-100 transition-all duration-200 group-hover/day:bg-blue-50/30 dark:group-hover/day:bg-blue-900/10">
+                            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 group-hover/day:text-blue-600 dark:group-hover/day:text-blue-400 px-2 py-0.5 rounded transition-all duration-200">
+                              Book {slotTime}
                             </span>
                           </div>
                         </button>

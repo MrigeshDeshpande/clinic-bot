@@ -585,6 +585,25 @@ export default function DashboardPage() {
   const [toast, setToast] = useState(null);
   const [recentBookings, setRecentBookings] = useState([]);
   const bookSlotRef = useRef(null);
+  const tabContainerRef = useRef(null);
+  const [pillStyle, setPillStyle] = useState({});
+
+  function movePill(mode) {
+    const container = tabContainerRef.current;
+    if (!container) return;
+    const btn = container.querySelector(`[data-view="${mode}"]`);
+    if (!btn) return;
+    const cr = container.getBoundingClientRect();
+    const br = btn.getBoundingClientRect();
+    setPillStyle({
+      width: br.width,
+      transform: `translateX(${br.left - cr.left}px)`,
+    });
+  }
+
+  useEffect(() => {
+    movePill(viewMode);
+  }, [viewMode]);
 
   // Handle ?book=time query param to pop open QuickBook (from WeekView/DayTimeline slot clicks)
   useEffect(() => {
@@ -725,28 +744,26 @@ export default function DashboardPage() {
               <Plus className="w-3.5 h-3.5" />
               New Appointment
             </button>
-            <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode('month')}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'month' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              >
-                <CalendarDays className="w-3 h-3" />
-                Month
-              </button>
-              <button
-                onClick={() => setViewMode('week')}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'week' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              >
-                <Columns3 className="w-3 h-3" />
-                Week
-              </button>
-              <button
-                onClick={() => setViewMode('day')}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'day' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              >
-                <LayoutGrid className="w-3 h-3" />
-                Day
-              </button>
+            <div ref={tabContainerRef} className="relative flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+              <div
+                className="absolute top-0.5 bottom-0.5 bg-white dark:bg-gray-700 rounded-md shadow-sm transition-all duration-200 ease-out z-0"
+                style={pillStyle}
+              />
+              {[['month', 'Month', CalendarDays], ['week', 'Week', Columns3], ['day', 'Day', LayoutGrid]].map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  data-view={mode}
+                  onClick={(e) => { setViewMode(mode); movePill(mode); }}
+                  className={`relative z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors duration-150 ${
+                    viewMode === mode
+                      ? 'text-gray-900 dark:text-gray-100'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Icon className="w-3 h-3" />
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -788,17 +805,35 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-pulse">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="shimmer h-80 rounded-xl" />
-            <div className="shimmer h-80 rounded-xl" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => <div key={i} className="shimmer h-28 rounded-xl" />)}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="shimmer h-64 rounded-xl" />
-            <div className="shimmer h-64 rounded-xl" />
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded" />
+                <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+              </div>
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {Array.from({length: 7}).map((_, i) => (
+                  <div key={`sh-${i}`} className="h-3 w-full bg-gray-200 dark:bg-gray-700 rounded" />
+                ))}
+              </div>
+              {Array.from({length: 5}).map((_, w) => (
+                <div key={`sw-${w}`} className="grid grid-cols-7 gap-1 mb-1">
+                  {Array.from({length: 7}).map((_, d) => (
+                    <div key={`sd-${d}`} className="h-8 w-full bg-gray-100 dark:bg-gray-800 rounded" />
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4">
+              <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded mb-4" />
+              {Array.from({length: 8}).map((_, i) => (
+                <div key={`ss-${i}`} className="flex items-center gap-3 mb-3">
+                  <div className="h-3 w-12 bg-gray-200 dark:bg-gray-700 rounded shrink-0" />
+                  <div className="h-6 flex-1 bg-gray-100 dark:bg-gray-800 rounded" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       ) : viewMode === 'month' ? (
