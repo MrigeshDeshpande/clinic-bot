@@ -80,3 +80,6 @@ Transform the clinic-bot into a dentist-specific clinical record system with per
 - `src/app/api/dashboard/visits/[id]/chart/route.js`: New route for printable dental chart PDF
 - `src/app/dashboard/patients/[id]/page.js`: Per-tooth diagnosis chips with treatment/severity/outcome, per-tooth history timeline with clickable expand/collapse, progress dot visualization, Chart + Print buttons
 - `src/app/dashboard/visit/page.js`: Integration of ToothGrid + PerToothDiagnosisPanel, `onQuickDiagnosis` handler preserves all fields, summary chips with surface/treatment/severity
+- `src/components/WeekView.js`: 7-column weekly calendar with time-slot grid (8am-8pm), appointment blocks positioned by time, **drag-to-reschedule** via native HTML5 DnD, click empty slot to book, click appointment to view patient
+- `src/components/DayTimeline.js`: Single-day vertical timeline with hour rows, wider appointment blocks (name/time/treatment/location/phone/status), drag-to-reschedule
+- `src/app/dashboard/page.js`: View switcher `[Month] [Week] [Day]` in header — Month renders existing Calendar+SlotGrid, Week renders WeekView, Day renders DayTimeline; `?book=time` query param auto-opens QuickBook modal

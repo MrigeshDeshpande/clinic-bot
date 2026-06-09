@@ -3,8 +3,10 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users } from 'lucide-react';
+import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3 } from 'lucide-react';
 import Calendar from '@/components/Calendar';
+import WeekView from '@/components/WeekView';
+import DayTimeline from '@/components/DayTimeline';
 import { DateContext } from './layout';
 import { TREATMENT_NAMES } from '@/lib/treatments';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
@@ -592,11 +594,25 @@ export default function DashboardPage() {
   const [slotDefinitions, setSlotDefinitions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [overviewError, setOverviewError] = useState(null);
+  const [viewMode, setViewMode] = useState('month');
   const [bookingModal, setBookingModal] = useState({ open: false, time: null });
   const [refreshKey, setRefreshKey] = useState(0);
   const [toast, setToast] = useState(null);
   const [recentBookings, setRecentBookings] = useState([]);
   const bookSlotRef = useRef(null);
+
+  // Handle ?book=time query param to pop open QuickBook (from WeekView/DayTimeline slot clicks)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const bookTime = params.get('book');
+    if (bookTime) {
+      setBookingModal({ open: true, time: bookTime });
+      // Clean the URL without full page reload
+      const url = new URL(window.location);
+      url.searchParams.delete('book');
+      window.history.replaceState({}, '', url);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -704,10 +720,36 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-in">
       {/* Header — always rendered, even during loading, to optimize LCP */}
-      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 py-4 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
+      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 py-4 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
+          </div>
+          {/* View Switcher */}
+          <div className="flex items-center self-start lg:self-auto bg-gray-100 dark:bg-gray-800 rounded-xl p-0.5">
+            <button
+              onClick={() => setViewMode('month')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'month' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              Month
+            </button>
+            <button
+              onClick={() => setViewMode('week')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'week' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            >
+              <Columns3 className="w-3.5 h-3.5" />
+              Week
+            </button>
+            <button
+              onClick={() => setViewMode('day')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'day' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Day
+            </button>
+          </div>
         </div>
       </div>
 
@@ -725,7 +767,7 @@ export default function DashboardPage() {
             <div className="shimmer h-64 rounded-xl" />
           </div>
         </div>
-      ) : (
+      ) : viewMode === 'month' ? (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Calendar */}
         <Calendar
@@ -752,6 +794,22 @@ export default function DashboardPage() {
           onBookSlotRef={bookSlotRef}
         />
       </div>
+      ) : viewMode === 'week' ? (
+        <div className="mb-8">
+          <WeekView
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
+            onRefresh={() => setRefreshKey(k => k + 1)}
+          />
+        </div>
+      ) : (
+        <div className="mb-8">
+          <DayTimeline
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
+            onRefresh={() => setRefreshKey(k => k + 1)}
+          />
+        </div>
       )
       }
 

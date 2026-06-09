@@ -110,6 +110,32 @@ export async function GET(req) {
     const id = searchParams.get('id');
     const date = searchParams.get('date');
     const scope = searchParams.get('scope');
+    const dateFrom = searchParams.get('from');
+    const dateTo = searchParams.get('to');
+
+    // Range query (for week view)
+    if (dateFrom && dateTo) {
+      const rows = await sql`
+        SELECT a.id, a.logical_id, a.wa_id,
+               COALESCE(p.name, a.patient_name) AS patient_name,
+               a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+               a.treatments,
+               a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
+               a.consultation_fee, a.treatment_charges, a.medicine_charges,
+               a.diagnosis, a.medicines, a.notes,
+               a.follow_up_date, a.follow_up_instructions,
+               a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
+               a.location, p.location AS patient_location,
+               a.payment_status, a.payment_method, a.transaction_id, a.paid_amount, a.paid_at,
+               a.chit_media, a.prescription_key, a.created_at, a.updated_at
+        FROM appointments a
+        LEFT JOIN patients p ON p.id = a.patient_id
+        WHERE a.date >= ${dateFrom}::date AND a.date <= ${dateTo}::date
+          AND a.status IN ('confirmed', 'completed', 'no_show')
+        ORDER BY a.date ASC, a.time ASC
+      `;
+      return NextResponse.json({ appointments: sanitizeResponse(rows || []) });
+    }
 
     // Single appointment by ID
     if (id) {
