@@ -13,17 +13,32 @@ export const ThemeContext = createContext();
 export const ToastContext = createContext();
 export const SidebarContext = createContext();
 
-const NAV = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { href: '/dashboard/appointments', label: 'Appointments', icon: CalendarDays },
-  { href: '/dashboard/patients', label: 'Patients', icon: Users },
-  { href: '/dashboard/stats', label: 'Statistics', icon: BarChart3 },
-  { href: '/dashboard/visit', label: 'Log Visit', icon: PenSquare },
-  { href: '/dashboard/queue', label: 'Queue Board', icon: ClipboardList },
-  { href: '/dashboard/feedback', label: 'Feedback', icon: Star },
-  { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
-  { href: '/dashboard/due-reminders', label: 'Due Reminders', icon: Bell },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+const NAV_GROUPS = [
+  {
+    label: 'MAIN',
+    items: [
+      { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+      { href: '/dashboard/appointments', label: 'Appointments', icon: CalendarDays },
+      { href: '/dashboard/patients', label: 'Patients', icon: Users },
+      { href: '/dashboard/stats', label: 'Statistics', icon: BarChart3 },
+      { href: '/dashboard/visit', label: 'Log Visit', icon: PenSquare },
+    ],
+  },
+  {
+    label: 'OPERATIONS',
+    items: [
+      { href: '/dashboard/queue', label: 'Queue Board', icon: ClipboardList },
+      { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
+      { href: '/dashboard/feedback', label: 'Feedback', icon: Star },
+      { href: '/dashboard/due-reminders', label: 'Due Reminders', icon: Bell },
+    ],
+  },
+  {
+    label: 'SYSTEM',
+    items: [
+      { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ];
 
 function ThemeToggle({ compact }) {
@@ -150,26 +165,35 @@ function SidebarContent({ pathname, onNavClick }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 pb-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(item => {
-          const Icon = item.icon;
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavClick}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative ${
-                active
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              <Icon className={`w-4 h-4 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 px-3 pb-4 overflow-y-auto">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={group.label} className={gi > 0 ? 'mt-4' : ''}>
+            <p className="px-3.5 pb-0.5 text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-500 font-semibold select-none">
+              {group.label}
+            </p>
+            <div className="space-y-0.5">
+              {group.items.map(item => {
+                const Icon = item.icon;
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavClick}
+                    className={`flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-150 relative ${
+                      active
+                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Notifications */}
@@ -327,8 +351,8 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Desktop Sidebar */}
-          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64'}`}>
-            <div className="min-w-64 flex-1 flex flex-col">
+          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-56'}`}>
+            <div className="min-w-56 flex-1 flex flex-col">
               <SidebarContent pathname={pathname} />
             </div>
           </aside>
@@ -347,7 +371,7 @@ export default function DashboardLayout({ children }) {
           )}
 
           {/* Main Content */}
-          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-64'}`}>
+          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-56'}`}>
             <div className="animate-fade-in mx-auto">
               {children}
             </div>
