@@ -35,6 +35,11 @@ Transform the clinic-bot into a dentist-specific clinical record system with per
 - Updated `onQuickDiagnosis` handler in visit page to preserve treatment, severity, status fields
 - Updated patient profile chips and visit summary to show treatment, severity, outcome, status
 - Added `chartKey` and `Chart` button UI on patient profile (per-visit + header)
+- Medical History → collapsible accordion (single-line header with chevron, `showMedical` state toggle)
+- Per-Tooth History → tighter padding (`p-3 md:p-5` instead of `p-4 md:p-8`)
+- Feedback → hidden when count=0, collapsed accordion header with count badge when >0, expand on click
+- Messages → hidden when count=0, collapsed accordion header with count badge when >0, expand on click; pre-loaded on page init
+- Messages section: reduced visual weight (smaller avatars, condensed spacing, compact header)
 
 ### Fixed
 - **`column a.tooth_diagnoses does not exist`** — Added missing `tooth_diagnoses JSONB` column to `appointments` table via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (was already in pool.js:391-395 migration but needed a server restart to apply, or the DB was created before the migration was added). Ran manually via psql and verified API returns 401 instead of 500.
