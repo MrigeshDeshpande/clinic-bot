@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Activity, DollarSign, Calendar, Clock, Phone,
+  ArrowLeft, Activity, IndianRupee, Calendar, Clock, Phone,
   Pill, Stethoscope, FileText, Printer, Download,
   ChevronRight, Users, AlertCircle, Star,
   ClipboardList, Edit3, Save, X, MessageSquare
@@ -696,7 +696,7 @@ export default function PatientDetailPage() {
               <button onClick={() => setActiveTab('visits')}
                 className="text-left bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-2xl p-3 sm:p-4 border border-emerald-200/50 dark:border-emerald-800 hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-[0.98]">
                 <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-600 dark:text-emerald-400 text-sm sm:text-base font-semibold uppercase tracking-wider mb-1.5 sm:mb-2">
-                  <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <IndianRupee className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   Revenue
                 </div>
                 <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{formatCurrency(totalRevenue)}</div>
@@ -1007,7 +1007,7 @@ export default function PatientDetailPage() {
                               )}
                               {(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0)) > 0 && (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-sm sm:text-base font-medium text-gray-700 dark:text-gray-300 shadow-sm">
-                                  <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500" />
+                                  <IndianRupee className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500" />
                                   {formatCurrency(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0))}
                                   {visit.payment_status === 'partial' && (
                                     <span className="text-amber-500 dark:text-amber-400 ml-1">(Paid {formatCurrency(visit.paid_amount || 0)})</span>
@@ -1249,7 +1249,7 @@ export default function PatientDetailPage() {
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 md:p-8 shadow-sm">
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2.5">
                 <Star className="w-5 h-5 text-blue-500" />
-                Doctor's Patient Rating
+                Doctor&apos;s Patient Rating
               </h2>
               <div className="space-y-3">
                 {RATING_CATEGORIES.map(cat => (

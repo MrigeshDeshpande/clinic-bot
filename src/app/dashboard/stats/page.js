@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchCached } from '@/lib/clientFetchCache';
 import {
-  TrendingUp, DollarSign, Calendar, Activity, Stethoscope,
+  TrendingUp, IndianRupee, Calendar, Activity, Stethoscope,
   Pill, Clock, Users, XCircle, Download, ArrowUp, ArrowDown, Mars, Venus,
 } from 'lucide-react';
 import {
@@ -150,7 +150,7 @@ export default function StatsPage() {
 
           {/* Revenue */}
           <KpiCard
-            icon={<DollarSign className="w-5 h-5" />}
+            icon={<IndianRupee className="w-5 h-5" />}
             iconBg="from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30"
             iconColor="text-emerald-600 dark:text-emerald-400"
             value={formatCurrency(stats?.totalRevenue || 0)}
@@ -188,7 +188,7 @@ export default function StatsPage() {
         {stats?.feeBreakdown && (stats.feeBreakdown.consultation > 0 || stats.feeBreakdown.treatment > 0 || stats.feeBreakdown.medicine > 0) && (
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 md:p-8 shadow-sm">
             <div className="flex items-center gap-2.5 mb-6">
-              <DollarSign className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
+              <IndianRupee className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
               <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Revenue Breakdown</h2>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

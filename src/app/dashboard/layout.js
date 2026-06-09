@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import dynamic from 'next/dynamic';
-import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Bell, Settings, Sun, Moon, X, Menu } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Bell, Settings, Sun, Moon, X, Menu, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 const NotificationPanel = dynamic(() => import('@/components/NotificationPanel'), { ssr: false });
 
@@ -154,6 +154,7 @@ function GlobalSearch() {
 
 function SidebarContent({ pathname, onNavClick }) {
   const router = useRouter();
+  const { setSidebarCollapsed } = useContext(SidebarContext);
 
   async function handleLogout() {
     await fetch('/api/dashboard/logout', { method: 'POST' });
@@ -163,7 +164,7 @@ function SidebarContent({ pathname, onNavClick }) {
   return (
     <>
       {/* Logo */}
-      <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800">
+      <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
         <Link href="/dashboard" onClick={onNavClick} className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
             <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-9 h-9 rounded-lg object-contain" />
@@ -173,6 +174,13 @@ function SidebarContent({ pathname, onNavClick }) {
             <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
           </div>
         </Link>
+        <button
+          onClick={() => setSidebarCollapsed(true)}
+          className="hidden md:flex p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+          title="Collapse sidebar"
+        >
+          <ChevronsLeft className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Search */}
@@ -270,11 +278,23 @@ export default function DashboardLayout({ children }) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
 
-  // Hydrate dark mode from localStorage after first mount (avoids hydration mismatch)
+  // Hydrate dark mode and sidebar status from localStorage after first mount (avoids hydration mismatch)
   useEffect(() => {
-    const saved = localStorage.getItem('dashboard-dark-mode');
-    if (saved === 'true') setDarkMode(true);
+    const savedDark = localStorage.getItem('dashboard-dark-mode');
+    if (savedDark === 'true') {
+      setTimeout(() => setDarkMode(true), 0);
+    }
+
+    const savedSidebar = localStorage.getItem('dashboard-sidebar-collapsed');
+    if (savedSidebar === 'true') {
+      setTimeout(() => setSidebarCollapsed(true), 0);
+    }
   }, []);
+
+  // Persist sidebar status to localStorage
+  useEffect(() => {
+    localStorage.setItem('dashboard-sidebar-collapsed', String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   // Apply/remove dark class on <html> and persist to localStorage
   useEffect(() => {
@@ -367,8 +387,8 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Desktop Sidebar */}
-          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-56'}`}>
-            <div className="min-w-56 flex-1 flex flex-col">
+          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64'}`}>
+            <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 min-w-0 overflow-hidden' : 'w-64 min-w-64'}`}>
               <SidebarContent pathname={pathname} />
             </div>
           </aside>
@@ -377,17 +397,15 @@ export default function DashboardLayout({ children }) {
           {sidebarCollapsed && (
             <button
               onClick={() => setSidebarCollapsed(false)}
-              className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-20 w-5 h-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-r-lg items-center justify-center shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-400 dark:text-gray-500"
+              className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-20 w-6 h-12 bg-white dark:bg-gray-900 border border-l-0 border-gray-200 dark:border-gray-800 rounded-r-xl items-center justify-center shadow-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-400 dark:text-gray-500 cursor-pointer hover:w-7"
               title="Expand sidebar"
             >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
+              <ChevronsRight className="w-4 h-4" />
             </button>
           )}
 
           {/* Main Content */}
-          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-56'}`}>
+          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-64'}`}>
             <div className="animate-fade-in mx-auto">
               {children}
             </div>

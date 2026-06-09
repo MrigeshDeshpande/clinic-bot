@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useContext } from 'react';
-import { Bell, Clock, CheckCircle, XCircle, Loader2, RefreshCw, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bell, Clock, CheckCircle, XCircle, Loader2, RefreshCw, IndianRupee, ChevronDown, ChevronUp } from 'lucide-react';
 import { ToastContext } from '../layout';
 
 function StatusIcon({ status }) {
@@ -171,7 +171,7 @@ export default function DueRemindersPage() {
           </div>
         ) : logs.length === 0 ? (
           <div className="p-8 text-center">
-            <DollarSign className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
+            <IndianRupee className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
             <p className="text-sm text-gray-400 dark:text-gray-500">No reminder history yet</p>
             <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">
               Click &quot;Send Due Reminders&quot; to trigger the first batch

@@ -3,7 +3,7 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3 } from 'lucide-react';
+import { IndianRupee, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3 } from 'lucide-react';
 import Calendar from '@/components/Calendar';
 import WeekView from '@/components/WeekView';
 import DayTimeline from '@/components/DayTimeline';
@@ -610,7 +610,9 @@ export default function DashboardPage() {
     const params = new URLSearchParams(window.location.search);
     const bookTime = params.get('book');
     if (bookTime) {
-      setBookingModal({ open: true, time: bookTime });
+      setTimeout(() => {
+        setBookingModal({ open: true, time: bookTime });
+      }, 0);
       // Clean the URL without full page reload
       const url = new URL(window.location);
       url.searchParams.delete('book');
@@ -765,35 +767,35 @@ export default function DashboardPage() {
 
         {/* Row 2: KPI Strip */}
         {!loading && (
-          <div className="flex items-center gap-4 overflow-x-auto">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{appointments.length}</span>
+          <div className="flex items-center gap-8 overflow-x-auto py-2">
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
+              <span className="text-sm md:text-base font-semibold text-gray-500 dark:text-gray-400">Total</span>
+              <span className="text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100">{appointments.length}</span>
             </div>
-            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Waiting</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.waiting || 0}</span>
+            <div className="w-px h-6 md:h-8 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="text-sm md:text-base font-semibold text-gray-500 dark:text-gray-400">Waiting</span>
+              <span className="text-xl md:text-2xl font-black text-amber-600 dark:text-amber-400">{totals.waiting || 0}</span>
             </div>
-            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">In Session</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.in_session || 0}</span>
+            <div className="w-px h-6 md:h-8 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
+              <span className="text-sm md:text-base font-semibold text-gray-500 dark:text-gray-400">In Session</span>
+              <span className="text-xl md:text-2xl font-black text-blue-600 dark:text-blue-400">{totals.in_session || 0}</span>
             </div>
-            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Completed</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.completed || 0}</span>
+            <div className="w-px h-6 md:h-8 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+              <span className="text-sm md:text-base font-semibold text-gray-500 dark:text-gray-400">Completed</span>
+              <span className="text-xl md:text-2xl font-black text-gray-700 dark:text-gray-300">{totals.completed || 0}</span>
             </div>
-            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Revenue</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(todayRevenue)}</span>
+            <div className="w-px h-6 md:h-8 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+              <span className="text-sm md:text-base font-semibold text-gray-500 dark:text-gray-400">Revenue</span>
+              <span className="text-xl md:text-2xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(todayRevenue)}</span>
             </div>
           </div>
         )}
@@ -902,7 +904,7 @@ export default function DashboardPage() {
             >
               <div className={`absolute -right-3 -bottom-3 w-20 h-20 pointer-events-none transition-all duration-500 ease-out group-hover:scale-125 group-hover:rotate-12 ${style.iconColor}`}>
                 <div className="w-full h-full opacity-[0.12] dark:opacity-[0.06] flex items-center justify-center">
-                  <DollarSign className="w-14 h-14" />
+                  <IndianRupee className="w-14 h-14" />
                 </div>
               </div>
               <div className="relative z-10 flex flex-col h-full justify-between">

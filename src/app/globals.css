@@ -76,16 +76,16 @@
   /* grays for dark mode - consistent with standard tailwind semantics:
      50 is lightest/white, 950 is darkest/black */
   --gray-50: #ffffff;
-  --gray-100: #f1f5f9;
+  --gray-100: #f8fafc;
   --gray-200: #e2e8f0;
   --gray-300: #cbd5e1;
   --gray-400: #94a3b8;
   --gray-500: #64748b;
-  --gray-600: #475569;
-  --gray-700: #334155;
-  --gray-800: #1c222c; /* dark border */
-  --gray-900: #0a0c10; /* dark card surface */
-  --gray-950: #000000; /* dark page background */
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #22252e; /* dark border (lighter for visibility) */
+  --gray-900: #121318; /* dark card surface (sleek lighter gray) */
+  --gray-950: #000000; /* dark page background (pure black) */
 
   /* Teal overrides (#00828a) */
   --blue-50: #e6f7f8;
