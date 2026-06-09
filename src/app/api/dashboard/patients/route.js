@@ -29,7 +29,11 @@ export async function GET(req) {
           FROM appointments
           GROUP BY patient_id
         ) ac ON ac.patient_id = p.id
-        LEFT JOIN appointments lv ON lv.patient_id = p.id AND lv.date = ac.last_visit AND lv.status = 'completed'
+        LEFT JOIN LATERAL (
+          SELECT time FROM appointments
+          WHERE patient_id = p.id AND date = ac.last_visit AND status = 'completed'
+          LIMIT 1
+        ) lv ON true
         WHERE p.name ILIKE ${pattern} OR p.phone ILIKE ${pattern}
         ORDER BY p.created_at DESC
         LIMIT ${limit}
@@ -48,7 +52,11 @@ export async function GET(req) {
           FROM appointments
           GROUP BY patient_id
         ) ac ON ac.patient_id = p.id
-        LEFT JOIN appointments lv ON lv.patient_id = p.id AND lv.date = ac.last_visit AND lv.status = 'completed'
+        LEFT JOIN LATERAL (
+          SELECT time FROM appointments
+          WHERE patient_id = p.id AND date = ac.last_visit AND status = 'completed'
+          LIMIT 1
+        ) lv ON true
         ORDER BY p.created_at DESC
         LIMIT ${limit}
       `;

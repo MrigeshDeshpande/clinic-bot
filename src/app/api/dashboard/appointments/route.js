@@ -16,7 +16,8 @@ export async function POST(req) {
     await runMigrations();
     const sql = getSql();
     const body = await req.json();
-    const { patientName, patientPhone, patientAge, patientSex, date, time, treatment, location } = body;
+    let { patientName, patientPhone, patientAge, patientSex, date, time, treatment, location } = body;
+    if (patientPhone) patientPhone = patientPhone.replace(/\D/g, '');
 
     if (!patientName || !date || !time) {
       return NextResponse.json({ error: 'patientName, date, and time are required' }, { status: 400 });
