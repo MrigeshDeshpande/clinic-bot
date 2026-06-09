@@ -25,7 +25,7 @@ export async function POST(req) {
   try {
     const sql = getSql();
     const body = await req.json();
-    const { appointmentId, treatment, treatments, tooth_diagnoses, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, advice_selected, diagnosis_selected, status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount, patient_age, patient_sex, patient_location } = body;
+    const { appointmentId, treatment, treatments, tooth_diagnoses, diagnosis, medicines, consultationFee, treatmentCharges, medicineCharges, notes, followUpDate, followUpInstructions, advice_selected, diagnosis_selected, status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount, patient_age, patient_sex, patient_location, chiefComplaint, generalExamination, extraOralExamination } = body;
 
     // ── Update existing appointment ──
     if (appointmentId) {
@@ -82,6 +82,18 @@ export async function POST(req) {
         setClauses.push(`diagnosis_selected = $${p++}`);
         params.push(toPgTextArray(diagnosis_selected));
       }
+      if (chiefComplaint !== undefined) {
+        setClauses.push(`chief_complaint = $${p++}`);
+        params.push(chiefComplaint);
+      }
+      if (generalExamination !== undefined) {
+        setClauses.push(`general_examination = $${p++}`);
+        params.push(generalExamination);
+      }
+      if (extraOralExamination !== undefined) {
+        setClauses.push(`extra_oral_examination = $${p++}`);
+        params.push(extraOralExamination);
+      }
       if (tooth_diagnoses !== undefined) {
         setClauses.push(`tooth_diagnoses = $${p++}`);
         params.push(JSON.stringify(tooth_diagnoses));
@@ -129,6 +141,7 @@ export async function POST(req) {
          SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,
                 treatments, diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
                 notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected, tooth_diagnoses, prescription_key,
+                chief_complaint, general_examination, extra_oral_examination,
                status, arrival_status, arrived_at, payment_status, payment_method, transaction_id, paid_amount, paid_at,
                created_at, updated_at
         FROM appointments WHERE id = ${appointmentId}
@@ -199,7 +212,8 @@ export async function POST(req) {
         diagnosis, medicines, notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected,
         tooth_diagnoses,
         arrival_status,
-        payment_status, payment_method, transaction_id, paid_at, paid_amount
+        payment_status, payment_method, transaction_id, paid_at, paid_amount,
+        chief_complaint, general_examination, extra_oral_examination
       ) VALUES (
         gen_random_uuid(), 1, ${patient_phone || null}, ${patient_name}, ${patient_phone || null}, ${patientId},
         ${today}, NULL, ${treatment || 'Walk-in'}, ${JSON.stringify(treatments || [])}, 'completed',
@@ -209,7 +223,8 @@ export async function POST(req) {
         ${advice_selected || []}, ${diagnosis_selected || []},
         ${JSON.stringify(tooth_diagnoses || [])},
         'arrived',
-        ${pStatus}, ${pMethod}, ${txnId}, ${paidAt}, ${paidAmt}
+        ${pStatus}, ${pMethod}, ${txnId}, ${paidAt}, ${paidAmt},
+        ${chiefComplaint || ''}, ${generalExamination || ''}, ${extraOralExamination || ''}
       )
       RETURNING *
     `;

@@ -127,6 +127,9 @@ function VisitPageInner() {
     adviceSelected: [],
     diagnosisSelected: [],
     toothDiagnoses: [],
+    chiefComplaint: '',
+    generalExamination: '',
+    extraOralExamination: '',
   });
   const [adviceOptions, setAdviceOptions] = useState([]);
   const [diagnosisOptions, setDiagnosisOptions] = useState([]);
@@ -215,7 +218,7 @@ function VisitPageInner() {
   const [patientVisits, setPatientVisits] = useState([]);
   const [patientMessages, setPatientMessages] = useState([]);
   const [patientFamily, setPatientFamily] = useState([]);
-  const [medicalHistory, setMedicalHistory] = useState({ allergies: '', chronicConditions: '', bloodGroup: '', bp: '', weight: '', medications: '', habits: {} });
+  const [medicalHistory, setMedicalHistory] = useState({ allergies: '', chronicConditions: '', bloodGroup: '', bp: '', weight: '', medications: '', habits: {}, address: '', occupation: '', dentalHistory: '', familyHistory: '' });
   const habits = medicalHistory.habits || {};
   const [loadingExtra, setLoadingExtra] = useState(false);
 
@@ -588,6 +591,9 @@ function VisitPageInner() {
                 ...f,
                 treatment: lastVisit.treatment || '',
                 diagnosis: lastVisit.diagnosis || '',
+                chiefComplaint: lastVisit.chief_complaint || '',
+                generalExamination: lastVisit.general_examination || '',
+                extraOralExamination: lastVisit.extra_oral_examination || '',
                 medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
                 adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
                 diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
@@ -669,8 +675,9 @@ function VisitPageInner() {
         if (data.patient) {
           const profile = data.patient;
           setPatientProfile(profile);
-          if (profile.allergies !== undefined || profile.chronicConditions !== undefined || profile.bloodGroup !== undefined || profile.bp !== undefined || profile.weight !== undefined || profile.medications !== undefined || profile.habits !== undefined) {
-            setMedicalHistory({
+          if (profile.allergies !== undefined || profile.chronicConditions !== undefined || profile.bloodGroup !== undefined || profile.bp !== undefined || profile.weight !== undefined || profile.medications !== undefined || profile.habits !== undefined || profile.address !== undefined || profile.occupation !== undefined || profile.dental_history !== undefined || profile.family_history !== undefined) {
+            setMedicalHistory(mh => ({
+              ...mh,
               allergies: profile.allergies || '',
               chronicConditions: profile.chronicConditions || '',
               bloodGroup: profile.bloodGroup || '',
@@ -678,7 +685,11 @@ function VisitPageInner() {
               weight: profile.weight || '',
               medications: profile.medications || '',
               habits: profile.habits || {},
-            });
+              address: profile.address || '',
+              occupation: profile.occupation || '',
+              dentalHistory: profile.dental_history || '',
+              familyHistory: profile.family_history || '',
+            }));
           }
           if (data.visits) {
             setPatientVisits(data.visits);
@@ -688,6 +699,9 @@ function VisitPageInner() {
                 ...f,
                 treatment: lastVisit.treatment || '',
                 diagnosis: lastVisit.diagnosis || '',
+                chiefComplaint: lastVisit.chief_complaint || '',
+                generalExamination: lastVisit.general_examination || '',
+                extraOralExamination: lastVisit.extra_oral_examination || '',
                 medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
                 adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
                 diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
@@ -888,6 +902,9 @@ function VisitPageInner() {
             diagnosis_selected: form.diagnosisSelected,
             tooth_diagnoses: form.toothDiagnoses,
             status: 'completed',
+            chiefComplaint: form.chiefComplaint.trim() || undefined,
+            generalExamination: form.generalExamination.trim() || undefined,
+            extraOralExamination: form.extraOralExamination.trim() || undefined,
             ...paymentPayload,
           }
         : {
@@ -902,6 +919,9 @@ function VisitPageInner() {
             treatmentCharges: computedTreatmentCharges,
             medicineCharges: Number(form.medicineCharges) || 0,
             diagnosis: form.diagnosis.trim() || undefined,
+            chiefComplaint: form.chiefComplaint.trim() || undefined,
+            generalExamination: form.generalExamination.trim() || undefined,
+            extraOralExamination: form.extraOralExamination.trim() || undefined,
             medicines: form.medicines.filter(m => m.name.trim()),
             followUpDate: form.followUpDate || undefined,
             followUpInstructions: form.followUpInstructions.trim() || undefined,
@@ -934,6 +954,10 @@ function VisitPageInner() {
         if (medicalHistory.weight) mhPayload.weight = medicalHistory.weight;
         if (medicalHistory.medications) mhPayload.medications = medicalHistory.medications;
         if (medicalHistory.habits && Object.keys(medicalHistory.habits).length > 0) mhPayload.habits = medicalHistory.habits;
+        if (medicalHistory.address) mhPayload.address = medicalHistory.address;
+        if (medicalHistory.occupation) mhPayload.occupation = medicalHistory.occupation;
+        if (medicalHistory.dentalHistory) mhPayload.dentalHistory = medicalHistory.dentalHistory;
+        if (medicalHistory.familyHistory) mhPayload.familyHistory = medicalHistory.familyHistory;
         if (Object.keys(mhPayload).length > 0) {
           try {
             const mhRes = await fetch(`/api/dashboard/patients/${patientIdForHistory}/medical-history`, {
@@ -985,7 +1009,7 @@ function VisitPageInner() {
   }
 
   function resetForm() {
-    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '', adviceSelected: [], diagnosisSelected: [], toothDiagnoses: [] });
+    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '', adviceSelected: [], diagnosisSelected: [], toothDiagnoses: [], chiefComplaint: '', generalExamination: '', extraOralExamination: '' });
     setTreatmentFees({});
     setConsultationFee(CONSULTATION_DEFAULT);
     setPatientProfile(null);
@@ -993,7 +1017,7 @@ function VisitPageInner() {
     setPatientVisits([]);
     setPatientMessages([]);
     setPatientFamily([]);
-    setMedicalHistory({ allergies: '', chronicConditions: '', bloodGroup: '', bp: '', weight: '', medications: '', habits: {} });
+    setMedicalHistory({ allergies: '', chronicConditions: '', bloodGroup: '', bp: '', weight: '', medications: '', habits: {}, address: '', occupation: '', dentalHistory: '', familyHistory: '' });
     setResult(null);
     setErrors({});
     setMediaFiles([]);
@@ -1712,6 +1736,64 @@ function VisitPageInner() {
             </div>
           )}
 
+          {/* ── Basic Details ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><Users className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Basic Details</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Address</label>
+                  <input type="text" value={medicalHistory.address} onChange={e => setMedicalHistory(h => ({ ...h, address: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. 123, Main Street, Durg" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Occupation</label>
+                  <input type="text" value={medicalHistory.occupation} onChange={e => setMedicalHistory(h => ({ ...h, occupation: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
+                    placeholder="e.g. Engineer, Teacher" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Chief Complaint ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="p-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/30"><FileText className="w-4 h-4 text-orange-500 dark:text-orange-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Chief Complaint</h2>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">C/C</span>
+              </div>
+              <textarea value={form.chiefComplaint} onChange={e => setForm(f => ({ ...f, chiefComplaint: e.target.value }))}
+                rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
+                placeholder="e.g. Pt complains of pain in upper left back tooth region, since 4 days." />
+            </div>
+          )}
+
+          {/* ── Dental History (PDH) + Family History (FH) ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Dental History <span className="text-gray-400 font-normal">(PDH)</span></label>
+                  <textarea value={medicalHistory.dentalHistory} onChange={e => setMedicalHistory(h => ({ ...h, dentalHistory: e.target.value }))}
+                    rows={2} className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
+                    placeholder="e.g. Previous RCT + cap done 3 yrs back in 46" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Family History <span className="text-gray-400 font-normal">(FH)</span></label>
+                  <textarea value={medicalHistory.familyHistory} onChange={e => setMedicalHistory(h => ({ ...h, familyHistory: e.target.value }))}
+                    rows={2} className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
+                    placeholder="e.g. Mother has ortho problem and diabetes" />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ══ Book-like two-page spread: Treatments left, Bill right ══ */}
           <div className="flex flex-col lg:flex-row rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
             {/* LEFT PAGE — Treatments */}
@@ -2035,6 +2117,32 @@ function VisitPageInner() {
             </div>
           </div>
 
+          {/* ── General Examination ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/30"><Activity className="w-4 h-4 text-teal-500 dark:text-teal-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">General Examination</h2>
+              </div>
+              <textarea value={form.generalExamination} onChange={e => setForm(f => ({ ...f, generalExamination: e.target.value }))}
+                rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-800 focus:border-teal-400 dark:focus:border-teal-500 transition-all resize-none placeholder-gray-400"
+                placeholder="e.g. Pallor, anemia, vitals stable" />
+            </div>
+          )}
+
+          {/* ── Extra-Oral Examination ── */}
+          {patientProfile && (
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="p-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30"><Activity className="w-4 h-4 text-violet-500 dark:text-violet-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Extra-Oral Examination</h2>
+              </div>
+              <textarea value={form.extraOralExamination} onChange={e => setForm(f => ({ ...f, extraOralExamination: e.target.value }))}
+                rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-400 dark:focus:border-violet-500 transition-all resize-none placeholder-gray-400"
+                placeholder="e.g. Swelling, lymphadenopathy" />
+            </div>
+          )}
+
           {/* Tooth Grid + Per-Tooth Diagnosis */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-4">
@@ -2119,6 +2227,114 @@ function VisitPageInner() {
             <textarea value={form.diagnosis} onChange={e => setForm(f => ({ ...f, diagnosis: e.target.value }))}
               rows={3} className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
               placeholder="Describe the diagnosis, observations, and any clinical notes..." />
+          </div>
+
+          {/* ── Attachments ── */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30"><Upload className="w-4 h-4 text-purple-500 dark:text-purple-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Attachments</h2>
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">(optional)</span>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
+                onChange={handleMediaUpload}
+                className="hidden"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingMedia}
+                  className="flex-1 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="text-xs font-medium">
+                    {uploadingMedia ? 'Uploading...' : 'Click to upload'}
+                  </span>
+                  <span className="text-xs">Photos, documents, audio</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCamera(true)}
+                  disabled={uploadingMedia}
+                  className="w-20 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 shrink-0"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span className="text-xs font-medium">Camera</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  disabled={uploadingMedia}
+                  className="w-20 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 shrink-0"
+                >
+                  <Images className="w-4 h-4" />
+                  <span className="text-xs font-medium">Gallery</span>
+                </button>
+              </div>
+              <input
+                ref={galleryInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleMediaUpload}
+                className="hidden"
+              />
+              {mediaFiles.length > 0 && (
+                <div className="mt-2.5 space-y-1.5">
+                  {mediaFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 text-sm">
+                      {getFilePreview(file) ? (
+                        <img src={getFilePreview(file)} alt="" className="w-8 h-8 rounded-lg object-cover" />
+                      ) : (
+                        <span className="text-base">{getFileIcon(file)}</span>
+                      )}
+                      <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{file.name}</span>
+                      <button type="button" onClick={() => removeMediaFile(idx)}
+                        className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          {/* ── Follow-up & Additional Notes ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><Calendar className="w-4 h-4 text-amber-500 dark:text-amber-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Follow-up</h2>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Follow-up Date</label>
+                  <input type="date" value={form.followUpDate} onChange={e => setForm(f => ({ ...f, followUpDate: e.target.value }))}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Instructions</label>
+                  <input type="text" value={form.followUpInstructions} onChange={e => setForm(f => ({ ...f, followUpInstructions: e.target.value }))}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
+                    placeholder="e.g. Return in 2 weeks" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800"><FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" /></div>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Additional Notes</h2>
+              </div>
+              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                rows={3} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
+                placeholder="Any additional notes or instructions..." />
+            </div>
           </div>
 
           {/* ── Medical & Dental History (Editable) ── */}
@@ -2244,116 +2460,6 @@ function VisitPageInner() {
               </div>
             </div>
           )}
-
-          {/* Right side items: Attachments + Follow-up + Notes */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Attachments */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30"><Upload className="w-4 h-4 text-purple-500 dark:text-purple-400" /></div>
-                  <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Attachments</h2>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">(optional)</span>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
-                  onChange={handleMediaUpload}
-                  className="hidden"
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingMedia}
-                    className="flex-1 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span className="text-xs font-medium">
-                      {uploadingMedia ? 'Uploading...' : 'Click to upload'}
-                    </span>
-                    <span className="text-xs">Photos, documents, audio</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowCamera(true)}
-                    disabled={uploadingMedia}
-                    className="w-20 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 shrink-0"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span className="text-xs font-medium">Camera</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => galleryInputRef.current?.click()}
-                    disabled={uploadingMedia}
-                    className="w-20 py-5 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-all flex flex-col items-center gap-2 text-gray-400 dark:text-gray-500 hover:text-purple-500 dark:hover:text-purple-400 shrink-0"
-                  >
-                    <Images className="w-4 h-4" />
-                    <span className="text-xs font-medium">Gallery</span>
-                  </button>
-                </div>
-                <input
-                  ref={galleryInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleMediaUpload}
-                  className="hidden"
-                />
-                {mediaFiles.length > 0 && (
-                  <div className="mt-2.5 space-y-1.5">
-                    {mediaFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 text-sm">
-                        {getFilePreview(file) ? (
-                          <img src={getFilePreview(file)} alt="" className="w-8 h-8 rounded-lg object-cover" />
-                        ) : (
-                          <span className="text-base">{getFileIcon(file)}</span>
-                        )}
-                        <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{file.name}</span>
-                        <button type="button" onClick={() => removeMediaFile(idx)}
-                          className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-            {/* Follow-up */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><Calendar className="w-4 h-4 text-amber-500 dark:text-amber-400" /></div>
-                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Follow-up</h2>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Follow-up Date</label>
-                  <input type="date" value={form.followUpDate} onChange={e => setForm(f => ({ ...f, followUpDate: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Instructions</label>
-                  <input type="text" value={form.followUpInstructions} onChange={e => setForm(f => ({ ...f, followUpInstructions: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
-                    placeholder="e.g. Return in 2 weeks" />
-                </div>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800"><FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" /></div>
-                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Additional Notes</h2>
-              </div>
-              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                rows={3} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all resize-none"
-                placeholder="Any additional notes or instructions..." />
-            </div>
-          </div>
 
           {/* Medicines — full width */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">

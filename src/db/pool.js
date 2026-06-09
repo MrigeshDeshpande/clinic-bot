@@ -533,6 +533,23 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS habits JSONB DEFAULT '{}';
     `;
 
+    // OPD slip fields on patients
+    await db`
+      ALTER TABLE patients
+        ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS occupation VARCHAR(100) DEFAULT '',
+        ADD COLUMN IF NOT EXISTS dental_history TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS family_history TEXT DEFAULT '';
+    `;
+
+    // OPD slip fields on appointments
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS chief_complaint TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS general_examination TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS extra_oral_examination TEXT DEFAULT '';
+    `;
+
     // Settings table — key-value store for admin dashboard customization
     await db`
       CREATE TABLE IF NOT EXISTS settings (
