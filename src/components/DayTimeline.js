@@ -318,11 +318,11 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
             {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
               <div className="absolute left-0 right-0 z-30 pointer-events-none" style={{ top: nowOffset }}>
                 <div className="flex items-center">
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1" />
-                  <div className="flex-1 h-0.5 bg-red-500 shadow-red-500/30 shadow-sm" />
-                  <span className="ml-1 text-[10px] font-bold text-red-500 bg-white dark:bg-gray-900 px-1 rounded shadow-sm">
+                  <span className="text-[10px] font-bold text-red-500 bg-white dark:bg-gray-900 px-1 rounded shadow-sm mr-1">
                     {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
                   </span>
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1" />
+                  <div className="flex-1 h-0.5 bg-red-500 shadow-red-500/30 shadow-sm" />
                 </div>
               </div>
             )}

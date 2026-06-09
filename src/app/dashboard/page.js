@@ -847,6 +847,16 @@ export default function DashboardPage() {
       )
       }
 
+      {/* FAB — quick book on week/day views */}
+      {(viewMode === 'week' || viewMode === 'day') && (
+        <button
+          onClick={() => setBookingModal({ open: true, time: null })}
+          className="fixed bottom-6 right-6 z-40 w-12 h-12 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-full shadow-xl shadow-gray-900/20 dark:shadow-white/10 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
+      )}
+
       {/* Financial Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         {[
