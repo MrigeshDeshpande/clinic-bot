@@ -338,7 +338,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
         <div ref={containerRef} className="overflow-x-auto overflow-y-auto max-h-[75vh] scroll-smooth">
           <div className="flex min-w-[700px]">
             {/* Time labels column */}
-            <div className="shrink-0 w-14 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800">
+            <div className="relative shrink-0 w-14 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800">
               <div className="h-10 border-b border-gray-100 dark:border-gray-800" />
               {HOURS.map(h => (
                   <div key={h} style={{ height: SLOT_HEIGHT * 2 }} className="relative border-b border-gray-100 dark:border-gray-800">
@@ -347,10 +347,20 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                   </span>
                 </div>
               ))}
+              {/* Current time label in gutter */}
+              {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
+                <div className="absolute right-0 z-20 pointer-events-none" style={{ top: nowOffset - 7 }}>
+                  <span className="text-[9px] font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 whitespace-nowrap shadow-sm">
+                    {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Day columns */}
-            {days.map((day, idx) => {
+            {/* Day columns with spine */}
+            <div className="flex-1 min-w-0 border-l border-gray-200 dark:border-gray-700">
+              <div className="flex">
+                {days.map((day, idx) => {
               const dayStr = formatISO(day);
               const dayAppts = apptsByDay[dayStr] || [];
               const dayOfWeek = day.getDay();
@@ -384,12 +394,24 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, dayStr)}
                   >
+                    {/* Alternating row backgrounds */}
+                    {ALL_SLOTS.map((si) => (
+                      <div
+                        key={`row-${si}`}
+                        className={`absolute left-0 right-0 pointer-events-none ${si % 2 === 0 ? 'bg-white dark:bg-transparent' : 'bg-gray-50/30 dark:bg-gray-900/10'}`}
+                        style={{ top: si * SLOT_HEIGHT, height: SLOT_HEIGHT }}
+                      />
+                    ))}
+
                     {/* Current time indicator (today only) */}
                     {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
                       <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: nowOffset }}>
                         <div className="flex items-center">
                           <div className="w-2 h-2 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1" />
                           <div className="flex-1 h-px bg-red-500 shadow-red-500/30 shadow-sm" />
+                          <span className="ml-1 text-[9px] font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 rounded shadow-sm">
+                            {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -475,8 +497,10 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* Toast */}

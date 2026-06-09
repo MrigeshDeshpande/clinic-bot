@@ -283,12 +283,15 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
       ) : (
         <div ref={containerRef} className="overflow-y-auto max-h-[70vh] scroll-smooth">
           <div className="relative" style={{ minHeight: HOURS.length * SLOT_HEIGHT * 2 }}>
+            {/* Time spine */}
+            <div className="absolute left-16 top-0 bottom-0 z-10 pointer-events-none border-l border-gray-200 dark:border-gray-700" />
+
             {/* Hour rows + Bookable click zones */}
-            {HOURS.map(h => {
+            {HOURS.map((h, hi) => {
               const hourLabel = h === 12 ? '12:00 PM' : h < 12 ? `${h}:00 AM` : `${h - 12}:00 PM`;
               const isPastHour = isToday && (h + 1) * 60 <= nowMin;
               return (
-                <div key={h} style={{ height: SLOT_HEIGHT * 2 }} className={`relative border-b border-gray-100 dark:border-gray-800 transition-colors ${isPastHour ? '' : 'hover:bg-blue-50/30 dark:hover:bg-blue-900/10'}`}>
+                <div key={h} style={{ height: SLOT_HEIGHT * 2 }} className={`relative border-b border-gray-100 dark:border-gray-800 transition-colors ${hi % 2 === 0 ? 'bg-white dark:bg-transparent' : 'bg-gray-50/30 dark:bg-gray-900/10'} ${isPastHour ? '' : 'hover:bg-blue-50/30 dark:hover:bg-blue-900/10'}`}>
                   <span className={`absolute -top-2.5 left-3 text-[11px] font-semibold bg-white dark:bg-gray-900 px-1 z-10 ${isPastHour ? 'text-gray-300 dark:text-gray-600' : 'text-gray-400 dark:text-gray-500'}`}>
                     {hourLabel}
                   </span>
@@ -317,6 +320,9 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
                 <div className="flex items-center">
                   <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1" />
                   <div className="flex-1 h-0.5 bg-red-500 shadow-red-500/30 shadow-sm" />
+                  <span className="ml-1 text-[10px] font-bold text-red-500 bg-white dark:bg-gray-900 px-1 rounded shadow-sm">
+                    {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
+                  </span>
                 </div>
               </div>
             )}
