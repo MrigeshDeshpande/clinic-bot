@@ -114,6 +114,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
   const toStr = formatISO(days[6]);
   const today = new Date();
   const todayStr = formatISO(today);
+  const isThisWeek = days.some(d => isSameDay(d, today));
 
   // Scroll to current time on mount (today)
   useEffect(() => {
@@ -348,7 +349,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                 </div>
               ))}
               {/* Current time label in gutter */}
-              {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
+              {isThisWeek && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
                 <div className="absolute right-0 z-20 pointer-events-none" style={{ top: nowOffset - 7 }}>
                   <span className="text-[9px] font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 whitespace-nowrap shadow-sm">
                     {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
@@ -404,7 +405,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                     ))}
 
                     {/* Current time indicator (today only) */}
-                    {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
+              {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
                       <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: nowOffset }}>
                         <div className="flex items-center">
                           <span className="text-[9px] font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 rounded shadow-sm mr-1">
@@ -472,7 +473,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                       </div>
                     )}
 
-                    {/* Empty slot book zones */}
+                    {/* Empty slot click zones */}
                     {ALL_SLOTS.map((slotTime, si) => {
                       const booked = dayAppts.some(a => a.time?.slice(0, 5) === slotTime && a.status === 'confirmed');
                       if (booked) return null;
@@ -482,15 +483,9 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                         <button
                           key={`book-${si}`}
                           onClick={() => handleSlotClick(dayStr, slotTime)}
-                          className="absolute left-0 right-0 z-5 transition-all duration-200"
+                          className="absolute left-0 right-0 z-5 cursor-pointer transition-colors duration-150 group-hover/day:bg-blue-50/20 dark:group-hover/day:bg-blue-900/10"
                           style={{ top: si * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                        >
-                          <div className="h-full flex items-center justify-center opacity-0 group-hover/day:opacity-100 transition-all duration-200 group-hover/day:bg-blue-50/30 dark:group-hover/day:bg-blue-900/10">
-                            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 group-hover/day:text-blue-600 dark:group-hover/day:text-blue-400 px-2 py-0.5 rounded transition-all duration-200">
-                              Book {slotTime}
-                            </span>
-                          </div>
-                        </button>
+                        />
                       );
                     })}
                   </div>

@@ -723,18 +723,13 @@ export default function DashboardPage() {
 
   return (
     <div className="animate-fade-in">
-      {/* Header — always rendered, even during loading, to optimize LCP */}
-      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 pt-3 pb-2 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all">
-        {/* Row 1: Brand + Actions */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gray-900 dark:bg-white flex items-center justify-center shrink-0 shadow-sm">
-              <span className="text-base text-white dark:text-gray-900 font-extrabold tracking-tight">S</span>
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight truncate">Shri Balaji Dental</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400 leading-tight truncate">{formatDateLong(selectedDate)}</p>
-            </div>
+      {/* Header */}
+      <div className="py-3 mb-6 border-b border-gray-100 dark:border-gray-800 transition-all">
+        {/* Row 1: Title + Actions */}
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight">Dashboard</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">{formatDateLong(selectedDate)}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -770,7 +765,7 @@ export default function DashboardPage() {
 
         {/* Row 2: KPI Strip */}
         {!loading && (
-          <div className="flex items-center gap-5 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 overflow-x-auto">
+          <div className="flex items-center gap-4 overflow-x-auto">
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
               <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total</span>
@@ -791,7 +786,7 @@ export default function DashboardPage() {
             <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400"          >Completed</span>
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Completed</span>
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.completed || 0}</span>
             </div>
             <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />

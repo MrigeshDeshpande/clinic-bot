@@ -118,7 +118,7 @@ export async function GET(req) {
       const rows = await sql`
         SELECT a.id, a.logical_id, a.wa_id,
                COALESCE(p.name, a.patient_name) AS patient_name,
-               a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+               a.patient_phone, a.patient_id, a.date::text AS date, a.time, a.treatment,
                a.treatments,
                a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
@@ -142,7 +142,7 @@ export async function GET(req) {
       const rows = await sql`
         SELECT a.id, a.logical_id, a.wa_id,
                COALESCE(p.name, a.patient_name) AS patient_name,
-               a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+               a.patient_phone, a.patient_id, a.date::text AS date, a.time, a.treatment,
                a.treatments,
          a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
@@ -170,7 +170,7 @@ export async function GET(req) {
             sql`
               SELECT a.id, a.logical_id, a.wa_id,
                      COALESCE(p.name, a.patient_name) AS patient_name,
-                     a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+                     a.patient_phone, a.patient_id, a.date::text AS date, a.time, a.treatment,
                      a.treatments,
                      a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                      a.consultation_fee, a.treatment_charges, a.medicine_charges,
@@ -203,7 +203,7 @@ export async function GET(req) {
             sql`
               SELECT a.id, a.logical_id, a.wa_id,
                      COALESCE(p.name, a.patient_name) AS patient_name,
-                     a.patient_phone, a.patient_id, a.date, a.time, a.treatment,
+                     a.patient_phone, a.patient_id, a.date::text AS date, a.time, a.treatment,
                      a.treatments,
                      a.status, a.arrival_status, a.arrived_at, a.called_at, a.is_priority,
                      a.consultation_fee, a.treatment_charges, a.medicine_charges,
