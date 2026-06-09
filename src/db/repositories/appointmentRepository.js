@@ -341,7 +341,7 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
       // succeeds in marking it — the other hits 0 rows and will fail the INSERT.
       await sql`
         UPDATE appointments
-        SET superseded_at = NOW(), updated_at = NOW()
+        SET superseded_at = NOW(), updated_at = NOW(), status = 'superseded'
         WHERE logical_id = ${logicalId}
           AND version = ${currentVersion}
           AND superseded_at IS NULL

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Clock, XCircle, Loader2, MapPin, Phone, Plus, IndianRupee } from 'lucide-react';
 import { parseDateOnly, formatDateShort } from '@/lib/date';
-import { fetchCached } from '@/lib/clientFetchCache';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 
 const SLOT_HEIGHT = 56;
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 8);
@@ -69,11 +69,11 @@ function formatCurrency(amount) {
 }
 
 function StatusBadge({ status, arrivalStatus }) {
-  if (status === 'completed') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Done</span>;
-  if (status === 'no_show') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700">No Show</span>;
-  if (arrivalStatus === 'called') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1 animate-pulse" />In Session</span>;
-  if (arrivalStatus === 'arrived') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block mr-1" />Waiting</span>;
-  return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700">Scheduled</span>;
+  if (status === 'completed') return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-slate-100 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300">Done</span>;
+  if (status === 'no_show') return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">No Show</span>;
+  if (arrivalStatus === 'called') return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1 animate-pulse" />In Session</span>;
+  if (arrivalStatus === 'arrived') return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block mr-1" />Waiting</span>;
+  return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Scheduled</span>;
 }
 
 function LoadingSkeleton() {
@@ -216,6 +216,7 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
         setToast(errData.error || 'Failed to reschedule');
         return;
       }
+      invalidateFetchCache('/api/dashboard/appointments');
       setToast(`Moved to ${formatDateShort(dateStr)} at ${time}`);
       fetchDay();
       onRefresh?.();
@@ -360,7 +361,7 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
                     style={{ top, height: SLOT_HEIGHT }}
                   >
                     {/* Treatment color left accent bar */}
-                    <div className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-full ${tStyle.dot}`} />
+                    <div className={`absolute left-0 top-1 bottom-1 w-1 rounded-full shadow-sm ${tStyle.dot}`} />
 
                     <div className="flex items-start justify-between gap-2 px-3 py-1.5 pl-[7px]">
                       <div className="min-w-0 flex-1">

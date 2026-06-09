@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, CalendarDays, Clock, XCircle, Plus, Loader2 } from 'lucide-react';
 import { parseDateOnly, formatDateShort } from '@/lib/date';
-import { fetchCached } from '@/lib/clientFetchCache';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 
 const SLOT_HEIGHT = 56;
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 8);
@@ -229,6 +229,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
         setToast(errData.error || 'Failed to reschedule');
         return;
       }
+      invalidateFetchCache('/api/dashboard/appointments');
       setToast(`Moved to ${popoverDateFormat(dayDateStr)} at ${time}`);
       fetchWeek();
       onRefresh?.();
@@ -416,19 +417,21 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                           style={{ top, height: SLOT_HEIGHT }}
                         >
                           {/* Treatment color left accent bar */}
-                          <div className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-full ${tStyle.dot}`} />
+                          <div className={`absolute left-0 top-1 bottom-1 w-1 rounded-full shadow-sm ${tStyle.dot}`} />
 
                           <div className="flex flex-col justify-center h-full px-2 pl-[7px] pr-4">
                             {appt.treatment && (
-                              <span className="text-[9px] font-bold uppercase tracking-wider leading-tight text-gray-800 dark:text-gray-200 truncate">
+                              <span className="text-xs font-bold uppercase tracking-wide leading-tight text-gray-800 dark:text-gray-200 truncate">
                                 {appt.treatment}
                               </span>
                             )}
-                            <span className={`text-xs font-semibold leading-tight truncate ${past ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                              {appt.patient_name || 'Patient'}
-                            </span>
-                            <span className="text-[9px] text-gray-400 dark:text-gray-500 leading-tight">
-                              {appt.time?.slice(0, 5)} — {getEndTime(appt.time)}
+                            <span className="truncate">
+                              <span className={`text-xs font-semibold leading-tight ${past ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                                {appt.patient_name || 'Patient'}
+                              </span>
+                              <span className="ml-1 text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                                · {appt.time?.slice(0, 5)}–{getEndTime(appt.time)}
+                              </span>
                             </span>
                           </div>
 

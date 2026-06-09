@@ -28,6 +28,20 @@ export async function POST(req, { params }) {
     }
 
     const logicalId = rows[0].logical_id;
+
+    // Check if target slot is already occupied by another appointment chain
+    const slotConflict = await sql`
+      SELECT 1 FROM appointments
+      WHERE date = ${date}
+        AND time = ${time}
+        AND status = 'confirmed'
+        AND logical_id != ${logicalId}
+      LIMIT 1
+    `;
+    if (slotConflict && slotConflict.length > 0) {
+      return NextResponse.json({ error: 'This time slot is already booked' }, { status: 409 });
+    }
+
     const result = await supersedeAppointment(logicalId, { date, time, treatment: treatment || null });
 
     if (!result) {
