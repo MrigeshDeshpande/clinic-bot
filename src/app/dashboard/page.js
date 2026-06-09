@@ -3,7 +3,7 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { IndianRupee, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3 } from 'lucide-react';
+import { IndianRupee, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3, AlertCircle, CheckCircle2 } from 'lucide-react';
 import Calendar from '@/components/Calendar';
 import WeekView from '@/components/WeekView';
 import DayTimeline from '@/components/DayTimeline';
@@ -890,38 +890,153 @@ export default function DashboardPage() {
       )}
 
       {/* Financial Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        {[
-          { key: 'revenue', label: "Today's Revenue", value: formatCurrency(todayRevenue), link: '/dashboard/stats' },
-          { key: 'outstanding', label: 'Outstanding Amount', value: formatCurrency(todayPending), link: '/dashboard/appointments?status=completed' },
-        ].map(card => {
-          const style = CARD_STYLE_MAP[card.key === 'outstanding' ? (todayPending > 0 ? 'waiting' : 'completed') : 'revenue'];
-          return (
+      {(() => {
+        const pendingCount = completed.filter(a => {
+          const totalCharges = Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0);
+          const paid = Number(a.paid_amount || 0);
+          return totalCharges > paid;
+        }).length;
+
+        const collectedPercentage = todayRevenue > 0 ? Math.round((todayCollected / todayRevenue) * 100) : 0;
+
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+            {/* Today's Revenue Card */}
             <button
-              key={card.key}
-              onClick={() => router.push(card.link)}
-              className={`relative overflow-hidden w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:-translate-y-0.5 transition-all duration-300 group cursor-pointer active:scale-[0.98] ${style.hoverBg} ${style.hoverBorder} ${style.hoverGlow}`}
+              onClick={() => router.push('/dashboard/stats')}
+              className="relative overflow-hidden w-full text-left bg-gradient-to-br from-emerald-500/[0.07] via-transparent to-transparent bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 hover:-translate-y-1 transition-all duration-300 group cursor-pointer active:scale-[0.98] hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/[0.05]"
             >
-              <div className={`absolute -right-3 -bottom-3 w-20 h-20 pointer-events-none transition-all duration-500 ease-out group-hover:scale-125 group-hover:rotate-12 ${style.iconColor}`}>
-                <div className="w-full h-full opacity-[0.12] dark:opacity-[0.06] flex items-center justify-center">
-                  <IndianRupee className="w-14 h-14" />
+              {/* Background Ambient Glow */}
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 pointer-events-none transition-all duration-500 ease-out group-hover:scale-125 group-hover:rotate-12 text-emerald-500/10 dark:text-emerald-500/5">
+                <div className="w-full h-full flex items-center justify-center">
+                  <IndianRupee className="w-20 h-20" />
                 </div>
               </div>
-              <div className="relative z-10 flex flex-col h-full justify-between">
+
+              <div className="relative z-10 flex flex-col h-full justify-between space-y-4">
                 <div>
-                  <span className={`text-[11px] font-bold tracking-wider uppercase ${style.accentText}`}>
-                    {card.label}
-                  </span>
-                  <p className="text-3xl font-extrabold tracking-tight mt-2 text-gray-900 dark:text-gray-100">
-                    {card.value}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold tracking-wider uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
+                      Today&apos;s Revenue
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 group-hover:text-emerald-500 transition-colors flex items-center gap-1 font-medium">
+                      Stats <span className="transform group-hover:translate-x-0.5 transition-transform">→</span>
+                    </span>
+                  </div>
+                  <p className="text-3xl font-black tracking-tight mt-2.5 text-gray-900 dark:text-gray-100">
+                    {formatCurrency(todayRevenue)}
+                  </p>
+                </div>
+
+                {/* Collected vs Pending breakdown */}
+                <div className="space-y-2 pt-2 border-t border-gray-50 dark:border-gray-800/60">
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      Collected: {formatCurrency(todayCollected)}
+                    </span>
+                    {todayPending > 0 ? (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        Pending: {formatCurrency(todayPending)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-gray-500">
+                        All Settled
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden flex">
+                    <div 
+                      className="h-full bg-emerald-500 dark:bg-emerald-400 transition-all duration-500"
+                      style={{ width: `${collectedPercentage}%` }}
+                    />
+                    <div 
+                      className="h-full bg-amber-500 dark:bg-amber-400 transition-all duration-500"
+                      style={{ width: `${100 - collectedPercentage}%` }}
+                    />
+                  </div>
+
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 flex justify-between">
+                    <span>{completed.length} completed visit{completed.length !== 1 ? 's' : ''} today</span>
+                    <span className="font-medium">{collectedPercentage}% collected</span>
                   </p>
                 </div>
               </div>
-              <div className={`absolute bottom-0 left-0 right-0 h-1 ${style.accentBar} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500 dark:bg-emerald-400 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
             </button>
-          );
-        })}
-      </div>
+
+            {/* Outstanding Amount Card */}
+            <button
+              onClick={() => router.push('/dashboard/appointments?status=completed')}
+              className={`relative overflow-hidden w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 hover:-translate-y-1 transition-all duration-300 group cursor-pointer active:scale-[0.98] ${
+                todayPending > 0 
+                  ? 'bg-gradient-to-br from-amber-500/[0.07] via-transparent to-transparent hover:border-amber-500/30 hover:shadow-amber-500/[0.05]'
+                  : 'bg-gradient-to-br from-blue-500/[0.07] via-transparent to-transparent hover:border-blue-500/30 hover:shadow-blue-500/[0.05]'
+              }`}
+            >
+              {/* Background Ambient Glow */}
+              <div className={`absolute -right-6 -bottom-6 w-24 h-24 pointer-events-none transition-all duration-500 ease-out group-hover:scale-125 group-hover:rotate-12 ${
+                todayPending > 0 ? 'text-amber-500/10 dark:text-amber-500/5' : 'text-blue-500/10 dark:text-blue-500/5'
+              }`}>
+                <div className="w-full h-full flex items-center justify-center">
+                  <IndianRupee className="w-20 h-20" />
+                </div>
+              </div>
+
+              <div className="relative z-10 flex flex-col h-full justify-between space-y-4">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[11px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-md ${
+                      todayPending > 0 
+                        ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40' 
+                        : 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40'
+                    }`}>
+                      Outstanding Amount
+                    </span>
+                    <span className={`text-xs group-hover:underline transition-colors flex items-center gap-1 font-medium ${
+                      todayPending > 0 ? 'text-amber-500 hover:text-amber-600' : 'text-blue-500 hover:text-blue-600'
+                    }`}>
+                      View Bills <span className="transform group-hover:translate-x-0.5 transition-transform">→</span>
+                    </span>
+                  </div>
+                  <p className="text-3xl font-black tracking-tight mt-2.5 text-gray-900 dark:text-gray-100">
+                    {formatCurrency(todayPending)}
+                  </p>
+                </div>
+
+                {/* Warning or success status info */}
+                <div className="space-y-2 pt-2 border-t border-gray-50 dark:border-gray-800/60">
+                  {todayPending > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                      <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                        Pending for {pendingCount} patient{pendingCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        All settled! No pending amount today
+                      </span>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                    {todayPending > 0 
+                      ? "Follow up on completed appointments with partial payment." 
+                      : "All patient bills for today's visits are fully paid."}
+                  </p>
+                </div>
+              </div>
+              <div className={`absolute bottom-0 left-0 right-0 h-1 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left ${
+                todayPending > 0 ? 'bg-amber-500 dark:bg-amber-400' : 'bg-blue-500 dark:bg-blue-400'
+              }`} />
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Today's Collection Breakdown */}
       {completed.length > 0 && (
@@ -964,81 +1079,159 @@ export default function DashboardPage() {
 
       {/* Upcoming & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Upcoming Section */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 transition-colors duration-200">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-dot-pulse" />
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Upcoming</h2>
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Upcoming Visits</h2>
             </div>
-            <Link href="/dashboard/appointments" className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors">
+            <Link href="/dashboard/appointments" className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors">
               View all →
             </Link>
           </div>
           {confirmed.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-500 text-sm py-8 text-center">No appointments for this date.</p>
+            <div className="text-center py-10">
+              <p className="text-gray-400 dark:text-gray-500 text-sm mb-3">No appointments scheduled for this date.</p>
+              <button 
+                onClick={() => setBookingModal({ open: true, time: null })}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/80 transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" /> Book Appointment
+              </button>
+            </div>
           ) : (
-            <div className="space-y-1">
-              {confirmed.slice(0, 5).map((a, i) => (
-                <div key={a.id} className={`flex items-start justify-between gap-2 py-3 px-3 -mx-3 rounded-lg transition-colors ${recentBookings.some(b => b.id === a.id) ? 'bg-blue-50/80 dark:bg-blue-900/20 ring-1 ring-blue-200 dark:ring-blue-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${recentBookings.some(b => b.id === a.id) ? 'bg-blue-500 text-white shadow-sm' : 'bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/50 text-blue-700 dark:text-blue-300'}`}>
-                      {(a.patient_name || 'P')[0].toUpperCase()}
+            <div className="space-y-2.5">
+              {confirmed.slice(0, 5).map((a) => {
+                const isNew = recentBookings.some(b => b.id === a.id);
+                const treatmentText = Array.isArray(a?.treatments) && a.treatments.length > 0 
+                  ? a.treatments.join(' + ') 
+                  : a.treatment || 'Visit';
+
+                return (
+                  <div 
+                    key={a.id} 
+                    className={`flex items-start justify-between gap-3 p-3.5 rounded-xl transition-all duration-200 border border-transparent group ${
+                      isNew 
+                        ? 'bg-blue-50/60 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/40 ring-1 ring-blue-50/50 dark:ring-blue-950/20' 
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/40 hover:border-gray-100 dark:hover:border-gray-800/60'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      {/* Time Pill */}
+                      <span className="shrink-0 px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[10px] font-bold font-mono tracking-wider">
+                        {a.time?.slice(0, 5)}
+                      </span>
+                      
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            {a.is_priority ? '⭐ ' : ''}
+                            {a.patient_id ? (
+                              <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
+                                {a.patient_name || 'Patient'}
+                              </Link>
+                            ) : (
+                              a.patient_name || 'Patient'
+                            )}
+                          </p>
+                          {isNew && (
+                            <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 text-[9px] font-bold animate-pulse">New</span>
+                          )}
+                        </div>
+                        
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 truncate">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border border-blue-100/20 dark:border-blue-900/20">
+                            {treatmentText}
+                          </span>
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {a.is_priority ? '⭐ ' : ''}
-                        {a.patient_id ? (
-                          <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
-                            {a.patient_name || 'Patient'}
-                          </Link>
-                        ) : (
-                          a.patient_name || 'Patient'
-                        )}
-                        {recentBookings.some(b => b.id === a.id) && (
-                          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-800/50 text-blue-700 dark:text-blue-300 animate-scale-in">New</span>
-                        )}
-                      </p>
-                      <p className="text-sm text-gray-400 dark:text-gray-500 truncate">{a.time?.slice(0, 5)} — {Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'}</p>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Hover Action to Log Visit */}
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center">
+                        <Link 
+                          href={`/dashboard/visit?patientId=${a.patient_id || ''}&apptId=${a.id}`} 
+                          className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline px-2 py-1 rounded bg-blue-50 dark:bg-blue-950/40"
+                        >
+                          Start Visit
+                        </Link>
+                      </div>
+                      <StatusBadge status={a.status} arrivalStatus={a.arrival_status} />
                     </div>
                   </div>
-                  <StatusBadge status={a.status} arrivalStatus={a.arrival_status} />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
+        {/* Recent Activity Section */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 transition-colors duration-200">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-dot-pulse" />
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Activity</h2>
+          <div className="flex items-center gap-2 mb-5">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Recent Completed Visits</h2>
           </div>
           {completed.length === 0 ? (
-            <p className="text-gray-400 dark:text-gray-500 text-sm py-8 text-center">No completed visits for this date.</p>
+            <p className="text-gray-400 dark:text-gray-500 text-sm py-10 text-center">No completed visits recorded for this date.</p>
           ) : (
-            <div className="space-y-1">
-              {completed.slice(0, 5).reverse().map(a => (
-                <div key={a.id} className="flex items-center justify-between py-3 px-3 -mx-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/50 dark:to-green-800/50 flex items-center justify-center text-xs font-semibold text-green-700 dark:text-green-300">
-                      {(a.patient_name || 'P')[0].toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {a.patient_id ? (
-                          <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
-                            {a.patient_name || 'Patient'}
-                          </Link>
-                        ) : (
-                          a.patient_name || 'Patient'
-                        )}
-                      </p>
-                      <p className="text-sm text-gray-400 dark:text-gray-500 truncate">{Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'} — ₹{(a.consultation_fee || 0) + (a.treatment_charges || 0) + (a.medicine_charges || 0)}</p>
+            <div className="relative border-l border-gray-100 dark:border-gray-800 ml-3.5 pl-6 space-y-4 py-1">
+              {completed.slice(0, 5).reverse().map(a => {
+                const totalCharges = Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0);
+                const paid = Number(a.paid_amount || 0);
+                
+                return (
+                  <div key={a.id} className="relative group">
+                    {/* Timeline Node Bullet */}
+                    <div className="absolute -left-[30px] top-2.5 w-2 h-2 rounded-full bg-green-500 border-2 border-white dark:border-gray-900 ring-4 ring-green-50 dark:ring-green-950/40" />
+                    
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-transparent hover:bg-gray-50 dark:hover:bg-gray-800/40 hover:border-gray-100 dark:hover:border-gray-800/60 transition-all duration-200">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          {a.patient_id ? (
+                            <Link href={`/dashboard/patients/${a.patient_id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">
+                              {a.patient_name || 'Patient'}
+                            </Link>
+                          ) : (
+                            a.patient_name || 'Patient'
+                          )}
+                        </p>
+                        
+                        <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 truncate flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium">{Array.isArray(a?.treatments) && a.treatments.length > 0 ? a.treatments.join(' + ') : a.treatment || 'Visit'}</span>
+                          <span className="text-gray-300 dark:text-gray-700">•</span>
+                          <span className="font-bold text-gray-700 dark:text-gray-300">{formatCurrency(totalCharges)}</span>
+                          
+                          {/* Payment status badge */}
+                          {paid >= totalCharges ? (
+                            <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.2 bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 rounded">Paid</span>
+                          ) : paid > 0 ? (
+                            <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded">Partial</span>
+                          ) : (
+                            <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.2 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded">Unpaid</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Quick Prescription Shortcut */}
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center">
+                          <a 
+                            href={`/api/dashboard/visits/${a.id}/prescription`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-950/40"
+                          >
+                            Prescription
+                          </a>
+                        </div>
+                        <StatusBadge status={a.status} />
+                      </div>
                     </div>
                   </div>
-                  <StatusBadge status={a.status} />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
