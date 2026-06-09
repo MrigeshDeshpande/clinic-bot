@@ -20,22 +20,7 @@ function StatusBadge({ status, arrivalStatus }) {
   return <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
 }
 
-const STAT_CARDS = [
-  { key: 'total', label: 'Total Appointments', color: 'gray', icon: (
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-  )},
-  { key: 'waiting', label: 'Waiting', color: 'amber', icon: (
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-  )},
-  { key: 'in_session', label: 'In Session', color: 'blue', icon: (
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-  )},
-  { key: 'completed', label: 'Completed', color: 'green', icon: (
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  )},
-];
-
-const REVENUE_CARD = { key: 'revenue', label: "Today's Revenue", color: 'emerald', icon: <DollarSign className="w-5 h-5" /> };
+const FINANCIAL_CARDS = ['revenue', 'outstanding'];
 
 const COLOR_MAP = {
   total: { text: 'text-gray-900 dark:text-gray-100', icon: 'text-gray-400 dark:text-gray-500', bg: 'bg-gray-50 dark:bg-gray-800', ring: 'ring-gray-100 dark:ring-gray-700' },
@@ -862,55 +847,34 @@ export default function DashboardPage() {
       )
       }
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        {[...STAT_CARDS, REVENUE_CARD].map(card => {
-          const style = CARD_STYLE_MAP[card.key];
-          let value;
-          if (card.key === 'total') value = appointments.length;
-          else if (card.key === 'revenue') value = formatCurrency(todayRevenue);
-          else value = totals[card.key] || 0;
+      {/* Financial Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        {[
+          { key: 'revenue', label: "Today's Revenue", value: formatCurrency(todayRevenue), link: '/dashboard/stats' },
+          { key: 'outstanding', label: 'Outstanding Amount', value: formatCurrency(todayPending), link: '/dashboard/appointments?status=completed' },
+        ].map(card => {
+          const style = CARD_STYLE_MAP[card.key === 'outstanding' ? (todayPending > 0 ? 'waiting' : 'completed') : 'revenue'];
           return (
             <button
               key={card.key}
-              onClick={() => {
-                const links = {
-                  total: '/dashboard/appointments',
-                  waiting: '/dashboard/appointments?arrival=arrived',
-                  in_session: '/dashboard/appointments?arrival=called',
-                  completed: '/dashboard/appointments?status=completed',
-                  revenue: '/dashboard/stats',
-                };
-                router.push(links[card.key] || '/dashboard/appointments');
-              }}
+              onClick={() => router.push(card.link)}
               className={`relative overflow-hidden w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:-translate-y-0.5 transition-all duration-300 group cursor-pointer active:scale-[0.98] ${style.hoverBg} ${style.hoverBorder} ${style.hoverGlow}`}
             >
-              {/* Watermark Icon */}
               <div className={`absolute -right-3 -bottom-3 w-20 h-20 pointer-events-none transition-all duration-500 ease-out group-hover:scale-125 group-hover:rotate-12 ${style.iconColor}`}>
-                {card.key === 'revenue' ? (
-                  <div className="w-full h-full opacity-[0.12] dark:opacity-[0.06] flex items-center justify-center">
-                    <DollarSign className="w-14 h-14" />
-                  </div>
-                ) : (
-                  <svg className="w-full h-full opacity-[0.12] dark:opacity-[0.06]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    {card.icon}
-                  </svg>
-                )}
+                <div className="w-full h-full opacity-[0.12] dark:opacity-[0.06] flex items-center justify-center">
+                  <DollarSign className="w-14 h-14" />
+                </div>
               </div>
-
-              {/* Card Contents */}
               <div className="relative z-10 flex flex-col h-full justify-between">
                 <div>
                   <span className={`text-[11px] font-bold tracking-wider uppercase ${style.accentText}`}>
                     {card.label}
                   </span>
                   <p className="text-3xl font-extrabold tracking-tight mt-2 text-gray-900 dark:text-gray-100">
-                    {value}
+                    {card.value}
                   </p>
                 </div>
               </div>
-
-              {/* Bottom Accent Bar */}
               <div className={`absolute bottom-0 left-0 right-0 h-1 ${style.accentBar} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
             </button>
           );
