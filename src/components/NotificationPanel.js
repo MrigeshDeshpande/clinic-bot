@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Bell, X, Calendar, Users, Phone, Clock, AlertTriangle } from 'lucide-react';
 
-export default function NotificationPanel() {
+export default function NotificationPanel({ compact }) {
   const [notifications, setNotifications] = useState(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -82,13 +82,19 @@ export default function NotificationPanel() {
     <div className="relative" ref={ref}>
       <button
         onClick={handleToggle}
-        className="relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 transition-all w-full"
+        className={`relative flex items-center rounded-xl text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 transition-all ${
+          compact ? 'justify-center w-12 h-12' : 'gap-2 px-3.5 py-2.5 w-full'
+        }`}
         title="Notifications"
       >
-        <Bell className="w-4 h-4" />
-        <span className="hidden sm:inline text-xs">Notifications</span>
+        <Bell className="w-5 h-5" />
+        {!compact && <span className="hidden sm:inline text-xs">Notifications</span>}
         {totalAlerts > 0 && (
-          <span className="absolute top-1.5 left-[22px] -translate-x-1/2 -translate-y-1/2 min-w-[16px] h-4 flex items-center justify-center px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none shadow-sm">
+          <span className={`absolute px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none shadow-sm ${
+            compact 
+              ? 'top-2.5 right-2.5 min-w-[14px] h-3.5 flex items-center justify-center' 
+              : 'top-1.5 left-[22px] -translate-x-1/2 -translate-y-1/2 min-w-[16px] h-4 flex items-center justify-center'
+          }`}>
             {totalAlerts > 9 ? '9+' : totalAlerts}
           </span>
         )}

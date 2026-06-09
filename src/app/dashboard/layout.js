@@ -154,7 +154,7 @@ function GlobalSearch() {
 
 function SidebarContent({ pathname, onNavClick }) {
   const router = useRouter();
-  const { setSidebarCollapsed } = useContext(SidebarContext);
+  const { sidebarCollapsed, setSidebarCollapsed } = useContext(SidebarContext);
 
   async function handleLogout() {
     await fetch('/api/dashboard/logout', { method: 'POST' });
@@ -164,38 +164,58 @@ function SidebarContent({ pathname, onNavClick }) {
   return (
     <>
       {/* Logo */}
-      <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+      <div className={`border-b border-gray-100 dark:border-gray-800 flex items-center transition-all duration-300 ${
+        sidebarCollapsed ? 'p-2 py-4 justify-center relative' : 'p-4 md:p-6 justify-between'
+      }`}>
         <Link href="/dashboard" onClick={onNavClick} className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
             <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-9 h-9 rounded-lg object-contain" />
           </div>
-          <div>
-            <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
-          </div>
+          {!sidebarCollapsed && (
+            <div>
+              <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
+            </div>
+          )}
         </Link>
-        <button
-          onClick={() => setSidebarCollapsed(true)}
-          className="hidden md:flex p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
-          title="Collapse sidebar"
-        >
-          <ChevronsLeft className="w-4 h-4" />
-        </button>
+        {sidebarCollapsed ? (
+          <button
+            onClick={() => setSidebarCollapsed(false)}
+            className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shadow-md hover:scale-110 transition-all cursor-pointer z-20"
+            title="Expand sidebar"
+          >
+            <ChevronsRight className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <button
+            onClick={() => setSidebarCollapsed(true)}
+            className="hidden md:flex p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+            title="Collapse sidebar"
+          >
+            <ChevronsLeft className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Search */}
-      <div className="px-4 py-3">
-        <GlobalSearch />
-      </div>
+      {!sidebarCollapsed && (
+        <div className="px-4 py-3">
+          <GlobalSearch />
+        </div>
+      )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 pb-4 overflow-y-auto">
+      <nav className={`flex-1 pb-4 overflow-y-auto transition-all duration-300 ${
+        sidebarCollapsed ? 'px-1 flex flex-col items-center gap-4 pt-4' : 'px-3'
+      }`}>
         {NAV_GROUPS.map((group, gi) => (
-          <div key={group.label} className={gi > 0 ? 'mt-4' : ''}>
-            <p className="px-3.5 pb-0.5 text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-500 font-semibold select-none">
-              {group.label}
-            </p>
-            <div className="space-y-0.5">
+          <div key={group.label} className={`${gi > 0 && !sidebarCollapsed ? 'mt-4' : ''} ${sidebarCollapsed ? 'flex flex-col items-center w-full' : ''}`}>
+            {!sidebarCollapsed && (
+              <p className="px-3.5 pb-0.5 text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-500 font-semibold select-none">
+                {group.label}
+              </p>
+            )}
+            <div className={`space-y-0.5 ${sidebarCollapsed ? 'flex flex-col items-center w-full' : ''}`}>
               {group.items.map(item => {
                 const Icon = item.icon;
                 const active = pathname === item.href;
@@ -204,14 +224,19 @@ function SidebarContent({ pathname, onNavClick }) {
                     key={item.href}
                     href={item.href}
                     onClick={onNavClick}
-                    className={`flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-150 relative ${
+                    title={sidebarCollapsed ? item.label : undefined}
+                    className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 relative ${
+                      sidebarCollapsed 
+                        ? 'justify-center w-12 h-12' 
+                        : 'gap-3 px-3.5 py-2'
+                    } ${
                       active
                         ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
                         : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
-                    {item.label}
+                    <Icon className={`w-5 h-5 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {!sidebarCollapsed && item.label}
                   </Link>
                 );
               })}
@@ -221,23 +246,28 @@ function SidebarContent({ pathname, onNavClick }) {
       </nav>
 
       {/* Notifications */}
-      <div className="px-3">
-        <NotificationPanel />
+      <div className={sidebarCollapsed ? 'px-1 flex justify-center' : 'px-3'}>
+        <NotificationPanel compact={sidebarCollapsed} />
       </div>
 
       {/* Logout + Theme */}
-      <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">
-        <ThemeToggle />
+      <div className={`border-t border-gray-100 dark:border-gray-800 space-y-1 flex flex-col transition-all duration-300 ${
+        sidebarCollapsed ? 'p-2 items-center' : 'p-4'
+      }`}>
+        <ThemeToggle compact={sidebarCollapsed} />
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all w-full group"
+          title={sidebarCollapsed ? "Logout" : undefined}
+          className={`flex items-center rounded-xl text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all group ${
+            sidebarCollapsed ? 'justify-center w-12 h-12' : 'gap-3 px-3.5 py-2.5 w-full'
+          }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
             />
           </svg>
-          Logout
+          {!sidebarCollapsed && "Logout"}
         </button>
       </div>
     </>
@@ -387,25 +417,23 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Desktop Sidebar */}
-          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64'}`}>
-            <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 min-w-0 overflow-hidden' : 'w-64 min-w-64'}`}>
+          <aside 
+            style={{ width: sidebarCollapsed ? '80px' : '256px' }}
+            className="hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300"
+          >
+            <div 
+              style={{ width: sidebarCollapsed ? '80px' : '256px', minWidth: sidebarCollapsed ? '80px' : '256px' }}
+              className="flex-1 flex flex-col transition-all duration-300"
+            >
               <SidebarContent pathname={pathname} />
             </div>
           </aside>
 
-          {/* Sidebar expand tab (visible when collapsed) */}
-          {sidebarCollapsed && (
-            <button
-              onClick={() => setSidebarCollapsed(false)}
-              className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-20 w-6 h-12 bg-white dark:bg-gray-900 border border-l-0 border-gray-200 dark:border-gray-800 rounded-r-xl items-center justify-center shadow-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-400 dark:text-gray-500 cursor-pointer hover:w-7"
-              title="Expand sidebar"
-            >
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-          )}
-
           {/* Main Content */}
-          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-64'}`}>
+          <main 
+            style={{ marginLeft: sidebarCollapsed ? '80px' : '256px' }}
+            className="pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300"
+          >
             <div className="animate-fade-in mx-auto">
               {children}
             </div>
