@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, CalendarDays, Clock, XCircle, Plus, Loader2 
 import { parseDateOnly, formatDateShort } from '@/lib/date';
 import { fetchCached } from '@/lib/clientFetchCache';
 
-const SLOT_HEIGHT = 44;
+const SLOT_HEIGHT = 56;
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 8);
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -20,6 +20,13 @@ const TREATMENT_COLORS = {
   'Crowns': { bg: 'bg-orange-100 dark:bg-orange-900/40', text: 'text-orange-700 dark:text-orange-300', dot: 'bg-orange-500' },
   'Pediatric Dentistry': { bg: 'bg-pink-100 dark:bg-pink-900/40', text: 'text-pink-700 dark:text-pink-300', dot: 'bg-pink-500' },
 };
+
+function getEndTime(time) {
+  if (!time) return '';
+  const [h, m] = time.split(':').map(Number);
+  const end = h * 60 + m + 45;
+  return `${String(Math.floor(end / 60) % 24).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
+}
 
 function getTreatmentStyle(t) {
   if (!t) return { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' };
@@ -273,19 +280,19 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
   }
 
   function getStatusColor(status, arrivalStatus) {
-    if (status === 'completed') return 'bg-green-500';
-    if (status === 'no_show') return 'bg-red-400';
-    if (arrivalStatus === 'called') return 'bg-blue-500';
+    if (status === 'completed') return 'bg-slate-500';
+    if (status === 'no_show') return 'bg-rose-400';
+    if (arrivalStatus === 'called') return 'bg-emerald-500';
     if (arrivalStatus === 'arrived') return 'bg-amber-400';
-    return 'bg-gray-400';
+    return 'bg-blue-400';
   }
 
   function getBlockColor(appt) {
-    if (appt.status === 'completed') return 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50';
-    if (appt.status === 'no_show') return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40';
-    if (appt.arrival_status === 'called') return 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 hover:bg-blue-200 dark:hover:bg-blue-900/60';
-    if (appt.arrival_status === 'arrived') return 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700 hover:bg-amber-200 dark:hover:bg-amber-900/60';
-    return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40';
+    if (appt.status === 'completed') return 'bg-slate-50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/50';
+    if (appt.status === 'no_show') return 'bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40';
+    if (appt.arrival_status === 'called') return 'bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40';
+    if (appt.arrival_status === 'arrived') return 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40';
+    return 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40';
   }
 
   const weekLabel = `${popoverDateFormat(formatISO(days[0]))} – ${popoverDateFormat(formatISO(days[6]))}`;
@@ -392,6 +399,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                       const isDragging = draggingId === appt.id;
                       const past = isPastDay || isSlotPast(dayStr, appt.time?.slice(0, 5));
                       const tStyle = getTreatmentStyle(appt.treatment);
+                      const statusDot = getStatusColor(appt.status, appt.arrival_status);
                       return (
                         <div
                           key={appt.id}
@@ -399,7 +407,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                           onDragStart={(e) => handleDragStart(e, appt)}
                           onDragEnd={handleDragEnd}
                           onClick={(e) => { e.stopPropagation(); handleAppointmentClick(appt); }}
-                          className={`absolute left-0.5 right-0.5 rounded border cursor-pointer transition-all duration-150 overflow-hidden group
+                          className={`absolute left-0.5 right-0.5 rounded-md border border-gray-200 dark:border-gray-700 cursor-pointer transition-all duration-150 overflow-hidden group
                             ${isDragging ? 'opacity-40 scale-95 z-30 ring-2 ring-blue-400 ring-offset-1' : 'z-10'}
                             ${getBlockColor(appt)}
                             ${past && !isDragging ? 'opacity-50 grayscale-[30%]' : ''}
@@ -407,13 +415,24 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                           `}
                           style={{ top, height: SLOT_HEIGHT }}
                         >
-                          <div className="flex items-center gap-1 px-1 h-full">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${appt.status === 'completed' ? 'bg-green-500' : appt.status === 'no_show' ? 'bg-red-400' : appt.arrival_status === 'called' ? 'bg-blue-500' : appt.arrival_status === 'arrived' ? 'bg-amber-400' : tStyle.dot}`} />
-                            <span className={`text-[11px] font-semibold truncate leading-tight ${past ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                          {/* Treatment color left accent bar */}
+                          <div className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-full ${tStyle.dot}`} />
+
+                          <div className="flex flex-col justify-center h-full px-2 pl-[7px] pr-4">
+                            {appt.treatment && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider leading-tight text-gray-800 dark:text-gray-200 truncate">
+                                {appt.treatment}
+                              </span>
+                            )}
+                            <span className={`text-xs font-semibold leading-tight truncate ${past ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
                               {appt.patient_name || 'Patient'}
                             </span>
-                            <span className="text-[9px] text-gray-400 dark:text-gray-500 shrink-0">{appt.time?.slice(0, 5)}</span>
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500 leading-tight">
+                              {appt.time?.slice(0, 5)} — {getEndTime(appt.time)}
+                            </span>
                           </div>
+
+                          <span className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${statusDot}`} />
                         </div>
                       );
                     })}

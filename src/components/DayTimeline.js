@@ -10,19 +10,26 @@ const SLOT_HEIGHT = 56;
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 8);
 
 const TREATMENT_COLORS = {
-  'General Dentistry': { bg: 'bg-sky-100 dark:bg-sky-900/30', text: 'text-sky-700 dark:text-sky-300' },
-  'Teeth Cleaning': { bg: 'bg-teal-100 dark:bg-teal-900/30', text: 'text-teal-700 dark:text-teal-300' },
-  'Root Canal': { bg: 'bg-rose-100 dark:bg-rose-900/30', text: 'text-rose-700 dark:text-rose-300' },
-  'Whitening': { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300' },
-  'Implants': { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300' },
-  'Braces': { bg: 'bg-indigo-100 dark:bg-indigo-900/30', text: 'text-indigo-700 dark:text-indigo-300' },
-  'Crowns': { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-300' },
-  'Pediatric Dentistry': { bg: 'bg-pink-100 dark:bg-pink-900/30', text: 'text-pink-700 dark:text-pink-300' },
+  'General Dentistry': { bg: 'bg-sky-100 dark:bg-sky-900/30', text: 'text-sky-700 dark:text-sky-300', dot: 'bg-sky-500' },
+  'Teeth Cleaning': { bg: 'bg-teal-100 dark:bg-teal-900/30', text: 'text-teal-700 dark:text-teal-300', dot: 'bg-teal-500' },
+  'Root Canal': { bg: 'bg-rose-100 dark:bg-rose-900/30', text: 'text-rose-700 dark:text-rose-300', dot: 'bg-rose-500' },
+  'Whitening': { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', dot: 'bg-amber-500' },
+  'Implants': { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300', dot: 'bg-purple-500' },
+  'Braces': { bg: 'bg-indigo-100 dark:bg-indigo-900/30', text: 'text-indigo-700 dark:text-indigo-300', dot: 'bg-indigo-500' },
+  'Crowns': { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-300', dot: 'bg-orange-500' },
+  'Pediatric Dentistry': { bg: 'bg-pink-100 dark:bg-pink-900/30', text: 'text-pink-700 dark:text-pink-300', dot: 'bg-pink-500' },
 };
 
 function getTreatmentStyle(t) {
-  if (!t) return { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300' };
-  return TREATMENT_COLORS[t] || { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-400' };
+  if (!t) return { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' };
+  return TREATMENT_COLORS[t] || { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-400', dot: 'bg-gray-500' };
+}
+
+function getEndTime(time) {
+  if (!time) return '';
+  const [h, m] = time.split(':').map(Number);
+  const end = h * 60 + m + 45;
+  return `${String(Math.floor(end / 60) % 24).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
 }
 
 function addDays(d, n) {
@@ -62,11 +69,11 @@ function formatCurrency(amount) {
 }
 
 function StatusBadge({ status, arrivalStatus }) {
-  if (status === 'completed') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700">Done</span>;
-  if (status === 'no_show') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700">No Show</span>;
-  if (arrivalStatus === 'called') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block mr-1 animate-pulse" />In Session</span>;
+  if (status === 'completed') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">Done</span>;
+  if (status === 'no_show') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700">No Show</span>;
+  if (arrivalStatus === 'called') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1 animate-pulse" />In Session</span>;
   if (arrivalStatus === 'arrived') return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block mr-1" />Waiting</span>;
-  return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
+  return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700">Scheduled</span>;
 }
 
 function LoadingSkeleton() {
@@ -337,44 +344,47 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
                     onDragStart={(e) => handleDragStart(e, appt)}
                     onDragEnd={handleDragEnd}
                     onClick={(e) => { e.stopPropagation(); handleAppointmentClick(appt); }}
-                    className={`absolute left-16 right-4 rounded-xl border-2 cursor-pointer transition-all duration-150 group
+                    className={`absolute left-16 right-4 rounded-xl border-2 cursor-pointer transition-all duration-150 group overflow-hidden
                       ${isDragging ? 'opacity-40 scale-[0.97] z-40 ring-2 ring-blue-400 ring-offset-2' : 'z-20'}
                       ${appt.status === 'completed'
-                        ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50'
+                        ? 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/50'
                         : appt.arrival_status === 'called'
-                          ? 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 hover:bg-blue-200 dark:hover:bg-blue-900/60 shadow-sm shadow-blue-200/50 dark:shadow-blue-900/30'
+                          ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
                           : appt.arrival_status === 'arrived'
-                            ? 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700 hover:bg-amber-200 dark:hover:bg-amber-900/60'
-                            : 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 shadow-sm'
+                            ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+                            : 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                       }
                       ${past && !isDragging ? 'opacity-50 grayscale-[20%]' : ''}
                       ${appt.status === 'confirmed' && !isDragging ? 'hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98]' : ''}
                     `}
                     style={{ top, height: SLOT_HEIGHT }}
                   >
-                    <div className="flex items-start justify-between gap-2 px-3 py-1.5">
+                    {/* Treatment color left accent bar */}
+                    <div className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-full ${tStyle.dot}`} />
+
+                    <div className="flex items-start justify-between gap-2 px-3 py-1.5 pl-[7px]">
                       <div className="min-w-0 flex-1">
+                        {/* Treatment name — primary */}
                         <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${appt.status === 'completed' ? 'bg-green-500' : appt.status === 'no_show' ? 'bg-red-400' : appt.arrival_status === 'called' ? 'bg-blue-500' : appt.arrival_status === 'arrived' ? 'bg-amber-400' : 'bg-gray-400'}`} />
-                          <span className={`text-sm font-bold truncate leading-tight ${isReserved ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                            {appt.patient_name || 'Patient'}
+                          <span className={`text-sm font-bold uppercase tracking-wider leading-tight ${isReserved || past ? 'text-gray-500 dark:text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                            {appt.treatment || 'Appointment'}
                           </span>
                           {appt.is_priority && <span className="text-xs">⭐</span>}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5 ml-3.5 flex-wrap">
-                          <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
-                            <Clock className="w-3 h-3" /> {appt.time?.slice(0, 5)}
+                        {/* Patient name */}
+                        <span className={`text-xs font-semibold leading-tight ${isReserved || past ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {appt.patient_name || 'Patient'}
+                        </span>
+                        {/* Time + Payment meta row */}
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span className="flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500 font-medium">
+                            <Clock className="w-3 h-3" /> {appt.time?.slice(0, 5)} — {getEndTime(appt.time)}
                           </span>
-                          {appt.treatment && (
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${tStyle.bg} ${tStyle.text}`}>
-                              {appt.treatment}
-                            </span>
-                          )}
                           {paymentTotal > 0 && appt.payment_status && (
                             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
-                              appt.payment_status === 'paid' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' :
+                              appt.payment_status === 'paid' ? 'bg-slate-100 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400' :
                               appt.payment_status === 'partial' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' :
-                              'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                              'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
                             }`}>
                               <IndianRupee className="w-2.5 h-2.5" />
                               {appt.payment_status === 'paid' ? formatCurrency(paymentTotal) : appt.payment_status === 'partial' ? `${formatCurrency(paymentDue)} due` : formatCurrency(paymentDue)}
@@ -382,7 +392,7 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
                           )}
                         </div>
                         {(appt.location || appt.patient_phone) && (
-                          <div className="flex items-center gap-3 mt-0.5 ml-3.5">
+                          <div className="flex items-center gap-3 mt-0.5">
                             {appt.location && (
                               <span className="flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
                                 <MapPin className="w-2.5 h-2.5" /> {appt.location}
