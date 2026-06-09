@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { FileImage, Phone as PhoneIcon, Download } from 'lucide-react';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
 import Calendar from '@/components/Calendar';
-import VisitCompleteModal from './VisitCompleteModal';
+import QuickCheckoutModal from '@/components/QuickCheckoutModal';
 import RescheduleModal from './RescheduleModal';
 import { DateContext, ToastContext } from '../layout';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
@@ -212,7 +212,7 @@ function AppointmentsContentInner() {
       .catch(e => setError(e.message));
   }
 
-  const [completeModal, setCompleteModal] = useState(null);
+  const [quickCheckoutModal, setQuickCheckoutModal] = useState(null);
   const [rescheduleModal, setRescheduleModal] = useState(null);
   const [cancelUpdating, setCancelUpdating] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -578,9 +578,9 @@ function AppointmentsContentInner() {
                               </button>
                             )}
                             {a.status === 'confirmed' && (
-                              <button onClick={() => setCompleteModal(a)}
-                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all">
-                                ✓ {a.arrival_status === 'called' ? 'Complete' : 'Done'}
+                              <button onClick={() => setQuickCheckoutModal(a)}
+                                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 transition-all">
+                                ₹ Quick Checkout
                               </button>
                             )}
                             {a.status === 'confirmed' && (
@@ -668,13 +668,13 @@ function AppointmentsContentInner() {
         document.body
       )}
 
-      {/* One-click Visit Complete Modal — outside animate-fade-in to avoid transform breaking fixed positioning */}
-      {typeof window !== 'undefined' && completeModal && createPortal(
-        <VisitCompleteModal
-          appointment={completeModal}
-          onClose={() => setCompleteModal(null)}
-          onComplete={(appointmentId) => {
-            setCompleteModal(null);
+      {/* Quick Checkout Modal */}
+      {typeof window !== 'undefined' && quickCheckoutModal && createPortal(
+        <QuickCheckoutModal
+          appointment={quickCheckoutModal}
+          onClose={() => setQuickCheckoutModal(null)}
+          onSuccess={(appointmentId) => {
+            setQuickCheckoutModal(null);
             setData(prev => ({
               ...prev,
               appointments: (prev?.appointments || []).map(a =>

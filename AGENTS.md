@@ -1,5 +1,8 @@
 ## Goal
-Transform the clinic-bot into a dentist-specific clinical record system with per-tooth diagnosis tracking, treatment planning, severity/outcome tracking, interactive tooth grid, and professional PDF exports.
+Transform the clinic-bot into a dentist-specific clinical record system with per-tooth diagnosis tracking, treatment planning, severity/outcome tracking, interactive tooth grid, professional PDF exports, and a receptionist-focused quick checkout & walk-in workflow.
+
+## Architecture — Completion
+One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call the existing `POST /api/dashboard/visit` — same business logic, different UI. No duplicate completion engines.
 
 ## Constraints & Preferences
 - Use FDI (ISO 3950) tooth numbering (11-48) instead of Universal #1-32
@@ -40,6 +43,13 @@ Transform the clinic-bot into a dentist-specific clinical record system with per
 - Feedback → hidden when count=0, collapsed accordion header with count badge when >0, expand on click
 - Messages → hidden when count=0, collapsed accordion header with count badge when >0, expand on click; pre-loaded on page init
 - Messages section: reduced visual weight (smaller avatars, condensed spacing, compact header)
+- **Quick Checkout modal**: Receptionist-only completion with Fee + Paid + Payment Mode + Notes — `src/components/QuickCheckoutModal.js`
+- **Appointment Details modal**: Lightweight routing hub on calendar click → [Edit Visit] [Quick Checkout] [Cancel] — `src/components/AppointmentDetailsModal.js`
+- **Rapid Walk-In modal**: 15-second walk-in with Name\* + Phone + Fee + Paid + Payment Mode + Notes, no treatment required — `src/components/RapidWalkInModal.js`
+- **FAB dropdown menu**: Dashboard FAB expanded to `[Quick Walk-In] [New Appointment]` on week/day views
+- **Reschedule discoverability**: `cursor: grab`/`grabbing` on confirmed appointment blocks + one-time "Drag to reschedule" tooltip in WeekView and DayTimeline
+- **Quick Checkout in appointments table**: Replaces old "Done" flow — `₹ Quick Checkout` button opens QuickCheckoutModal, calls same `POST /api/dashboard/visit`
+- **Single completion path**: Quick Checkout and Rapid Walk-In reuse `POST /api/dashboard/visit` — no separate completion engine
 
 ### Fixed
 - **`column a.tooth_diagnoses does not exist`** — Added missing `tooth_diagnoses JSONB` column to `appointments` table via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (was already in pool.js:391-395 migration but needed a server restart to apply, or the DB was created before the migration was added). Ran manually via psql and verified API returns 401 instead of 500.
@@ -59,6 +69,10 @@ Transform the clinic-bot into a dentist-specific clinical record system with per
 - **Single `expandedTooth` state**: Used instead of per-item `useState` since hooks can't be called inside JSX map callbacks
 - **`tooth_diagnoses` JSONB is additive**: Backward-compatible — old `diagnosis_selected TEXT[]` column kept unchanged
 - **Status dots render after tooth stroke**: Moved `circle` elements after the `<path>` outline so they appear on top, opacity increased from 0.5 → 0.7
+- **One completion path**: Both Quick Checkout and Rapid Walk-In call `POST /api/dashboard/visit` — no separate API endpoints. Different UI, same business logic.
+- **Appointment Details modal as single entry point**: Calendar appointments no longer navigate directly to patient profiles. Single click → AppointmentDetailsModal → [Edit] [Quick Checkout] [Cancel]
+- **Fee maps to treatment_charges**: Quick Checkout uses a single `Fee` input mapped to `treatment_charges`. Consultation and medicine charges are preserved from prior data.
+- **Discount-ready structure**: Quick Checkout uses `subtotal → discount → total → paid → outstanding` internally, even though discount is hidden for V1.
 
 ## Next Steps
 1. ~~Add `tooth_diagnoses` JSONB column to `appointments` table via DB migration~~ ✅ Done

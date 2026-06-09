@@ -89,7 +89,7 @@ function LoadingSkeleton() {
   );
 }
 
-export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
+export default function DayTimeline({ selectedDate, onDateSelect, onRefresh, onAppointmentSelect }) {
   const router = useRouter();
   const [viewDate, setViewDate] = useState(() => parseDateOnly(selectedDate) || new Date());
   const [appointments, setAppointments] = useState([]);
@@ -99,6 +99,21 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dropTime, setDropTime] = useState(null);
   const containerRef = useRef(null);
+  const [dragHint, setDragHint] = useState(false);
+  const hintTimer = useRef(null);
+  const [hintTarget, setHintTarget] = useState(null);
+
+  function handleAppointmentHover(appt, e) {
+    if (appt.status !== 'confirmed') return;
+    if (typeof window !== 'undefined' && !localStorage.getItem('dtDragHintShown')) {
+      localStorage.setItem('dtDragHintShown', '1');
+      const rect = e.currentTarget.getBoundingClientRect();
+      setHintTarget({ top: rect.top - 32, left: rect.left + rect.width / 2 });
+      setDragHint(true);
+      if (hintTimer.current) clearTimeout(hintTimer.current);
+      hintTimer.current = setTimeout(() => { setDragHint(false); setHintTarget(null); }, 3000);
+    }
+  }
 
   const dateStr = formatISO(viewDate);
   const today = new Date();
@@ -229,11 +244,7 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
   }
 
   function handleAppointmentClick(appt) {
-    if (appt.patient_id) {
-      router.push(`/dashboard/patients/${appt.patient_id}`);
-    } else {
-      router.push(`/dashboard/appointments?id=${appt.id}`);
-    }
+    onAppointmentSelect?.(appt);
   }
 
   function isSlotPast(time) {
@@ -351,7 +362,8 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
                     onDragStart={(e) => handleDragStart(e, appt)}
                     onDragEnd={handleDragEnd}
                     onClick={(e) => { e.stopPropagation(); handleAppointmentClick(appt); }}
-                    className={`absolute left-16 right-4 rounded-xl border-2 cursor-pointer transition-all duration-150 group overflow-hidden
+                    onMouseEnter={(e) => handleAppointmentHover(appt, e)}
+                    className={`absolute left-16 right-4 rounded-xl border-2 transition-all duration-150 group overflow-hidden
                       ${isDragging ? 'opacity-40 scale-[0.97] z-40 ring-2 ring-blue-400 ring-offset-2' : 'z-20'}
                       ${appt.status === 'completed'
                         ? 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/50'
@@ -362,7 +374,7 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
                             : 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                       }
                       ${past && !isDragging ? 'opacity-50 grayscale-[20%]' : ''}
-                      ${appt.status === 'confirmed' && !isDragging ? 'hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98]' : ''}
+                      ${appt.status === 'confirmed' && !isDragging ? 'cursor-grab hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] active:cursor-grabbing' : 'cursor-pointer'}
                     `}
                     style={{ top, height: SLOT_HEIGHT }}
                   >
@@ -438,6 +450,15 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh }) {
                 <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">Click an empty slot to book</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {dragHint && hintTarget && (
+        <div className="fixed z-[9999] animate-scale-in pointer-events-none" style={{ top: hintTarget.top, left: hintTarget.left, transform: 'translateX(-50%)' }}>
+          <div className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap">
+            Drag to reschedule
+            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-white" />
           </div>
         </div>
       )}

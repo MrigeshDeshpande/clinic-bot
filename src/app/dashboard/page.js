@@ -3,14 +3,17 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3 } from 'lucide-react';
+import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3, ChevronUp } from 'lucide-react';
 import Calendar from '@/components/Calendar';
 import WeekView from '@/components/WeekView';
 import DayTimeline from '@/components/DayTimeline';
+import AppointmentDetailsModal from '@/components/AppointmentDetailsModal';
+import QuickCheckoutModal from '@/components/QuickCheckoutModal';
+import RapidWalkInModal from '@/components/RapidWalkInModal';
 import { DateContext } from './layout';
 import { TREATMENT_NAMES } from '@/lib/treatments';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
-import { fetchCached } from '@/lib/clientFetchCache';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
@@ -584,6 +587,10 @@ export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [toast, setToast] = useState(null);
   const [recentBookings, setRecentBookings] = useState([]);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [showQuickCheckout, setShowQuickCheckout] = useState(null);
+  const [showWalkIn, setShowWalkIn] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
   const bookSlotRef = useRef(null);
   const tabContainerRef = useRef(null);
   const [pillStyle, setPillStyle] = useState({});
@@ -681,6 +688,23 @@ export default function DashboardPage() {
         .catch(() => {});
     }
     setToast('Appointment booked successfully');
+  }
+
+  function handleAppointmentSelect(appt) {
+    setSelectedAppointment(appt);
+  }
+
+  function handleQuickCheckoutSuccess() {
+    setShowQuickCheckout(null);
+    setSelectedAppointment(null);
+    setToast('Visit completed');
+    setRefreshKey(k => k + 1);
+  }
+
+  function handleWalkInSuccess() {
+    setShowWalkIn(false);
+    setToast('Walk-in completed');
+    setRefreshKey(k => k + 1);
   }
 
   const totals = data?.totals || {};
@@ -864,6 +888,7 @@ export default function DashboardPage() {
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}
             onRefresh={() => setRefreshKey(k => k + 1)}
+            onAppointmentSelect={handleAppointmentSelect}
           />
         </div>
       ) : (
@@ -872,19 +897,40 @@ export default function DashboardPage() {
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}
             onRefresh={() => setRefreshKey(k => k + 1)}
+            onAppointmentSelect={handleAppointmentSelect}
           />
         </div>
       )
       }
 
-      {/* FAB — quick book on week/day views */}
+      {/* FAB — quick actions on week/day views */}
       {(viewMode === 'week' || viewMode === 'day') && (
-        <button
-          onClick={() => setBookingModal({ open: true, time: null })}
-          className="fixed bottom-6 right-6 z-40 w-12 h-12 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-full shadow-xl shadow-gray-900/20 dark:shadow-white/10 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+          {fabOpen && (
+            <div className="animate-scale-in origin-bottom-right space-y-1.5 mb-1">
+              <button
+                onClick={() => { setShowWalkIn(true); setFabOpen(false); }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl shadow-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all w-full active:scale-[0.97]"
+              >
+                <span className="text-lg">⚡</span>
+                Quick Walk-In
+              </button>
+              <button
+                onClick={() => { setBookingModal({ open: true, time: null }); setFabOpen(false); }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl shadow-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all w-full active:scale-[0.97]"
+              >
+                <Plus className="w-4 h-4" />
+                New Appointment
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setFabOpen(o => !o)}
+            className="w-12 h-12 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-full shadow-xl shadow-gray-900/20 dark:shadow-white/10 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
+          >
+            {fabOpen ? <ChevronUp className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          </button>
+        </div>
       )}
 
       {/* Financial Summary Cards */}
@@ -1055,12 +1101,8 @@ export default function DashboardPage() {
       {/* Quick Booking Modal — Enhanced */}
       {bookingModal.open && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-          {/* Subtle backdrop */}
           <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={() => setBookingModal({ open: false, time: null })} />
-
-          {/* Modal Card */}
           <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1075,7 +1117,6 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-
             <QuickBookForm
               date={selectedDate}
               time={bookingModal.time}
@@ -1084,6 +1125,35 @@ export default function DashboardPage() {
             />
           </div>
         </div>
+      )}
+
+      {/* Appointment Details Modal */}
+      {selectedAppointment && !showQuickCheckout && (
+        <AppointmentDetailsModal
+          appointment={selectedAppointment}
+          onClose={() => setSelectedAppointment(null)}
+          onQuickCheckout={(appt) => { setShowQuickCheckout(appt); }}
+          showToast={(msg) => setToast(msg)}
+        />
+      )}
+
+      {/* Quick Checkout Modal */}
+      {showQuickCheckout && (
+        <QuickCheckoutModal
+          appointment={showQuickCheckout}
+          onClose={() => { setShowQuickCheckout(null); setSelectedAppointment(null); }}
+          onSuccess={handleQuickCheckoutSuccess}
+          showToast={(msg) => setToast(msg)}
+        />
+      )}
+
+      {/* Rapid Walk-In Modal */}
+      {showWalkIn && (
+        <RapidWalkInModal
+          onClose={() => setShowWalkIn(false)}
+          onSuccess={handleWalkInSuccess}
+          showToast={(msg) => setToast(msg)}
+        />
       )}
     </div>
   );

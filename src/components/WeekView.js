@@ -95,7 +95,7 @@ function LoadingSkeleton() {
   );
 }
 
-export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
+export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppointmentSelect }) {
   const router = useRouter();
   const [weekStart, setWeekStart] = useState(() => getMonday(parseDateOnly(selectedDate) || new Date()));
   const [appointments, setAppointments] = useState([]);
@@ -108,6 +108,21 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
   const containerRef = useRef(null);
   const dragOverDayRef = useRef(null);
   const dragOverTimeRef = useRef(null);
+  const [dragHint, setDragHint] = useState(false);
+  const hintTimer = useRef(null);
+  const [hintTarget, setHintTarget] = useState(null);
+
+  function handleAppointmentHover(appt, e) {
+    if (appt.status !== 'confirmed') return;
+    if (typeof window !== 'undefined' && !localStorage.getItem('wkDragHintShown')) {
+      localStorage.setItem('wkDragHintShown', '1');
+      const rect = e.currentTarget.getBoundingClientRect();
+      setHintTarget({ top: rect.top - 32, left: rect.left + rect.width / 2 });
+      setDragHint(true);
+      if (hintTimer.current) clearTimeout(hintTimer.current);
+      hintTimer.current = setTimeout(() => { setDragHint(false); setHintTarget(null); }, 3000);
+    }
+  }
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const fromStr = formatISO(days[0]);
@@ -243,11 +258,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
   }
 
   function handleAppointmentClick(appt) {
-    if (appt.patient_id) {
-      router.push(`/dashboard/patients/${appt.patient_id}`);
-    } else {
-      router.push(`/dashboard/appointments?id=${appt.id}`);
-    }
+    onAppointmentSelect?.(appt);
   }
 
   const apptsByDay = {};
@@ -431,11 +442,12 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                           onDragStart={(e) => handleDragStart(e, appt)}
                           onDragEnd={handleDragEnd}
                           onClick={(e) => { e.stopPropagation(); handleAppointmentClick(appt); }}
-                          className={`absolute left-0.5 right-0.5 rounded-md border border-gray-200 dark:border-gray-700 cursor-pointer transition-all duration-150 overflow-hidden group
+                          onMouseEnter={(e) => handleAppointmentHover(appt, e)}
+                          className={`absolute left-0.5 right-0.5 rounded-md border border-gray-200 dark:border-gray-700 transition-all duration-150 overflow-hidden group
                             ${isDragging ? 'opacity-40 scale-95 z-30 ring-2 ring-blue-400 ring-offset-1' : 'z-10'}
                             ${getBlockColor(appt)}
                             ${past && !isDragging ? 'opacity-50 grayscale-[30%]' : ''}
-                            ${appt.status === 'confirmed' && !isDragging ? 'hover:shadow-md hover:scale-[1.005] hover:z-20 active:scale-[0.97]' : ''}
+                            ${appt.status === 'confirmed' && !isDragging ? 'cursor-grab hover:shadow-md hover:scale-[1.005] hover:z-20 active:scale-[0.97] active:cursor-grabbing' : 'cursor-pointer'}
                           `}
                           style={{ top, height: SLOT_HEIGHT }}
                         >
@@ -503,6 +515,15 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
       )}
 
       {/* Toast */}
+      {dragHint && hintTarget && (
+        <div className="fixed z-[9999] animate-scale-in pointer-events-none" style={{ top: hintTarget.top, left: hintTarget.left, transform: 'translateX(-50%)' }}>
+          <div className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap">
+            Drag to reschedule
+            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-white" />
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className="fixed bottom-6 right-6 z-[9999] animate-scale-in">
           <div className="flex items-center gap-2.5 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl shadow-2xl text-sm font-medium">
