@@ -720,37 +720,86 @@ export default function DashboardPage() {
   return (
     <div className="animate-fade-in">
       {/* Header — always rendered, even during loading, to optimize LCP */}
-      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 py-4 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
+      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 pt-3 pb-2 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all">
+        {/* Row 1: Brand + Actions */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-gray-900 dark:bg-white flex items-center justify-center shrink-0 shadow-sm">
+              <span className="text-base text-white dark:text-gray-900 font-extrabold tracking-tight">S</span>
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight truncate">Shri Balaji Dental</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-tight truncate">{formatDateLong(selectedDate)}</p>
+            </div>
           </div>
-          {/* View Switcher */}
-          <div className="flex items-center self-start lg:self-auto bg-gray-100 dark:bg-gray-800 rounded-xl p-0.5">
+          <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => setViewMode('month')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'month' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              onClick={() => setBookingModal({ open: true, time: null })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-semibold rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all shadow-sm"
             >
-              <CalendarDays className="w-3.5 h-3.5" />
-              Month
+              <Plus className="w-3.5 h-3.5" />
+              New Appointment
             </button>
-            <button
-              onClick={() => setViewMode('week')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'week' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-            >
-              <Columns3 className="w-3.5 h-3.5" />
-              Week
-            </button>
-            <button
-              onClick={() => setViewMode('day')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'day' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              Day
-            </button>
+            <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode('month')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'month' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                <CalendarDays className="w-3 h-3" />
+                Month
+              </button>
+              <button
+                onClick={() => setViewMode('week')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'week' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                <Columns3 className="w-3 h-3" />
+                Week
+              </button>
+              <button
+                onClick={() => setViewMode('day')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'day' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                <LayoutGrid className="w-3 h-3" />
+                Day
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Row 2: KPI Strip */}
+        {!loading && (
+          <div className="flex items-center gap-5 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 overflow-x-auto">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{appointments.length}</span>
+            </div>
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Waiting</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.waiting || 0}</span>
+            </div>
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">In Session</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.in_session || 0}</span>
+            </div>
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400"          >Completed</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.completed || 0}</span>
+            </div>
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Revenue</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(todayRevenue)}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {loading ? (
