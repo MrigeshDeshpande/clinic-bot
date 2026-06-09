@@ -96,32 +96,42 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   const [treatment, setTreatment] = useState('');
   const [location, setLocation] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const [searchState, setSearchState] = useState('idle');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [familyMembers, setFamilyMembers] = useState([]);
   const [selectedFamilyMember, setSelectedFamilyMember] = useState(null);
   const nameInputRef = useRef(null);
+  const queryRef = useRef('');
 
   useEffect(() => {
     setTimeout(() => nameInputRef.current?.focus(), 100);
   }, []);
 
   useEffect(() => {
+    const abort = new AbortController();
+    queryRef.current = patientName;
     if (patientName.length < 2 || selectedPatient) {
       setSearchResults([]);
+      setSearchState('idle');
       return;
     }
-    setSearching(true);
-    const timer = setTimeout(() => {
-      fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(patientName)}`)
-        .then(r => r.json())
-        .then(d => setSearchResults(d.patients || []))
-        .catch(e => console.error('Quick book search error:', e))
-        .finally(() => setSearching(false));
+    setSearchResults([]);
+    setSearchState('searching');
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(patientName)}`, { signal: abort.signal });
+        const d = await res.json();
+        const results = d.patients || [];
+        if (queryRef.current !== patientName) return; // stale
+        setSearchResults(results);
+        setSearchState(results.length > 0 ? 'success' : 'empty');
+      } catch (e) {
+        if (e.name !== 'AbortError') { console.error('Quick book search error:', e); setSearchState('idle'); }
+      }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); abort.abort(); };
   }, [patientName, selectedPatient]);
 
   function selectPatient(p) {
@@ -131,6 +141,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
     setPatientAge(p.age ? String(p.age) : '');
     setPatientSex(p.sex || '');
     setSearchResults([]);
+    setSearchState('idle');
     setSelectedFamilyMember(null);
     fetch(`/api/dashboard/patients/${p.id}/family`)
       .then(r => r.json())
@@ -189,13 +200,13 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
             placeholder="Type patient name..."
             className="w-full pl-9 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />
-          {searching && (
+          {searchState === 'searching' && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
               <div className="w-3.5 h-3.5 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
             </div>
           )}
         </div>
-        {searchResults.length > 0 && !selectedPatient && (
+        {searchState === 'success' && !selectedPatient && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50 z-10 overflow-hidden">
             {searchResults.map(p => (
               <button
@@ -213,6 +224,13 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
                 </div>
               </button>
             ))}
+          </div>
+        )}
+        {searchState === 'empty' && !selectedPatient && (
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm z-10 p-5 text-center">
+            <Search className="w-6 h-6 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No patients found</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">A new patient record will be created when you book.</p>
           </div>
         )}
       </div>

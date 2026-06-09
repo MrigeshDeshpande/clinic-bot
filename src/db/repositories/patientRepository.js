@@ -47,14 +47,26 @@ export async function searchPatients(query) {
   const sql = getSql();
   if (!sql) return [];
   try {
+    const start = performance.now();
     const term = `%${query}%`;
-    const phoneTerm = `%${normalizePhone(query)}%`;
-    const rows = await sql`
-      SELECT * FROM patients
-      WHERE name ILIKE ${term} OR phone ILIKE ${phoneTerm}
-      ORDER BY updated_at DESC
-      LIMIT 10
-    `;
+    const cleanedPhone = normalizePhone(query);
+    let rows;
+    if (cleanedPhone) {
+      const phoneTerm = `%${cleanedPhone}%`;
+      rows = await sql`
+        SELECT * FROM patients
+        WHERE name ILIKE ${term} OR phone ILIKE ${phoneTerm}
+        LIMIT 10
+      `;
+    } else {
+      rows = await sql`
+        SELECT * FROM patients
+        WHERE name ILIKE ${term}
+        LIMIT 10
+      `;
+    }
+    const elapsed = performance.now() - start;
+    if (elapsed > 100) logger.warn('SLOW_PATIENT_SEARCH', { query, elapsed: `${elapsed.toFixed(0)}ms` });
     return rows;
   } catch (error) {
     logger.error('PATIENT_SEARCH_ERROR', { query, error: error.message });

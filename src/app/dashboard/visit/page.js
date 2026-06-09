@@ -138,8 +138,7 @@ function VisitPageInner() {
   const [result, setResult] = useState(null);
   const [errors, setErrors] = useState({});
   const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
+  const [searchState, setSearchState] = useState('idle');
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaFiles, setMediaFiles] = useState([]);
   const [showCamera, setShowCamera] = useState(false);
@@ -274,6 +273,7 @@ function VisitPageInner() {
   const fileInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   const formReadyRef = useRef(false);
+  const queryRef = useRef('');
 
   // Auto-save draft
   const [draftRestored, setDraftRestored] = useState(false);
@@ -436,22 +436,27 @@ function VisitPageInner() {
 
   // Patient search for walk-in
   useEffect(() => {
-    if (appointmentId || form.patientName.trim().length < 2) {
+    const abort = new AbortController();
+    const query = form.patientName.trim();
+    queryRef.current = query;
+    if (appointmentId || query.length < 2) {
       setSearchResults([]);
-      setShowSearch(false);
+      setSearchState('idle');
       return;
     }
+    setSearchResults([]);
+    setSearchState('searching');
     const timer = setTimeout(async () => {
-      setSearching(true);
       try {
-        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(form.patientName.trim())}`);
+        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(query)}`, { signal: abort.signal });
         const data = await res.json();
-        setSearchResults(data.patients || []);
-        setShowSearch(data.patients?.length > 0);
-      } catch {}
-      setSearching(false);
+        const results = data.patients || [];
+        if (queryRef.current !== query) return; // stale
+        setSearchResults(results);
+        setSearchState(results.length > 0 ? 'success' : 'empty');
+      } catch (e) { if (e.name !== 'AbortError') setSearchState('idle'); }
     }, 300);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); abort.abort(); };
   }, [form.patientName, appointmentId]);
 
   // ── Auto-save draft to localStorage ──
@@ -666,7 +671,7 @@ function VisitPageInner() {
       patientLocation: p.location || '',
     }));
     if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
-    setShowSearch(false);
+    setSearchState('idle');
     setSearchResults([]);
     if (p.id) {
       setLoadingExtra(true);
@@ -1662,7 +1667,7 @@ function VisitPageInner() {
                     className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 transition-all ${errors.patientName ? 'border-red-300 dark:border-red-700 focus:ring-red-200 dark:focus:ring-red-800' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500'}`}
                     placeholder="e.g. Rajesh Kumar" />
                   {errors.patientName && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.patientName}</p>}
-                  {showSearch && searchResults.length > 0 && (
+                  {searchState === 'success' && (
                     <div ref={searchRef} className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
                       {searchResults.map(p => (
                         <button
@@ -1680,6 +1685,13 @@ function VisitPageInner() {
                           </div>
                         </button>
                       ))}
+                    </div>
+                  )}
+                  {searchState === 'empty' && (
+                    <div ref={searchRef} className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden p-5 text-center">
+                      <Search className="w-6 h-6 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No patients found</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">A new patient record will be created when you book.</p>
                     </div>
                   )}
                 </div>

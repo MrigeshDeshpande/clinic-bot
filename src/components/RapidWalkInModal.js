@@ -22,30 +22,40 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
   const [method, setMethod] = useState('');
   const [notes, setNotes] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const [searchState, setSearchState] = useState('idle');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const nameInputRef = useRef(null);
+  const queryRef = useRef('');
 
   useEffect(() => {
     setTimeout(() => nameInputRef.current?.focus(), 100);
   }, []);
 
   useEffect(() => {
+    const abort = new AbortController();
+    queryRef.current = name;
     if (name.length < 2 || selectedPatient) {
       setSearchResults([]);
+      setSearchState('idle');
       return;
     }
-    setSearching(true);
-    const timer = setTimeout(() => {
-      fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(name)}`)
-        .then(r => r.json())
-        .then(d => setSearchResults(d.patients || []))
-        .catch(() => setSearchResults([]))
-        .finally(() => setSearching(false));
+    setSearchResults([]);
+    setSearchState('searching');
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(name)}`, { signal: abort.signal });
+        const d = await res.json();
+        const results = d.patients || [];
+        if (queryRef.current !== name) return; // stale
+        setSearchResults(results);
+        setSearchState(results.length > 0 ? 'success' : 'empty');
+      } catch (e) {
+        if (e.name !== 'AbortError') { console.error('Walk-in search error:', e); setSearchState('idle'); }
+      }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); abort.abort(); };
   }, [name, selectedPatient]);
 
   function selectPatient(p) {
@@ -53,6 +63,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
     setName(p.name);
     setPhone(stripPhonePrefix(p.phone) || '');
     setSearchResults([]);
+    setSearchState('idle');
   }
 
   const outstanding = Math.max(0, total - paid);
@@ -127,13 +138,13 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
                 placeholder="Type patient name..."
                 className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
               />
-              {searching && (
+              {searchState === 'searching' && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   <div className="w-3.5 h-3.5 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
                 </div>
               )}
             </div>
-            {searchResults.length > 0 && !selectedPatient && (
+            {searchState === 'success' && !selectedPatient && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50 z-10 overflow-hidden">
                 {searchResults.map(p => (
                   <button
@@ -151,6 +162,13 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
                     </div>
                   </button>
                 ))}
+              </div>
+            )}
+            {searchState === 'empty' && !selectedPatient && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm z-10 p-5 text-center">
+                <Search className="w-6 h-6 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No patients found</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">A new patient record will be created when you book.</p>
               </div>
             )}
           </div>

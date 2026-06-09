@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const MAX_QUERY_RETRIES = 4;
-const RETRY_BASE_DELAY_MS = 3000;
+const RETRY_BASE_DELAY_MS = 500;
 
 let rawSql;
 let sql;
@@ -314,6 +314,15 @@ export async function runMigrations() {
       ALTER TABLE patients ADD CONSTRAINT unique_patient_phone UNIQUE (phone);
     `;
 
+    // Trigram indexes for fast ILIKE '%search%' on name/phone
+    try {
+      await db`CREATE EXTENSION IF NOT EXISTS pg_trgm;`;
+      await db`CREATE INDEX IF NOT EXISTS idx_patients_name_trgm ON patients USING gin (name gin_trgm_ops);`;
+      await db`CREATE INDEX IF NOT EXISTS idx_patients_phone_trgm ON patients USING gin (phone gin_trgm_ops);`;
+    } catch (_) {
+      logger.warn('pg_trgm not available — ILIKE searches will be slower');
+    }
+
     // Visit logging columns on appointments
     await db`
       ALTER TABLE appointments
@@ -377,6 +386,46 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(100),
         ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
         ADD COLUMN IF NOT EXISTS paid_amount INTEGER DEFAULT 0;
+    `;
+
+    // Payments ledger — independent financial tracking (source of truth for money)
+    await db`
+      CREATE TABLE IF NOT EXISTS payments (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id  UUID REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id      UUID REFERENCES patients(id) ON DELETE CASCADE,
+        amount          INTEGER NOT NULL CHECK (amount > 0),
+        direction       VARCHAR(10) NOT NULL CHECK (direction IN ('credit', 'debit')),
+        kind            VARCHAR(20) NOT NULL DEFAULT 'payment'
+                        CHECK (kind IN ('payment','refund','adjustment','migration','waiver','advance')),
+        method          VARCHAR(20) CHECK (method IN ('cash','upi','card','bank','other')),
+        idempotency_key VARCHAR(100) UNIQUE,
+        notes           TEXT,
+        recorded_by     VARCHAR(20) NOT NULL DEFAULT 'reception',
+        recorded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_payments_appointment ON payments(appointment_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_payments_patient ON payments(patient_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_payments_recorded ON payments(recorded_at);
+    `;
+
+    // Backfill: migrate existing paid_amount > 0 into payments ledger with explicit migration marker
+    // Only runs once — INSERT ON CONFLICT (idempotency_key) ensures no duplicates
+    await db`
+      INSERT INTO payments (appointment_id, patient_id, amount, direction, kind, notes, recorded_by)
+      SELECT a.id, a.patient_id, a.paid_amount, 'credit', 'migration',
+             'Migrated from legacy paid_amount=' || a.paid_amount, 'system'
+      FROM appointments a
+      WHERE a.paid_amount > 0
+        AND a.id NOT IN (
+          SELECT appointment_id FROM payments WHERE kind = 'migration'
+        )
     `;
 
     // post_visit_sent_at — tracks whether post-visit summary has been sent
