@@ -39,6 +39,7 @@ Transform the clinic-bot into a dentist-specific clinical record system with per
 ### Fixed
 - **`column a.tooth_diagnoses does not exist`** — Added missing `tooth_diagnoses JSONB` column to `appointments` table via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (was already in pool.js:391-395 migration but needed a server restart to apply, or the DB was created before the migration was added). Ran manually via psql and verified API returns 401 instead of 500.
 - **Reschedule 500 (unique constraint `idx_appointments_unique_slot`)** — Three-part fix: (1) `supersedeAppointment` now sets `status='superseded'` on the old version so it doesn't hold the slot in the `WHERE status='confirmed'` constraint, (2) reschedule route now checks slot availability upfront and returns 409 if taken, (3) WeekView/DayTimeline call `invalidateFetchCache('/api/dashboard/appointments')` after successful drop so the 60s cache doesn't hide the new position.
+- **Reschedule 500 (CHECK constraint `valid_appt_status`)** — `status='superseded'` was not in the allowed list (`confirmed,cancelled,completed,no_show`). Fix: (1) Updated `CREATE TABLE IF NOT EXISTS` constraint to include `'superseded'`, (2) Added migration block to DROP/ADD constraint in `pool.js`, (3) Added `await runMigrations()` to reschedule route (was missing), (4) Applied ALTER TABLE manually. Root cause: migration code didn't run before the reschedule POST since that route never called `runMigrations()`.
 
 ### In Progress
 - (none)

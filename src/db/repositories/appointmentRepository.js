@@ -336,7 +336,18 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
       } = current[0];
       const newVersion = currentVersion + 1;
 
-      // Step 2: Mark current version as superseded.
+      // Step 2a: Check target slot availability inside retry loop (TOCTOU-safe)
+      const slotTaken = await sql`
+        SELECT 1 FROM appointments
+        WHERE date = ${date} AND time = ${time}
+          AND status = 'confirmed' AND logical_id != ${logicalId}
+        LIMIT 1
+      `;
+      if (slotTaken?.length > 0) {
+        return { ok: false, reason: 'slot_conflict' };
+      }
+
+      // Step 2b: Mark current version as superseded.
       // Conditional WHERE superseded_at IS NULL ensures only one caller
       // succeeds in marking it — the other hits 0 rows and will fail the INSERT.
       await sql`

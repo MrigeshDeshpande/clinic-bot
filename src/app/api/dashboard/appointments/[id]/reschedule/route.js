@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSql } from '@/db/pool';
+import { getSql, runMigrations } from '@/db/pool';
 import { supersedeAppointment } from '@/db/repositories/appointmentRepository';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
@@ -10,6 +10,7 @@ export async function POST(req, { params }) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
   try {
+    await runMigrations();
     const sql = getSql();
     const { id } = await params;
     const body = await req.json();
@@ -29,21 +30,11 @@ export async function POST(req, { params }) {
 
     const logicalId = rows[0].logical_id;
 
-    // Check if target slot is already occupied by another appointment chain
-    const slotConflict = await sql`
-      SELECT 1 FROM appointments
-      WHERE date = ${date}
-        AND time = ${time}
-        AND status = 'confirmed'
-        AND logical_id != ${logicalId}
-      LIMIT 1
-    `;
-    if (slotConflict && slotConflict.length > 0) {
-      return NextResponse.json({ error: 'This time slot is already booked' }, { status: 409 });
-    }
-
     const result = await supersedeAppointment(logicalId, { date, time, treatment: treatment || null });
 
+    if (result?.reason === 'slot_conflict') {
+      return NextResponse.json({ error: 'This time slot is already booked' }, { status: 409 });
+    }
     if (!result) {
       return NextResponse.json({ error: 'Failed to reschedule appointment' }, { status: 500 });
     }

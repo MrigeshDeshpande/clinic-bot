@@ -178,7 +178,7 @@ export async function runMigrations() {
         cancellation_reason VARCHAR(255),
         created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        CONSTRAINT valid_appt_status CHECK (status IN ('confirmed','cancelled','completed','no_show'))
+        CONSTRAINT valid_appt_status CHECK (status IN ('confirmed','cancelled','completed','no_show','superseded'))
       );
     `;
 
@@ -218,6 +218,15 @@ export async function runMigrations() {
     await db`
       CREATE INDEX IF NOT EXISTS idx_appointments_logical_id ON appointments(logical_id);
     `;
+    // Migration: Allow 'superseded' status for reschedule versioning
+    await db`
+      ALTER TABLE appointments DROP CONSTRAINT IF EXISTS valid_appt_status;
+    `;
+    await db`
+      ALTER TABLE appointments ADD CONSTRAINT valid_appt_status
+        CHECK (status IN ('confirmed','cancelled','completed','no_show','superseded'));
+    `;
+
     // Unique constraint on (logical_id, version) prevents duplicate versions
     // in concurrent reschedule attempts
     await db`

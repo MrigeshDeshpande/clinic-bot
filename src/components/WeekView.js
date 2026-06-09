@@ -412,7 +412,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                             {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
                           </span>
                           <div className="w-2 h-2 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1" />
-                          <div className="flex-1 h-px bg-red-500 shadow-red-500/30 shadow-sm" />
+                          <div className="flex-1 h-0.5 bg-red-500 shadow-red-500/30 shadow-sm" />
                         </div>
                       </div>
                     )}
@@ -443,9 +443,13 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh }) {
                           <div className={`absolute left-0 top-1 bottom-1 w-1 rounded-full shadow-sm ${tStyle.dot}`} />
 
                           <div className="flex flex-col justify-center h-full px-2 pl-[7px] pr-4">
-                            {appt.treatment && (
+                            {appt.treatment ? (
                               <span className="text-xs font-bold uppercase tracking-wide leading-tight text-gray-800 dark:text-gray-200 truncate">
                                 {appt.treatment}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 truncate">
+                                No Treatment
                               </span>
                             )}
                             <span className="truncate">
