@@ -35,6 +35,9 @@ export async function POST(req, { params }) {
     if (result?.reason === 'slot_conflict') {
       return NextResponse.json({ error: 'This time slot is already booked' }, { status: 409 });
     }
+    if (result?.reason === 'invalid_state') {
+      return NextResponse.json({ error: 'Cannot reschedule a completed or cancelled appointment' }, { status: 400 });
+    }
     if (!result) {
       return NextResponse.json({ error: 'Failed to reschedule appointment' }, { status: 500 });
     }

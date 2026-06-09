@@ -135,7 +135,10 @@ export async function POST(req) {
       setClauses.push(`prescription_key = NULL`, `compiled_document_key = NULL`, `updated_at = NOW()`);
       params.push(appointmentId);
 
-      await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${p}`, params);
+      const result = await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${p} AND status NOT IN ('cancelled', 'no_show', 'superseded') RETURNING id`, params);
+      if (result.rowCount === 0) {
+        return NextResponse.json({ error: 'Appointment not found or cannot be edited' }, { status: 400 });
+      }
 
       const updated = await sql`
          SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,

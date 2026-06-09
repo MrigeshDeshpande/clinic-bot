@@ -81,7 +81,7 @@ export async function cancelAppointment(id, reason) {
           cancelled_at = NOW(),
           cancellation_reason = ${reason || null},
           updated_at = NOW()
-      WHERE id = ${id}
+      WHERE id = ${id} AND status = 'confirmed'
       RETURNING *
     `;
     return rows[0] || null;
@@ -307,11 +307,11 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
       // The UNIQUE (logical_id, version) constraint + retry loop
       // handle concurrent access correctly.
       const current = await sql`
-        SELECT version, wa_id, patient_name, patient_phone, patient_id,
+        SELECT version, status, wa_id, patient_name, patient_phone, patient_id,
                session_id, treatment, treatments, diagnosis, medicines,
                consultation_fee, treatment_charges, medicine_charges,
                notes, follow_up_date, follow_up_instructions,
-               advice_selected, diagnosis_selected,
+               advice_selected, diagnosis_selected, tooth_diagnoses,
                location, payment_status, payment_method, transaction_id,
                paid_amount, paid_at, arrival_status, chit_media
         FROM appointments
@@ -326,77 +326,82 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
       }
 
       const {
-        version: currentVersion, wa_id, patient_name, patient_phone, patient_id,
+        version: currentVersion, status: currentStatus, wa_id, patient_name, patient_phone, patient_id,
         session_id, treatment: oldTreatment, treatments, diagnosis, medicines,
         consultation_fee, treatment_charges, medicine_charges,
         notes, follow_up_date, follow_up_instructions,
-        advice_selected, diagnosis_selected,
+        advice_selected, diagnosis_selected, tooth_diagnoses,
         location, payment_status, payment_method, transaction_id,
         paid_amount, paid_at, arrival_status, chit_media
       } = current[0];
+
+      if (currentStatus !== 'confirmed') {
+        return { ok: false, reason: 'invalid_state' };
+      }
+
       const newVersion = currentVersion + 1;
 
-      // Step 2a: Check target slot availability inside retry loop (TOCTOU-safe)
-      const slotTaken = await sql`
-        SELECT 1 FROM appointments
-        WHERE date = ${date} AND time = ${time}
-          AND status = 'confirmed' AND logical_id != ${logicalId}
-        LIMIT 1
-      `;
-      if (slotTaken?.length > 0) {
-        return { ok: false, reason: 'slot_conflict' };
-      }
-
-      // Step 2b: Mark current version as superseded.
-      // Conditional WHERE superseded_at IS NULL ensures only one caller
-      // succeeds in marking it — the other hits 0 rows and will fail the INSERT.
-      await sql`
-        UPDATE appointments
-        SET superseded_at = NOW(), updated_at = NOW(), status = 'superseded'
-        WHERE logical_id = ${logicalId}
-          AND version = ${currentVersion}
-          AND superseded_at IS NULL
-      `;
-
-      // Step 3: Insert new version with the new data.
-      // UNIQUE (logical_id, version) constraint prevents duplicate versions.
+      // Merge the UPDATE and INSERT into a single atomic CTE statement.
+      // This prevents a split logical chain if the UPDATE were to fail after the INSERT.
       const rows = await sql`
-        INSERT INTO appointments (
-          logical_id, version, replaces_version, wa_id, patient_name, patient_phone, patient_id,
-          session_id, date, time, treatment, treatments, diagnosis, medicines,
-          consultation_fee, treatment_charges, medicine_charges,
-          notes, follow_up_date, follow_up_instructions,
-          advice_selected, diagnosis_selected,
-          location, payment_status, payment_method, transaction_id,
-          paid_amount, paid_at, arrival_status, chit_media, status
-        ) VALUES (
-          ${logicalId}, ${newVersion}, ${currentVersion}, ${wa_id}, ${patient_name}, ${patient_phone}, ${patient_id},
-          ${session_id}, ${date}, ${time}, ${treatment || oldTreatment}, ${JSON.stringify(treatments)},
-          ${diagnosis}, ${JSON.stringify(medicines)},
-          ${consultation_fee}, ${treatment_charges}, ${medicine_charges},
-          ${notes}, ${follow_up_date}, ${follow_up_instructions},
-          ${advice_selected || []}, ${diagnosis_selected || []},
-          ${location}, ${payment_status}, ${payment_method}, ${transaction_id},
-          ${paid_amount}, ${paid_at}, ${arrival_status}, ${chit_media}, 'confirmed'
+        WITH updated AS (
+          UPDATE appointments
+          SET superseded_at = NOW(), updated_at = NOW(), status = 'superseded'
+          WHERE logical_id = ${logicalId}
+            AND version = ${currentVersion}
+            AND superseded_at IS NULL
+          RETURNING id
+        ),
+        inserted AS (
+          INSERT INTO appointments (
+            logical_id, version, replaces_version, wa_id, patient_name, patient_phone, patient_id,
+            session_id, date, time, treatment, treatments, diagnosis, medicines,
+            consultation_fee, treatment_charges, medicine_charges,
+            notes, follow_up_date, follow_up_instructions,
+            advice_selected, diagnosis_selected, tooth_diagnoses,
+            location, payment_status, payment_method, transaction_id,
+            paid_amount, paid_at, arrival_status, chit_media, status
+          ) SELECT
+            ${logicalId}, ${newVersion}, ${currentVersion}, ${wa_id}, ${patient_name}, ${patient_phone}, ${patient_id},
+            ${session_id}, ${date}, ${time}, ${treatment || oldTreatment}, ${JSON.stringify(treatments || [])},
+            ${diagnosis}, ${JSON.stringify(medicines || [])},
+            ${consultation_fee}, ${treatment_charges}, ${medicine_charges},
+            ${notes}, ${follow_up_date}, ${follow_up_instructions},
+            ${advice_selected || []}, ${diagnosis_selected || []}, ${JSON.stringify(tooth_diagnoses || [])},
+            ${location}, ${payment_status}, ${payment_method}, ${transaction_id},
+            ${paid_amount}, ${paid_at}, ${arrival_status}, ${chit_media}, 'confirmed'
+          WHERE EXISTS (SELECT 1 FROM updated)
+          RETURNING *
         )
-        RETURNING *
+        SELECT * FROM inserted;
       `;
 
-      if (rows && rows.length > 0) {
-        logger.info('APPOINTMENT_SUPERSEDED', {
-          logicalId,
-          oldVersion: currentVersion,
-          newVersion,
-          newId: rows[0].id,
-        });
+      // If 0 rows returned, the UPDATE CTE matched 0 rows, meaning this version
+      // was already superseded by a concurrent request. We trigger the retry loop.
+      if (!rows || rows.length === 0) {
+        if (attempt < maxRetries - 1) continue;
+        return null;
       }
+
+      logger.info('APPOINTMENT_SUPERSEDED', {
+        logicalId,
+        oldVersion: currentVersion,
+        newVersion,
+        newId: rows[0].id,
+      });
 
       return rows[0] || null;
     } catch (error) {
-      // PostgreSQL unique violation (code 23505) — another call inserted
-      // this version first. Retry to re-read the latest and try again.
-      if (error.code === '23505' && attempt < maxRetries - 1) {
-        continue;
+      if (error.code === '23505') {
+        const msg = error.message || '';
+        // If the target slot was taken, Postgres enforces the unique constraint.
+        if (error.constraint_name === 'idx_appointments_unique_slot' || msg.includes('idx_appointments_unique_slot')) {
+          return { ok: false, reason: 'slot_conflict' };
+        }
+        // Otherwise, it was a concurrent reschedule colliding on (logical_id, version). Retry.
+        if (attempt < maxRetries - 1) {
+          continue;
+        }
       }
       logger.error('APPOINTMENT_SUPERSEDE_ERROR', {
         logicalId,

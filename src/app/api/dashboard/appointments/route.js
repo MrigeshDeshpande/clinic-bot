@@ -72,26 +72,24 @@ export async function POST(req) {
       }
     }
 
-    // Check if slot is already booked
-    const existingAppt = await sql`
-      SELECT id FROM appointments
-      WHERE date = ${date}::date AND time = ${time} AND status = 'confirmed'
-      LIMIT 1
-    `;
-    if (existingAppt && existingAppt.length > 0) {
-      return NextResponse.json({ error: 'This slot is already booked' }, { status: 409 });
-    }
-
-    // Create appointment — use phone as wa_id for walk-in tracking, or a placeholder if no phone
+    // Create appointment atomically with slot check
     const waId = patientPhone || `w-${Date.now()}`;
     // Derive treatments array from single treatment string
     const treatmentsArr = treatment ? [treatment] : [];
 
     const rows = await sql`
       INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, treatments, status, location)
-      VALUES (gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, ${JSON.stringify(treatmentsArr)}, 'confirmed', ${location || ''})
+      SELECT gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, ${JSON.stringify(treatmentsArr)}, 'confirmed', ${location || ''}
+      WHERE NOT EXISTS (
+        SELECT 1 FROM appointments
+        WHERE date = ${date}::date AND time = ${time} AND status = 'confirmed'
+      )
       RETURNING *
     `;
+
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ error: 'This slot is already booked' }, { status: 409 });
+    }
 
     logger.info('QUICK_BOOK_DASHBOARD', { patientName, date, time, treatment });
     return NextResponse.json({ appointment: sanitizeResponse(rows[0] || null) });
