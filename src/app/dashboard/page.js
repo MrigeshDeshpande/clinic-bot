@@ -3,7 +3,7 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3, ChevronUp } from 'lucide-react';
+import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3, ChevronUp, Search, CheckCircle2 } from 'lucide-react';
 import Calendar from '@/components/Calendar';
 import WeekView from '@/components/WeekView';
 import DayTimeline from '@/components/DayTimeline';
@@ -100,10 +100,12 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [familyMembers, setFamilyMembers] = useState([]);
-  const [selectedFamilyMember, setSelectedFamilyMember] = useState(null);
   const nameInputRef = useRef(null);
+  const submitRef = useRef(null);
   const queryRef = useRef('');
+  const shouldFocusSubmit = useRef(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [bookedAppointment, setBookedAppointment] = useState(null);
 
   useEffect(() => {
     setTimeout(() => nameInputRef.current?.focus(), 100);
@@ -134,19 +136,44 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
     return () => { clearTimeout(timer); abort.abort(); };
   }, [patientName, selectedPatient]);
 
+  // Auto-highlight first result
+  useEffect(() => {
+    setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
+  }, [searchResults]);
+
+  // Focus submit after patient selection
+  useEffect(() => {
+    if (shouldFocusSubmit.current) {
+      submitRef.current?.focus();
+      shouldFocusSubmit.current = false;
+    }
+  }, [selectedPatient]);
+
+  // Global Escape handler
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        if (searchState === 'success' || searchResults.length > 0) {
+          setSearchResults([]);
+          setSearchState('idle');
+        } else if (!bookedAppointment) {
+          onClose?.();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [searchState, searchResults, bookedAppointment, onClose]);
+
   function selectPatient(p) {
     setSelectedPatient(p);
     setPatientName(p.name);
-    setPatientPhone(stripPhonePrefix(p.phone) || '');
+    setPatientPhone((p.phone || '').replace(/\D/g, ''));
     setPatientAge(p.age ? String(p.age) : '');
     setPatientSex(p.sex || '');
     setSearchResults([]);
     setSearchState('idle');
-    setSelectedFamilyMember(null);
-    fetch(`/api/dashboard/patients/${p.id}/family`)
-      .then(r => r.json())
-      .then(d => { setFamilyMembers(d.family || []); })
-      .catch(() => setFamilyMembers([]));
+    shouldFocusSubmit.current = true;
   }
 
   async function handleSubmit(e) {
@@ -161,7 +188,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientName: patientName.trim(),
-          patientPhone: withPhonePrefix(patientPhone.trim()) || null,
+          patientPhone: patientPhone ? `+91${patientPhone}` : null,
           patientAge: patientAge.trim() || null,
           patientSex: patientSex || null,
           date,
@@ -175,12 +202,59 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         setError(data.error || 'Failed to book');
         return;
       }
+      setBookedAppointment(data.appointment);
       onBooked?.(data.appointment);
     } catch (err) {
       setError('Network error');
     } finally {
       setSaving(false);
     }
+  }
+
+  if (bookedAppointment) {
+    return (
+      <div className="p-6 space-y-5 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/30 mx-auto">
+          <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+        </div>
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Appointment Booked</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {bookedAppointment.patient_name}{bookedAppointment.time ? ` — ${bookedAppointment.time?.slice(0, 5)}` : ''}
+        </p>
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={() => {
+              const close = onClose;
+              close?.();
+              window.location.href = `/dashboard/visit?appointmentId=${bookedAppointment.id}&name=${encodeURIComponent(bookedAppointment.patient_name)}`;
+            }}
+            className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all"
+          >
+            Open Visit
+          </button>
+          <button
+            onClick={() => {
+              setBookedAppointment(null);
+              setPatientName('');
+              setPatientPhone('');
+              setPatientAge('');
+              setPatientSex('');
+              setTreatment('');
+              setLocation('');
+              setSelectedPatient(null);
+              setSearchResults([]);
+              setSearchState('idle');
+              setError('');
+              setHighlightedIndex(-1);
+              setTimeout(() => nameInputRef.current?.focus(), 50);
+            }}
+            className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+          >
+            Book Another
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -197,6 +271,22 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
             type="text"
             value={patientName}
             onChange={e => { setPatientName(e.target.value); setSelectedPatient(null); }}
+            onKeyDown={e => {
+              if (searchState === 'success' && searchResults.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setHighlightedIndex(prev => (prev + 1) % searchResults.length);
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setHighlightedIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+                    selectPatient(searchResults[highlightedIndex]);
+                  }
+                }
+              }
+            }}
             placeholder="Type patient name..."
             className="w-full pl-9 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />
@@ -208,12 +298,18 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         </div>
         {searchState === 'success' && !selectedPatient && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50 z-10 overflow-hidden">
-            {searchResults.map(p => (
+            {searchResults.map((p, i) => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => selectPatient(p)}
-                className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0"
+                onMouseEnter={() => setHighlightedIndex(i)}
+                ref={el => { if (highlightedIndex === i && el) el.scrollIntoView({ block: 'nearest' }); }}
+                className={`w-full text-left px-4 py-3 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0 ${
+                  highlightedIndex === i
+                    ? 'bg-gray-100 dark:bg-gray-700'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
               >
                 <span className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-semibold text-gray-600 dark:text-gray-300 shrink-0">
                   {(p.name || '?')[0].toUpperCase()}
@@ -242,8 +338,8 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
           <span className="inline-flex items-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-200 dark:border-gray-600 rounded-l-xl text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">{PHONE_PREFIX}</span>
           <input
             type="tel"
-            value={stripPhonePrefix(patientPhone)}
-            onChange={e => setPatientPhone(stripPhonePrefix(e.target.value))}
+            value={patientPhone}
+            onChange={e => setPatientPhone(e.target.value.replace(/\D/g, ''))}
             placeholder="9876543210"
             className="flex-1 px-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />
@@ -297,29 +393,6 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         </div>
       </div>
 
-      {/* Family Member Selector */}
-      {familyMembers.length > 0 && selectedPatient && (
-        <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5" /> Booking for
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button"
-              onClick={() => { setSelectedFamilyMember(null); setPatientName(selectedPatient.name); setPatientPhone(selectedPatient.phone || ''); }}
-              className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${!selectedFamilyMember ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-              {selectedPatient.name} (self)
-            </button>
-            {familyMembers.map(m => (
-              <button key={m.id} type="button"
-                onClick={() => { setSelectedFamilyMember(m); setPatientName(m.name); setPatientPhone(m.phone || ''); setPatientAge(m.age ? String(m.age) : ''); setPatientSex(m.sex || ''); }}
-                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${selectedFamilyMember?.id === m.id ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                {m.name} {m.age ? `(${m.age}y)` : ''}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Treatment Dropdown */}
       <div>
         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Treatment</label>
@@ -351,6 +424,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
       <div className="flex gap-3 pt-1">
         <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">Cancel</button>
         <button
+          ref={submitRef}
           type="submit"
           disabled={saving || !patientName.trim()}
           className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"

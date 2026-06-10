@@ -28,6 +28,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
   const [error, setError] = useState('');
   const nameInputRef = useRef(null);
   const queryRef = useRef('');
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   useEffect(() => {
     setTimeout(() => nameInputRef.current?.focus(), 100);
@@ -58,10 +59,31 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
     return () => { clearTimeout(timer); abort.abort(); };
   }, [name, selectedPatient]);
 
+  // Auto-highlight first result
+  useEffect(() => {
+    setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
+  }, [searchResults]);
+
+  // Global Escape handler
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        if (searchState === 'success' || searchResults.length > 0) {
+          setSearchResults([]);
+          setSearchState('idle');
+        } else {
+          onClose?.();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [searchState, searchResults, onClose]);
+
   function selectPatient(p) {
     setSelectedPatient(p);
     setName(p.name);
-    setPhone(stripPhonePrefix(p.phone) || '');
+    setPhone((p.phone || '').replace(/\D/g, ''));
     setSearchResults([]);
     setSearchState('idle');
   }
@@ -83,7 +105,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
     try {
       const payload = {
         patient_name: name.trim(),
-        patient_phone: phone.trim() ? withPhonePrefix(phone.trim()) : undefined,
+        patient_phone: phone ? `+91${phone}` : undefined,
         treatmentCharges: total,
         paidAmount: paid,
         paymentStatus: getPaymentStatus(),
@@ -135,6 +157,22 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
                 type="text"
                 value={name}
                 onChange={e => { setName(e.target.value); setSelectedPatient(null); }}
+                onKeyDown={e => {
+                  if (searchState === 'success' && searchResults.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setHighlightedIndex(prev => (prev + 1) % searchResults.length);
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setHighlightedIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+                        selectPatient(searchResults[highlightedIndex]);
+                      }
+                    }
+                  }
+                }}
                 placeholder="Type patient name..."
                 className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
               />
@@ -146,12 +184,18 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
             </div>
             {searchState === 'success' && !selectedPatient && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50 z-10 overflow-hidden">
-                {searchResults.map(p => (
+                {searchResults.map((p, i) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => selectPatient(p)}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0"
+                    onMouseEnter={() => setHighlightedIndex(i)}
+                    ref={el => { if (highlightedIndex === i && el) el.scrollIntoView({ block: 'nearest' }); }}
+                    className={`w-full text-left px-4 py-3 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0 ${
+                      highlightedIndex === i
+                        ? 'bg-gray-100 dark:bg-gray-700'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    }`}
                   >
                     <span className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-semibold text-gray-600 dark:text-gray-300 shrink-0">
                       {(p.name || '?')[0].toUpperCase()}
@@ -179,8 +223,8 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
               <span className="inline-flex items-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-200 dark:border-gray-600 rounded-l-xl text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">{PHONE_PREFIX}</span>
               <input
                 type="tel"
-                value={stripPhonePrefix(phone)}
-                onChange={e => setPhone(stripPhonePrefix(e.target.value))}
+                value={phone}
+                onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
                 placeholder="9876543210"
                 className="flex-1 px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-r-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
               />

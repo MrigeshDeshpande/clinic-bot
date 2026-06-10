@@ -148,6 +148,7 @@ function VisitPageInner() {
   const [patientRatings, setPatientRatings] = useState({});
   const [savingRatings, setSavingRatings] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   // Escape closes preview
   useEffect(() => {
@@ -329,7 +330,7 @@ function VisitPageInner() {
           setAppointmentMeta(a);
           setForm({
             patientName: a.patient_name || '',
-            patientPhone: stripPhonePrefix(a.patient_phone) || '',
+            patientPhone: (a.patient_phone || '').replace(/\D/g, ''),
             patientAge: '',
             patientSex: '',
             treatment: a.treatment || '',
@@ -458,6 +459,11 @@ function VisitPageInner() {
     }, 300);
     return () => { clearTimeout(timer); abort.abort(); };
   }, [form.patientName, appointmentId]);
+
+  // Auto-highlight first result
+  useEffect(() => {
+    setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
+  }, [searchResults]);
 
   // ── Auto-save draft to localStorage ──
   useEffect(() => {
@@ -650,11 +656,11 @@ function VisitPageInner() {
       }
       // Escape to close dropdowns
       if (e.key === 'Escape') {
-        setShowSearch(false);
+        setSearchResults([]);
+        setSearchState('idle');
         setShowSuggestions(false);
         setShowTemplateLoad(false);
         setShowTemplateInput(false);
-        setSaltSearch('');
       }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -665,7 +671,7 @@ function VisitPageInner() {
     setForm(f => ({
       ...f,
       patientName: p.name,
-      patientPhone: stripPhonePrefix(p.phone) || f.patientPhone,
+      patientPhone: (p.phone || '').replace(/\D/g, '') || f.patientPhone,
       patientAge: p.age?.toString() || '',
       patientSex: normalizeSex(p.sex),
       patientLocation: p.location || '',
@@ -914,7 +920,7 @@ function VisitPageInner() {
           }
         : {
             patient_name: form.patientName.trim(),
-            patient_phone: withPhonePrefix(form.patientPhone.trim()) || undefined,
+            patient_phone: form.patientPhone ? `+91${form.patientPhone}` : undefined,
             patient_age: walkInAge,
             patient_sex: form.patientSex || undefined,
             patient_location: form.patientLocation.trim() || undefined,
@@ -1662,19 +1668,48 @@ function VisitPageInner() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Patient Name *</label>
-                  <input type="text" value={form.patientName}
-                    onChange={e => { setForm(f => ({ ...f, patientName: e.target.value })); setErrors(ev => { const n={...ev}; delete n.patientName; return n; }); }}
-                    className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 transition-all ${errors.patientName ? 'border-red-300 dark:border-red-700 focus:ring-red-200 dark:focus:ring-red-800' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500'}`}
-                    placeholder="e.g. Rajesh Kumar" />
+                  <div className="relative">
+                    <input type="text" value={form.patientName}
+                      onChange={e => { setForm(f => ({ ...f, patientName: e.target.value })); setErrors(ev => { const n={...ev}; delete n.patientName; return n; }); }}
+                      onKeyDown={e => {
+                        if (searchState === 'success' && searchResults.length > 0) {
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setHighlightedIndex(prev => (prev + 1) % searchResults.length);
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setHighlightedIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
+                          } else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+                              selectPatient(searchResults[highlightedIndex]);
+                            }
+                          }
+                        }
+                      }}
+                      className={`w-full px-4 py-2.5 bg-white dark:bg-gray-800 border rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 transition-all ${errors.patientName ? 'border-red-300 dark:border-red-700 focus:ring-red-200 dark:focus:ring-red-800' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500'}`}
+                      placeholder="e.g. Rajesh Kumar" />
+                    {searchState === 'searching' && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-3.5 h-3.5 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
                   {errors.patientName && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.patientName}</p>}
                   {searchState === 'success' && (
                     <div ref={searchRef} className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
-                      {searchResults.map(p => (
+                      {searchResults.map((p, i) => (
                         <button
                           key={p.id}
                           type="button"
                           onClick={() => selectPatient(p)}
-                          className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-b border-gray-50 dark:border-gray-700 last:border-0 transition-colors flex items-center gap-3"
+                          onMouseEnter={() => setHighlightedIndex(i)}
+                          ref={el => { if (highlightedIndex === i && el) el.scrollIntoView({ block: 'nearest' }); }}
+                          className={`w-full text-left px-4 py-3 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0 ${
+                            highlightedIndex === i
+                              ? 'bg-blue-100 dark:bg-blue-900/40'
+                              : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                          }`}
                         >
                           <span className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 flex items-center justify-center text-xs font-semibold text-blue-700 dark:text-blue-300 flex-shrink-0">
                             {(p.name || '?')[0].toUpperCase()}
@@ -1699,7 +1734,7 @@ function VisitPageInner() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Phone</label>
                   <div className="flex">
                     <span className="inline-flex items-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-200 dark:border-gray-600 rounded-l-xl text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">{PHONE_PREFIX}</span>
-                    <input type="tel" value={stripPhonePrefix(form.patientPhone)} onChange={e => setForm(f => ({ ...f, patientPhone: stripPhonePrefix(e.target.value) }))}
+                    <input type="tel" value={form.patientPhone} onChange={e => setForm(f => ({ ...f, patientPhone: e.target.value.replace(/\D/g, '') }))}
                       className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-r-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all"
                       placeholder="9876543210" />
                   </div>
