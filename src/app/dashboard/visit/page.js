@@ -316,11 +316,27 @@ function VisitPageInner() {
         [key]: {
           ...prev[key],
           amount: Math.max(0, (prev[key].amount || 0) + delta),
-          source: 'manual' // Explicitly mark as manual on user edit
+          source: 'manual'
         }
       };
     });
   }
+
+  function handleAdjustQuantity(key, delta) {
+    setTreatmentFees(prev => {
+      const item = prev[key];
+      if (!item) return prev;
+      const newQty = Math.max(1, (item.quantity || 1) + delta);
+      const unitFee = item.source === 'auto' && item.quantity > 0
+        ? Math.round(item.amount / item.quantity)
+        : getFee(key);
+      return {
+        ...prev,
+        [key]: { ...item, quantity: newQty, amount: unitFee * newQty, source: 'manual' }
+      };
+    });
+  }
+  
   const [symptomInput, setSymptomInput] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1856,6 +1872,9 @@ function VisitPageInner() {
                 consultationFee={consultationFee}
                 medicines={form.medicines}
                 onEditPatient={() => setShowEditDrawer(true)}
+                onToggleTreatment={toggleTreatment}
+                onAdjustQuantity={handleAdjustQuantity}
+                getFee={getFee}
                 onMedicalHistorySave={async (payload) => {
                   const patientId = patientProfile?.id || appointmentMeta?.patient_id;
                   if (!patientId) { showToast('No patient selected', 'error'); return; }

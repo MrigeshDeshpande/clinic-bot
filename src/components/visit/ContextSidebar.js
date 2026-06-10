@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Clock, Activity } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Activity, Search, X, Plus, Minus } from 'lucide-react';
+import { TREATMENTS, getTreatmentName } from '@/lib/treatments';
 
 const MEDICAL_SECTIONS = [
   {
@@ -222,6 +223,9 @@ export default function ContextSidebar({
   medicines = [],
   onEditPatient,
   onMedicalHistorySave,
+  onToggleTreatment,
+  onAdjustQuantity,
+  getFee,
 }) {
   const mh = medicalHistory || {};
 
@@ -236,6 +240,21 @@ export default function ContextSidebar({
   if (mh.chronicConditions) alerts.push({ label: `Chronic: ${mh.chronicConditions}`, severity: severityOf('chronic') });
 
   const medicinesCount = medicines.length || 0;
+
+  const [showAddTreatment, setShowAddTreatment] = useState(false);
+  const [treatmentSearch, setTreatmentSearch] = useState('');
+  const filteredAdd = treatmentSearch.trim()
+    ? TREATMENTS.filter(t => {
+        const q = treatmentSearch.toLowerCase();
+        return t.name.toLowerCase().includes(q) || t.id.includes(q) || t.aliases.some(a => a.toLowerCase().includes(q));
+      }).slice(0, 8)
+    : [];
+
+  function handleSelectAdd(id) {
+    onToggleTreatment(id);
+    setTreatmentSearch('');
+    setShowAddTreatment(false);
+  }
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
@@ -275,29 +294,80 @@ export default function ContextSidebar({
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Projected Bill</span>
           <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">₹{totalFees.toLocaleString('en-IN')}</span>
         </div>
-        {selectedTreatments.length > 0 && (
-          <div className="space-y-0.5">
-            {selectedTreatments.map(key => {
-              const item = treatmentFees[key];
-              return (
-                <div key={key} className="flex items-center gap-2 text-[11px]">
-                  <span className="flex-1 text-gray-600 dark:text-gray-400 truncate">{item.label}{item.quantity > 1 ? ` ×${item.quantity}` : ''}</span>
-                  <span className="font-medium text-gray-800 dark:text-gray-200">₹{(item.amount || 0).toLocaleString('en-IN')}</span>
+        <div className="space-y-1">
+          {selectedTreatments.map(key => {
+            const item = treatmentFees[key];
+            const unitFee = item.source === 'auto' && item.quantity > 0
+              ? Math.round(item.amount / item.quantity)
+              : getFee ? getFee(key) : (item.amount || 0);
+            return (
+              <div key={key} className="flex items-center gap-1 text-[11px]">
+                <span className="flex-1 text-gray-600 dark:text-gray-400 truncate min-w-0">{item.label}</span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button type="button" onClick={() => onAdjustQuantity(key, -1)}
+                    className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                    <Minus className="w-2.5 h-2.5" />
+                  </button>
+                  <span className="w-5 text-center font-medium text-gray-800 dark:text-gray-200 text-[10px]">×{item.quantity || 1}</span>
+                  <button type="button" onClick={() => onAdjustQuantity(key, 1)}
+                    className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                    <Plus className="w-2.5 h-2.5" />
+                  </button>
                 </div>
-              );
-            })}
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className="flex-1 text-gray-400">Consultation</span>
-              <span className="font-medium text-gray-800 dark:text-gray-200">₹{consultationFee.toLocaleString('en-IN')}</span>
-            </div>
-            {medicinesCount > 0 && (
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="flex-1 text-gray-400">Medicines ({medicinesCount})</span>
-                <span className="text-gray-400">—</span>
+                <span className="font-medium text-gray-800 dark:text-gray-200 w-16 text-right shrink-0">₹{(item.amount || 0).toLocaleString('en-IN')}</span>
+                <button type="button" onClick={() => onToggleTreatment(key)}
+                  className="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-300 hover:text-red-500 transition-colors shrink-0">
+                  <X className="w-3 h-3" />
+                </button>
               </div>
-            )}
+            );
+          })}
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="flex-1 text-gray-400">Consultation</span>
+            <span className="font-medium text-gray-800 dark:text-gray-200">₹{consultationFee.toLocaleString('en-IN')}</span>
           </div>
-        )}
+          {medicinesCount > 0 && (
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="flex-1 text-gray-400">Medicines ({medicinesCount})</span>
+              <span className="text-gray-400">—</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Inline Add Treatment ── */}
+        <div className="mt-2">
+          {!showAddTreatment ? (
+            <button type="button" onClick={() => setShowAddTreatment(true)}
+              className="flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+              <Plus className="w-3 h-3" />
+              Add Treatment
+            </button>
+          ) : (
+            <div className="relative">
+              <div className="flex items-center gap-1">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                <input type="text" value={treatmentSearch} onChange={e => setTreatmentSearch(e.target.value)}
+                  autoFocus placeholder="Search treatments..."
+                  className="w-full pl-6 pr-2 py-1 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 placeholder-gray-400" />
+                <button type="button" onClick={() => { setShowAddTreatment(false); setTreatmentSearch(''); }}
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                  <X className="w-3 h-3 text-gray-400" />
+                </button>
+              </div>
+              {filteredAdd.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+                  {filteredAdd.map(t => (
+                    <button key={t.id} type="button" onClick={() => handleSelectAdd(t.id)}
+                      className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2">
+                      <span className="text-gray-700 dark:text-gray-300">{t.name}</span>
+                      <span className="ml-auto text-gray-400 font-mono">₹{t.defaultFee}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── MEDICAL HISTORY (collapsible) ── */}
