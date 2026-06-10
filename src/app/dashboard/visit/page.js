@@ -12,11 +12,13 @@ import { fetchCached } from '@/lib/clientFetchCache';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
 import CameraViewfinder from '@/components/CameraViewfinder';
 
-import ClinicalNotesCard from '@/components/visit/ClinicalNotesCard';
 import ToothChartCard from '@/components/visit/ToothChartCard';
 import MediaCard from '@/components/visit/MediaCard';
 import PrescriptionCard from '@/components/visit/PrescriptionCard';
 import AdviceCard from '@/components/visit/AdviceCard';
+import IntraOralFindings from '@/components/visit/IntraOralFindings';
+import ProvisionalDiagnosisCard from '@/components/visit/ProvisionalDiagnosisCard';
+import VisitSummary from '@/components/visit/VisitSummary';
 import ContextSidebar from '@/components/visit/ContextSidebar';
 import WalkInDrawer from '@/components/visit/WalkInDrawer';
 import EditPatientDrawer from '@/components/visit/EditPatientDrawer';
@@ -356,6 +358,8 @@ function VisitPageInner() {
   const [showWalkInDrawer, setShowWalkInDrawer] = useState(false);
   const [showEditDrawer, setShowEditDrawer] = useState(false);
   const [visitSaved, setVisitSaved] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
+  const formDirtyTimerRef = useRef(null);
 
   useEffect(() => {
     setForm(f => ({
@@ -696,6 +700,16 @@ function VisitPageInner() {
     localStorage.removeItem(DRAFT_KEY);
     setDraftAvailable(false);
   }
+
+  // ── formDirty debounced ──
+  useEffect(() => {
+    if (formDirtyTimerRef.current) clearTimeout(formDirtyTimerRef.current);
+    formDirtyTimerRef.current = setTimeout(() => {
+      setFormDirty(true);
+    }, 500);
+    return () => { if (formDirtyTimerRef.current) clearTimeout(formDirtyTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, treatmentFees, consultationFee]);
 
   // Load templates on mount
   useEffect(() => {
@@ -1149,6 +1163,7 @@ function VisitPageInner() {
       const appointmentIdForResult = data.appointment?.id || appointmentId;
       setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
       setVisitSaved(true);
+      setFormDirty(false);
     } catch (err) {
       console.error('[VISIT] Submit error:', err);
       showToast('Network error — could not save visit', 'error');
@@ -1461,13 +1476,10 @@ function VisitPageInner() {
       </div>
     );
   }
-  const clinicalNotesProps = { patientProfile, form, setForm };
   const toothChartProps = { diagnosisOptions, form, setForm, stableSetSelectedTooth, selectedTooth, setSelectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta, handleToothSave, handleToothClose, patientVisits };
   const mediaProps = { fileInputRef, handleMediaUpload, uploadingMedia, setShowCamera, galleryInputRef, mediaFiles, getFilePreview, getFileIcon, removeMediaFile };
   const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS };
   const adviceProps = { adviceOptions, form, setForm };
-
-  const billingProjectionProps = { adjustTreatmentFee, TREATMENT_STEP, CONSULTATION_STEP };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900">
@@ -1483,7 +1495,11 @@ function VisitPageInner() {
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Clinical Cockpit</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">
+              Clinical Cockpit
+              {formDirty && !visitSaved && <span className="text-[10px] font-medium text-amber-500 dark:text-amber-400">● Unsaved Changes</span>}
+              {!formDirty && visitSaved && <span className="text-[10px] font-medium text-emerald-500 dark:text-emerald-400">✓ Saved</span>}
+            </h1>
             <div className="flex items-center gap-2 mt-0.5">
               {/* Persistent patient search */}
               <div className="relative max-w-xs">
@@ -1595,11 +1611,95 @@ function VisitPageInner() {
                 </div>
               )}
 
+              {/* ── Examination (shared heading, two textareas) ── */}
+              {patientProfile && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">Examination</h3>
+                  <textarea value={form.generalExamination} onChange={e => setForm(f => ({ ...f, generalExamination: e.target.value }))}
+                    rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
+                    placeholder="General Examination — e.g. Extraoral: no swelling, TMJ normal. Intraoral: poor OH, generalized calculus..." />
+                  <textarea value={form.extraOralExamination} onChange={e => setForm(f => ({ ...f, extraOralExamination: e.target.value }))}
+                    rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
+                    placeholder="Extra-Oral — e.g. Facial asymmetry, lymphadenopathy, TMJ tenderness..." />
+                </div>
+              )}
+
               {/* ── Tooth Chart (hero) ── */}
               <ToothChartCard toothChartProps={toothChartProps} />
 
-              {/* ── Clinical Notes ── */}
-              <ClinicalNotesCard clinicalNotesProps={clinicalNotesProps} />
+              {/* ── Intra-Oral Findings (derived) ── */}
+              {patientProfile && (
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
+                  <IntraOralFindings
+                    toothDiagnoses={form.toothDiagnoses}
+                    notes={form.notes}
+                    onNotesChange={(v) => setForm(f => ({ ...f, notes: v }))}
+                    onToothSelect={(t) => { setSelectedTooth(t); setTimeout(() => document.getElementById('per-tooth-editor')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
+                  />
+                </div>
+              )}
+
+              {/* ── Provisional Diagnosis ── */}
+              {patientProfile && (
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
+                  <ProvisionalDiagnosisCard
+                    diagnosisOptions={diagnosisOptions}
+                    selectedDiagnoses={form.diagnosisSelected}
+                    diagnosisNotes={form.diagnosis}
+                    onToggleDiagnosis={(item) => {
+                      setForm(f => ({
+                        ...f,
+                        diagnosisSelected: f.diagnosisSelected.includes(item)
+                          ? f.diagnosisSelected.filter(d => d !== item)
+                          : [...f.diagnosisSelected, item],
+                      }));
+                    }}
+                    onNotesChange={(v) => setForm(f => ({ ...f, diagnosis: v }))}
+                  />
+                </div>
+              )}
+
+              {/* ── Planned Procedures (derived, grouped) ── */}
+              {patientProfile && (
+                <div>
+                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Planned Procedures</h3>
+                  {(() => {
+                    const perTooth = form.toothDiagnoses.filter(e => e.treatment);
+                    const toothTreatmentIds = new Set(perTooth.map(e => e.treatment));
+                    const general = selectedTreatments.filter(t => !toothTreatmentIds.has(t));
+                    if (perTooth.length === 0 && general.length === 0) {
+                      return <p className="text-xs text-gray-400 dark:text-gray-500 italic">No procedures planned yet.</p>;
+                    }
+                    const groups = {};
+                    for (const e of perTooth) {
+                      if (!groups[e.treatment]) groups[e.treatment] = [];
+                      groups[e.treatment].push(`Tooth ${e.tooth}`);
+                    }
+                    for (const g of general) {
+                      const name = getTreatmentName(g);
+                      if (!groups[name]) groups[name] = [];
+                      groups[name].push('General');
+                    }
+                    return (
+                      <div className="space-y-2">
+                        {Object.entries(groups).map(([treatment, items]) => (
+                          <div key={treatment}>
+                            <p className="text-xs font-semibold text-gray-800 dark:text-gray-200">{treatment}</p>
+                            <div className="mt-0.5 space-y-0.5 ml-2">
+                              {items.map((item, i) => (
+                                <p key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                  {item}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* ── Prescription ── */}
               <PrescriptionCard prescriptionProps={prescriptionProps} />
@@ -1609,6 +1709,18 @@ function VisitPageInner() {
 
               {/* ── Media (collapsed by default) ── */}
               <MediaCard mediaProps={mediaProps} />
+
+              {/* ── Visit Summary (read-only) ── */}
+              {patientProfile && (
+                <VisitSummary
+                  form={form}
+                  toothDiagnoses={form.toothDiagnoses}
+                  selectedTreatments={selectedTreatments}
+                  treatmentFees={treatmentFees}
+                  consultationFee={consultationFee}
+                  medicines={form.medicines}
+                />
+              )}
             </div>
 
             {/* ── Context Sidebar (Right) — xl:col-span-4 ── */}
@@ -1617,28 +1729,16 @@ function VisitPageInner() {
                 patientProfile={patientProfile}
                 patientVisits={patientVisits}
                 medicalHistory={medicalHistory}
-                billingProjectionProps={billingProjectionProps}
                 form={form} setForm={setForm}
-                submitting={submitting} isEdit={isEdit} appointmentId={appointmentId}
+                submitting={submitting} isEdit={isEdit}
                 visitSaved={visitSaved}
                 onCheckout={() => handleSubmit()}
                 selectedTreatments={selectedTreatments}
                 treatmentFees={treatmentFees}
-                setTreatmentFees={setTreatmentFees}
                 totalFees={totalFees}
                 consultationFee={consultationFee}
-                setConsultationFee={setConsultationFee}
-                paymentStatus={paymentStatus}
-                setPaymentStatus={setPaymentStatus}
-                paidAmount={paidAmount}
-                setPaidAmount={setPaidAmount}
-                paymentMethod={paymentMethod}
-                setPaymentMethod={setPaymentMethod}
-                transactionId={transactionId}
-                setTransactionId={setTransactionId}
+                medicines={form.medicines}
                 onEditPatient={() => setShowEditDrawer(true)}
-                CONSULTATION_STEP={CONSULTATION_STEP}
-                TREATMENT_STEP={TREATMENT_STEP}
               />
             </div>
           </div>
