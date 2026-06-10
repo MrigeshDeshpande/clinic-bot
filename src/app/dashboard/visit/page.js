@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef, useContext, useCallback } from '
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext, SidebarContext } from '../layout';
-import { Stethoscope, FileText, Pill, Calendar, Plus, Trash2, ClipboardCheck, Activity, ArrowLeft, Upload, Search, X, Lightbulb, Clock, MessageSquare, Heart, Users, TrendingUp, AlertTriangle, CheckCircle2, Download, Camera, Images } from 'lucide-react';
+import { Stethoscope, ClipboardCheck, ArrowLeft, Search, X, CheckCircle2, Clock } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import { apiFetch } from '@/lib/clientApi';
@@ -12,19 +12,14 @@ import { fetchCached } from '@/lib/clientFetchCache';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
 import CameraViewfinder from '@/components/CameraViewfinder';
 
-import PatientSummaryCard from '@/components/visit/PatientSummaryCard';
-import MedicalAlertsCard from '@/components/visit/MedicalAlertsCard';
-import WalkInPatientCard from '@/components/visit/WalkInPatientCard';
-import BillingProjectionCard from '@/components/visit/BillingProjectionCard';
 import ClinicalNotesCard from '@/components/visit/ClinicalNotesCard';
 import ToothChartCard from '@/components/visit/ToothChartCard';
-import DiagnosisCard from '@/components/visit/DiagnosisCard';
 import MediaCard from '@/components/visit/MediaCard';
-import FollowUpCard from '@/components/visit/FollowUpCard';
-import MedicalHistoryCard from '@/components/visit/MedicalHistoryCard';
 import PrescriptionCard from '@/components/visit/PrescriptionCard';
 import AdviceCard from '@/components/visit/AdviceCard';
-import ActionCard from '@/components/visit/ActionCard';
+import ContextSidebar from '@/components/visit/ContextSidebar';
+import WalkInDrawer from '@/components/visit/WalkInDrawer';
+import EditPatientDrawer from '@/components/visit/EditPatientDrawer';
 
 const DRAFT_KEY = 'visit_draft';
 const TEMPLATES_KEY = 'visit_templates';
@@ -356,6 +351,11 @@ function VisitPageInner() {
   const [transactionId, setTransactionId] = useState('');
   const [paidAmount, setPaidAmount] = useState(0);
   const [sendingPaymentLink, setSendingPaymentLink] = useState(false);
+
+  // Cockpit state
+  const [showWalkInDrawer, setShowWalkInDrawer] = useState(false);
+  const [showEditDrawer, setShowEditDrawer] = useState(false);
+  const [visitSaved, setVisitSaved] = useState(false);
 
   useEffect(() => {
     setForm(f => ({
@@ -807,6 +807,43 @@ function VisitPageInner() {
     }
   }
 
+  async function handleWalkInComplete(patientData) {
+    // If patient has an id, they already exist
+    if (patientData.id) {
+      await selectPatient(patientData);
+      setShowWalkInDrawer(false);
+      return;
+    }
+    // Otherwise create new patient inline
+    setForm(f => ({
+      ...f,
+      patientName: patientData.name,
+      patientPhone: (patientData.phone || '').replace(/\D/g, ''),
+      patientAge: patientData.age?.toString() || '',
+      patientSex: patientData.sex || '',
+      patientLocation: patientData.location || '',
+    }));
+    if (patientData.location && !LOCATIONS.includes(patientData.location)) setShowCustomLocation(true);
+    // If phone exists, try to find existing patient after creation
+    if (patientData.phone) {
+      try {
+        const searchRes = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(patientData.phone.replace(/\D/g, ''))}`);
+        const searchData = await searchRes.json();
+        const match = (searchData.patients || []).find(p =>
+          p.phone?.replace(/\D/g, '') === patientData.phone.replace(/\D/g, '')
+        );
+        if (match) {
+          await selectPatient(match);
+          setShowWalkInDrawer(false);
+          return;
+        }
+      } catch {}
+    }
+    // No existing patient, setting up for creation on submit
+    setPatientProfile(prev => prev || { name: patientData.name });
+    setShowWalkInDrawer(false);
+  }
+
   // ── Treatment Templates ──
   function saveTemplate() {
     if (!templateName.trim()) { showToast('Enter a template name', 'error'); return; }
@@ -1111,6 +1148,7 @@ function VisitPageInner() {
       localStorage.removeItem(DRAFT_KEY);
       const appointmentIdForResult = data.appointment?.id || appointmentId;
       setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
+      setVisitSaved(true);
     } catch (err) {
       console.error('[VISIT] Submit error:', err);
       showToast('Network error — could not save visit', 'error');
@@ -1163,6 +1201,67 @@ function VisitPageInner() {
     return `/api/dashboard/media/signed?key=${encodeURIComponent(key)}`;
   }
 
+  // ── Mode A: No patient selected — Patient Selection ──
+  if (!patientProfile && !appointmentId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-8 md:p-12 max-w-lg w-full text-center shadow-lg">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/30 mb-6">
+            <Stethoscope className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Start Consultation</h2>
+
+          {/* Patient search */}
+          <div className="relative mb-6">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type="text" value={form.patientName}
+              onChange={e => setForm(f => ({ ...f, patientName: e.target.value }))}
+              placeholder="Search existing patient..."
+              className="w-full pl-10 pr-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all" />
+            {searchState === 'searching' && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="mb-6 border border-gray-200 dark:border-gray-700 rounded-xl divide-y divide-gray-100 dark:divide-gray-800 max-h-[240px] overflow-y-auto text-left">
+              {searchResults.slice(0, 5).map(p => (
+                <button key={p.id} type="button" onClick={() => selectPatient(p)}
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-xs font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
+                    {(p.name || '?')[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{p.phone || ''}{p.phone && p.age ? ' · ' : ''}{p.age ? `${p.age} yrs` : ''}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 mb-6">
+            <hr className="flex-1 border-gray-200 dark:border-gray-700" />
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">or</span>
+            <hr className="flex-1 border-gray-200 dark:border-gray-700" />
+          </div>
+
+          <button type="button" onClick={() => setShowWalkInDrawer(true)}
+            className="w-full py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50 transition-all active:scale-[0.99]">
+            + Register Walk-in
+          </button>
+        </div>
+
+        {showWalkInDrawer && (
+          <WalkInDrawer onComplete={handleWalkInComplete} onClose={() => setShowWalkInDrawer(false)} />
+        )}
+      </div>
+    );
+  }
+
+  // ── Result (post-save) Screen ──
   if (result) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900 flex items-center justify-center p-4">
@@ -1362,23 +1461,18 @@ function VisitPageInner() {
       </div>
     );
   }
-  const patientSummaryProps = { appointmentId, appointmentMeta, patientProfile, patientVisits, getSignedUrl, showToast };
-  const walkInProps = { appointmentId, patientProfile, form, setForm, errors, setErrors, searchState, searchResults, highlightedIndex, setHighlightedIndex, selectPatient, searchRef, showCustomLocation, setShowCustomLocation, PHONE_PREFIX, LOCATIONS };
-  const billingProjectionProps = { setShowTemplateLoad, setShowTemplateInput, showTemplateInput, templateName, setTemplateName, saveTemplate, showTemplateLoad, templates, loadTemplate, deleteTemplate, symptomInput, setSymptomInput, showSuggestions, setShowSuggestions, suggestions, toggleTreatment, TREATMENTS, selectedTreatments, addCustomTreatment, errors, treatmentFees, adjustTreatmentFee, TREATMENT_STEP, form, setForm, totalFees, paymentStatus, setPaymentStatus, paidAmount, setPaidAmount, paymentMethod, setPaymentMethod, transactionId, setTransactionId, PAYMENT_METHODS, upiDeepLink, sendPaymentLink, sendingPaymentLink, patientProfile, appointmentMeta, withPhonePrefix, consultationFee, setConsultationFee, CONSULTATION_STEP };
   const clinicalNotesProps = { patientProfile, form, setForm };
   const toothChartProps = { diagnosisOptions, form, setForm, stableSetSelectedTooth, selectedTooth, setSelectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta, handleToothSave, handleToothClose };
-  const diagnosisProps = { form, setForm };
   const mediaProps = { fileInputRef, handleMediaUpload, uploadingMedia, setShowCamera, galleryInputRef, mediaFiles, getFilePreview, getFileIcon, removeMediaFile };
-  const followUpProps = { form, setForm };
-  const medicalHistoryProps = { patientProfile, medicalHistory, setMedicalHistory, habits };
   const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS };
   const adviceProps = { adviceOptions, form, setForm };
-  const actionProps = { submitting, isEdit, appointmentId };
+
+  const billingProjectionProps = { adjustTreatmentFee, TREATMENT_STEP, CONSULTATION_STEP };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900">
       <div className="p-5 md:p-7 lg:p-10 max-w-[1600px] mx-auto">
-        {/* Header */}
+        {/* ── Cockpit Header ── */}
         <div className="flex items-center gap-4 mb-6">
           {appointmentId && (
             <button onClick={() => router.push(returnTo === 'queue' ? '/dashboard/queue' : '/dashboard/appointments')} className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
@@ -1388,20 +1482,49 @@ function VisitPageInner() {
           <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50">
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
-          <div className="flex-1">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{isEdit ? 'Edit Visit' : 'Log Visit'}</h1>              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {isEdit ? `Editing visit for ${prefillName || 'patient'}` : appointmentId ? `Completing appointment for ${prefillName}` : patientProfile ? `Logging visit for ${patientProfile.name}` : 'Record a patient consultation'}
-            </p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Clinical Cockpit</h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              {/* Persistent patient search */}
+              <div className="relative max-w-xs">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input type="text" value={form.patientName}
+                  onChange={e => setForm(f => ({ ...f, patientName: e.target.value }))}
+                  placeholder="Switch patient..."
+                  className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400" />
+                {searchResults.length > 0 && form.patientName.trim().length >= 2 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 max-h-[180px] overflow-y-auto">
+                    {searchResults.slice(0, 5).map((p) => (
+                      <button key={p.id} type="button"
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2`}
+                        onClick={() => selectPatient(p)}>
+                        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
+                          {(p.name || '?')[0].toUpperCase()}
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</span>
+                        <span className="text-gray-400 shrink-0">{p.phone || ''}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button type="button" onClick={() => setShowEditDrawer(true)}
+                className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+                Edit demographics
+              </button>
+              <button type="button" onClick={() => setShowWalkInDrawer(true)}
+                className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
+                + Walk-in
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
+          <button type="button"
             onClick={() => setShowPreview(s => { const next = !s; setSidebarCollapsed(next); return next; })}
             className={`px-4 py-2 text-xs font-medium rounded-xl border transition-all active:scale-95 flex items-center gap-1.5 ${
               showPreview
                 ? 'bg-blue-500 text-white border-blue-500 hover:bg-blue-600 shadow-sm'
                 : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400'
-            }`}
-          >
+            }`}>
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -1410,10 +1533,10 @@ function VisitPageInner() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit}>
           {/* ── Draft restore banner ── */}
           {draftAvailable && (
-            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 flex items-center justify-between shadow-sm mb-4">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-500" />
                 <p className="text-sm text-amber-800 dark:text-amber-300">You have an unsaved draft</p>
@@ -1429,7 +1552,7 @@ function VisitPageInner() {
 
           {/* ── Draft restored indicator ── */}
           {draftRestored && (
-            <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+            <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-2xl p-3 flex items-center justify-between shadow-sm mb-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">Draft restored — changes auto-save every few seconds</p>
@@ -1441,117 +1564,68 @@ function VisitPageInner() {
             </div>
           )}
 
-          {/* Keyboard shortcut hint */}
-          <div className="text-right text-xs text-gray-400 dark:text-gray-500">
-            <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-xs">Ctrl+Enter</kbd> to submit
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-            
-            {/* ── Clinical Pane (Left/Center) ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-10 gap-6 items-start">
+            {/* ── Clinical Pane (Left) — xl:col-span-8 ── */}
             <div className="xl:col-span-8 space-y-6">
-              {/* ── Chief Complaint ── */}
+              {/* ── Chief Complaint (auto-expand) ── */}
               {patientProfile && (
-                <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <div className="p-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/30"><FileText className="w-4 h-4 text-orange-500 dark:text-orange-400" /></div>
-                    <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Chief Complaint</h2>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">C/C</span>
-                  </div>
+                <div>
                   <textarea value={form.chiefComplaint} onChange={e => setForm(f => ({ ...f, chiefComplaint: e.target.value }))}
-                    rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
-                    placeholder="e.g. Pt complains of pain in upper left back tooth region, since 4 days." />
+                    rows={Math.min(4, Math.max(1, (form.chiefComplaint || '').split('\n').length))}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
+                    placeholder="Chief Complaint — e.g. Pt complains of pain in upper left back tooth region, since 4 days." />
                 </div>
               )}
 
-              {/* <ClinicalNotesCard> */}
-              <ClinicalNotesCard clinicalNotesProps={clinicalNotesProps} />
-              
-              {/* <ToothChartCard> */}
+              {/* ── Tooth Chart (hero) ── */}
               <ToothChartCard toothChartProps={toothChartProps} />
-              
-              {/* <DiagnosisCard> */}
-              <DiagnosisCard diagnosisProps={diagnosisProps} />
-              
-              {/* <PrescriptionCard> */}
+
+              {/* ── Clinical Notes ── */}
+              <ClinicalNotesCard clinicalNotesProps={clinicalNotesProps} />
+
+              {/* ── Prescription ── */}
               <PrescriptionCard prescriptionProps={prescriptionProps} />
-              
-              {/* <AdviceCard> */}
+
+              {/* ── Advice — inline pills, no card chrome ── */}
               <AdviceCard adviceProps={adviceProps} />
-              
-              {/* <MediaCard> */}
+
+              {/* ── Media (collapsed by default) ── */}
               <MediaCard mediaProps={mediaProps} />
             </div>
 
-            {/* ── Sidebar Pane (Right) ── */}
-            <div className="xl:col-span-4 space-y-6">
-              {/* <PatientSummaryCard> */}
-              <PatientSummaryCard patientSummaryProps={patientSummaryProps} />
-
-              {/* <MedicalAlertsCard> */}
-              <MedicalAlertsCard medicalAlertsProps={{ patientProfile, patientVisits, medicalHistory, loadingExtra, patientMessages, patientFamily, router }} />
-
-              {/* <WalkInPatientCard> */}
-              <WalkInPatientCard walkInProps={walkInProps} />
-
-              {/* ── Basic Details ── */}
-              {patientProfile && (
-                <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30"><Users className="w-4 h-4 text-blue-500 dark:text-blue-400" /></div>
-                    <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Basic Details</h2>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Address</label>
-                      <input type="text" value={medicalHistory.address} onChange={e => setMedicalHistory(h => ({ ...h, address: e.target.value }))}
-                        className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
-                        placeholder="e.g. 123, Main Street, Durg" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Occupation</label>
-                      <input type="text" value={medicalHistory.occupation} onChange={e => setMedicalHistory(h => ({ ...h, occupation: e.target.value }))}
-                        className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 focus:border-blue-400 dark:focus:border-blue-500 transition-all placeholder-gray-400"
-                        placeholder="e.g. Engineer, Teacher" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Dental History (PDH) + Family History (FH) ── */}
-              {patientProfile && (
-                <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
-                  <div className="grid grid-cols-1 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Dental History <span className="text-gray-400 font-normal">(PDH)</span></label>
-                      <textarea value={medicalHistory.dentalHistory} onChange={e => setMedicalHistory(h => ({ ...h, dentalHistory: e.target.value }))}
-                        rows={2} className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
-                        placeholder="e.g. Previous RCT + cap done 3 yrs back in 46" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Family History <span className="text-gray-400 font-normal">(FH)</span></label>
-                      <textarea value={medicalHistory.familyHistory} onChange={e => setMedicalHistory(h => ({ ...h, familyHistory: e.target.value }))}
-                        rows={2} className="w-full px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
-                        placeholder="e.g. Mother has ortho problem and diabetes" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* <MedicalHistoryCard> */}
-              <MedicalHistoryCard medicalHistoryProps={medicalHistoryProps} />
-
-              {/* <FollowUpCard> */}
-              <FollowUpCard followUpProps={followUpProps} />
-
-              {/* <BillingProjectionCard> */}
-              <BillingProjectionCard billingProjectionProps={billingProjectionProps} />
-
-              {/* <ActionCard> */}
-              <ActionCard actionProps={actionProps} />
+            {/* ── Context Sidebar (Right) — xl:col-span-2 ── */}
+            <div className="xl:col-span-2">
+              <ContextSidebar
+                patientProfile={patientProfile}
+                patientVisits={patientVisits}
+                medicalHistory={medicalHistory}
+                billingProjectionProps={billingProjectionProps}
+                form={form} setForm={setForm}
+                submitting={submitting} isEdit={isEdit} appointmentId={appointmentId}
+                visitSaved={visitSaved}
+                onCheckout={() => handleSubmit()}
+                selectedTreatments={selectedTreatments}
+                treatmentFees={treatmentFees}
+                totalFees={totalFees}
+                consultationFee={consultationFee}
+                setConsultationFee={setConsultationFee}
+                paymentStatus={paymentStatus}
+                setPaymentStatus={setPaymentStatus}
+                paidAmount={paidAmount}
+                setPaidAmount={setPaidAmount}
+                paymentMethod={paymentMethod}
+                setPaymentMethod={setPaymentMethod}
+                transactionId={transactionId}
+                setTransactionId={setTransactionId}
+                onEditPatient={() => setShowEditDrawer(true)}
+                CONSULTATION_STEP={CONSULTATION_STEP}
+                TREATMENT_STEP={TREATMENT_STEP}
+              />
             </div>
           </div>
         </form>
+
+        {/* ── Overlays ── */}
         {showPreview && (
           <div className="fixed right-0 top-14 z-40 h-[calc(100vh-3.5rem)]">
             <PrescriptionPreview
@@ -1568,6 +1642,12 @@ function VisitPageInner() {
             onCapture={handleCameraCapture}
             onClose={() => setShowCamera(false)}
           />
+        )}
+        {showWalkInDrawer && (
+          <WalkInDrawer onComplete={handleWalkInComplete} onClose={() => setShowWalkInDrawer(false)} />
+        )}
+        {showEditDrawer && (
+          <EditPatientDrawer patientProfile={patientProfile} onClose={() => setShowEditDrawer(false)} onSaved={(updated) => selectPatient(updated)} />
         )}
       </div>
     </div>

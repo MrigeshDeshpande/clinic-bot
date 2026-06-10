@@ -11,19 +11,22 @@ const PAYMENT_METHODS = [
 ];
 
 export default function QuickCheckoutModal({ appointment, onClose, onSuccess, showToast }) {
-  const subtotal = (appointment.consultation_fee || 0) + (appointment.treatment_charges || 0) + (appointment.medicine_charges || 0);
-  const [total, setTotal] = useState(subtotal);
+  const [treatmentFee, setTreatmentFee] = useState(appointment.treatment_charges || 0);
+  const [medicineFee, setMedicineFee] = useState(appointment.medicine_charges || 0);
+  const consultationFee = appointment.consultation_fee || 0;
+  
+  const subtotal = treatmentFee + medicineFee + consultationFee;
   const [paid, setPaid] = useState(subtotal);
   const [method, setMethod] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const outstanding = Math.max(0, total - paid);
-  const canComplete = total > 0;
+  const outstanding = Math.max(0, subtotal - paid);
+  const canComplete = subtotal > 0;
 
   function getPaymentStatus() {
-    if (paid >= total) return 'paid';
+    if (paid >= subtotal) return 'paid';
     if (paid > 0) return 'partial';
     return 'pending';
   }
@@ -36,7 +39,8 @@ export default function QuickCheckoutModal({ appointment, onClose, onSuccess, sh
     try {
       const payload = {
         appointmentId: appointment.id,
-        treatmentCharges: total,
+        treatmentCharges: treatmentFee,
+        medicineCharges: medicineFee,
         paidAmount: paid,
         paymentStatus: getPaymentStatus(),
         status: 'completed',
@@ -79,18 +83,45 @@ export default function QuickCheckoutModal({ appointment, onClose, onSuccess, sh
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fee</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 font-medium">₹</span>
-              <input
-                type="number"
-                min="0"
-                value={total}
-                onChange={e => setTotal(Math.max(0, Number(e.target.value) || 0))}
-                className="w-full pl-8 pr-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Treatment Fee</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 font-medium">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={treatmentFee}
+                  onChange={e => setTreatmentFee(Math.max(0, Number(e.target.value) || 0))}
+                  className="w-full pl-8 pr-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Medicine Fee</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 font-medium">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={medicineFee}
+                  onChange={e => setMedicineFee(Math.max(0, Number(e.target.value) || 0))}
+                  className="w-full pl-8 pr-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+            </div>
+          </div>
+          
+          {consultationFee > 0 && (
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Consultation</span>
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">₹{consultationFee}</span>
+            </div>
+          )}
+          
+          <div className="flex items-center justify-between px-1 pt-1 border-t border-gray-100 dark:border-gray-800">
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Total Bill</span>
+            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">₹{subtotal.toLocaleString('en-IN')}</span>
           </div>
 
           <div>

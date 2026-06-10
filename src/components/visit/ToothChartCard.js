@@ -21,13 +21,9 @@ export default function ToothChartCard({ toothChartProps }) {
   } = toothChartProps;
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
-      <div className="flex items-center gap-2.5 mb-4">
-        <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30">
-          <svg className="w-4 h-4 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-        </div>
-        <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Tooth Chart</h2>
-        <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Tap a tooth to add diagnosis</span>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Tooth Chart</h2>
       </div>
 
       {diagnosisOptions.length === 0 ? (
@@ -36,7 +32,7 @@ export default function ToothChartCard({ toothChartProps }) {
           <Link href="/dashboard/settings" className="text-blue-500 hover:text-blue-600 underline">Settings</Link>.
         </p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <ToothGrid
             toothData={form.toothDiagnoses}
             onToothSelect={stableSetSelectedTooth}
@@ -47,8 +43,9 @@ export default function ToothChartCard({ toothChartProps }) {
             loading={appointmentId && !appointmentMeta && !form.toothDiagnoses.length}
           />
 
-          {selectedTooth && (
-            <div className="mt-3">
+          {/* Always-visible selected tooth panel */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            {selectedTooth ? (
               <PerToothDiagnosisPanel
                 toothNumber={selectedTooth}
                 currentEntry={form.toothDiagnoses.find(t => t.tooth === selectedTooth)}
@@ -56,12 +53,16 @@ export default function ToothChartCard({ toothChartProps }) {
                 onSave={handleToothSave}
                 onClose={handleToothClose}
               />
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-3 italic">
+                Tap a tooth above to begin diagnosis
+              </p>
+            )}
+          </div>
 
-          {/* Summary of all tooth entries */}
+          {/* Summary chips */}
           {form.toothDiagnoses.length > 0 && (
-            <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-3">
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
               <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-2">
                 {form.toothDiagnoses.length} tooth/teeth affected
               </p>

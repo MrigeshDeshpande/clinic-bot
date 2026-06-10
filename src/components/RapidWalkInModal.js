@@ -17,76 +17,10 @@ function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE
 export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [total, setTotal] = useState(500);
+  const [treatmentFee, setTreatmentFee] = useState(500);
+  const [medicineFee, setMedicineFee] = useState(0);
+  const total = treatmentFee + medicineFee;
   const [paid, setPaid] = useState(500);
-  const [method, setMethod] = useState('');
-  const [notes, setNotes] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchState, setSearchState] = useState('idle');
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const nameInputRef = useRef(null);
-  const queryRef = useRef('');
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-
-  useEffect(() => {
-    setTimeout(() => nameInputRef.current?.focus(), 100);
-  }, []);
-
-  useEffect(() => {
-    const abort = new AbortController();
-    queryRef.current = name;
-    if (name.length < 2 || selectedPatient) {
-      setSearchResults([]);
-      setSearchState('idle');
-      return;
-    }
-    setSearchResults([]);
-    setSearchState('searching');
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(name)}`, { signal: abort.signal });
-        const d = await res.json();
-        const results = d.patients || [];
-        if (queryRef.current !== name) return; // stale
-        setSearchResults(results);
-        setSearchState(results.length > 0 ? 'success' : 'empty');
-      } catch (e) {
-        if (e.name !== 'AbortError') { console.error('Walk-in search error:', e); setSearchState('idle'); }
-      }
-    }, 250);
-    return () => { clearTimeout(timer); abort.abort(); };
-  }, [name, selectedPatient]);
-
-  // Auto-highlight first result
-  useEffect(() => {
-    setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
-  }, [searchResults]);
-
-  // Global Escape handler
-  useEffect(() => {
-    function handleKey(e) {
-      if (e.key === 'Escape') {
-        if (searchState === 'success' || searchResults.length > 0) {
-          setSearchResults([]);
-          setSearchState('idle');
-        } else {
-          onClose?.();
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [searchState, searchResults, onClose]);
-
-  function selectPatient(p) {
-    setSelectedPatient(p);
-    setName(p.name);
-    setPhone((p.phone || '').replace(/\D/g, ''));
-    setSearchResults([]);
-    setSearchState('idle');
-  }
 
   const outstanding = Math.max(0, total - paid);
 
@@ -106,7 +40,8 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
       const payload = {
         patient_name: name.trim(),
         patient_phone: phone ? `+91${phone}` : undefined,
-        treatmentCharges: total,
+        treatmentCharges: treatmentFee,
+        medicineCharges: medicineFee,
         paidAmount: paid,
         paymentStatus: getPaymentStatus(),
         notes: notes.trim() || undefined,
@@ -233,20 +168,42 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Fee</label>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Treat. Fee</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 font-medium">₹</span>
                 <input
                   type="number"
                   min="0"
-                  value={total}
-                  onChange={e => setTotal(Math.max(0, Number(e.target.value) || 0))}
+                  value={treatmentFee}
+                  onChange={e => {
+                    const diff = (Number(e.target.value) || 0) - treatmentFee;
+                    setTreatmentFee(Math.max(0, Number(e.target.value) || 0));
+                    setPaid(prev => Math.max(0, prev + diff));
+                  }}
                   className="w-full pl-8 pr-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Paid</label>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Med. Fee</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 font-medium">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={medicineFee}
+                  onChange={e => {
+                    const diff = (Number(e.target.value) || 0) - medicineFee;
+                    setMedicineFee(Math.max(0, Number(e.target.value) || 0));
+                    setPaid(prev => Math.max(0, prev + diff));
+                  }}
+                  className="w-full pl-8 pr-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+              </div>
+            </div>
+            
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Amount Paid (Out of ₹{total.toLocaleString()})</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 dark:text-gray-500 font-medium">₹</span>
                 <input
