@@ -135,7 +135,7 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
 
   return (
     <div className="flex flex-col items-center">
-      <svg viewBox="0 0 40 40" className="w-28 h-28 sm:w-32 sm:h-32">
+      <svg viewBox="0 0 40 40" className="w-16 h-16">
         <g transform="translate(8, 8) scale(1)">
           <path
             d={shape}

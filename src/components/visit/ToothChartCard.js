@@ -17,13 +17,23 @@ export default function ToothChartCard({ toothChartProps }) {
     appointmentId,
     appointmentMeta,
     handleToothSave,
-    handleToothClose
+    handleToothClose,
+    patientVisits = []
   } = toothChartProps;
 
+  // Tooth history — filter visits for the selected tooth
+  const toothHistory = selectedTooth
+    ? (patientVisits || [])
+        .filter(v => {
+          const td = v.tooth_diagnoses;
+          return td && Array.isArray(td) && td.some(e => e.tooth === selectedTooth);
+        })
+    : [];
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Tooth Chart</h2>
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Tooth Chart</h2>
       </div>
 
       {diagnosisOptions.length === 0 ? (
@@ -33,6 +43,7 @@ export default function ToothChartCard({ toothChartProps }) {
         </p>
       ) : (
         <div className="space-y-4">
+          {/* Chart — always full size */}
           <ToothGrid
             toothData={form.toothDiagnoses}
             onToothSelect={stableSetSelectedTooth}
@@ -43,24 +54,22 @@ export default function ToothChartCard({ toothChartProps }) {
             loading={appointmentId && !appointmentMeta && !form.toothDiagnoses.length}
           />
 
-          {/* Always-visible selected tooth panel */}
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            {selectedTooth ? (
-              <PerToothDiagnosisPanel
-                toothNumber={selectedTooth}
-                currentEntry={form.toothDiagnoses.find(t => t.tooth === selectedTooth)}
-                diagnosisOptions={diagnosisOptions}
-                onSave={handleToothSave}
-                onClose={handleToothClose}
-              />
-            ) : (
-              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-3 italic">
-                Tap a tooth above to begin diagnosis
-              </p>
-            )}
-          </div>
+          {/* Editor — only when tooth selected, no layout shift */}
+          {selectedTooth && (
+            <>
+              <div id="per-tooth-editor" className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <PerToothDiagnosisPanel
+                  toothNumber={selectedTooth}
+                  currentEntry={form.toothDiagnoses.find(t => t.tooth === selectedTooth)}
+                  diagnosisOptions={diagnosisOptions}
+                  onSave={handleToothSave}
+                  onClose={handleToothClose}
+                />
+              </div>
+            </>
+          )}
 
-          {/* Summary chips */}
+          {/* Summary chips — always show when there are diagnoses */}
           {form.toothDiagnoses.length > 0 && (
             <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
               <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-2">
@@ -90,6 +99,35 @@ export default function ToothChartCard({ toothChartProps }) {
                     }} />
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Tooth History — read-only timeline ── */}
+          {toothHistory.length > 0 && (
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+              <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-2">History</p>
+              <div className="space-y-2">
+                {toothHistory.map(v => {
+                  const entries = (v.tooth_diagnoses || []).filter(e => e.tooth === selectedTooth);
+                  return entries.map((e, i) => (
+                    <div key={`${v.id}-${i}`} className="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <span className="shrink-0 w-14 text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                        {v.date?.slice(0, 4) || '--'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-700 dark:text-gray-300">
+                          {e.diagnoses?.join(', ') || v.diagnosis || ''}
+                        </span>
+                        {e.treatment && (
+                          <span className="text-emerald-600 dark:text-emerald-400 ml-1">
+                            — {e.treatment}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ));
+                })}
               </div>
             </div>
           )}

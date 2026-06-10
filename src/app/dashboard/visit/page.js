@@ -1462,7 +1462,7 @@ function VisitPageInner() {
     );
   }
   const clinicalNotesProps = { patientProfile, form, setForm };
-  const toothChartProps = { diagnosisOptions, form, setForm, stableSetSelectedTooth, selectedTooth, setSelectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta, handleToothSave, handleToothClose };
+  const toothChartProps = { diagnosisOptions, form, setForm, stableSetSelectedTooth, selectedTooth, setSelectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta, handleToothSave, handleToothClose, patientVisits };
   const mediaProps = { fileInputRef, handleMediaUpload, uploadingMedia, setShowCamera, galleryInputRef, mediaFiles, getFilePreview, getFileIcon, removeMediaFile };
   const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS };
   const adviceProps = { adviceOptions, form, setForm };
@@ -1471,7 +1471,7 @@ function VisitPageInner() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900">
-      <div className="p-5 md:p-7 lg:p-10 max-w-[1600px] mx-auto">
+      <div className="p-3">
         {/* ── Cockpit Header ── */}
         <div className="flex items-center gap-4 mb-6">
           {appointmentId && (
@@ -1564,9 +1564,27 @@ function VisitPageInner() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-10 gap-6 items-start">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            
             {/* ── Clinical Pane (Left) — xl:col-span-8 ── */}
             <div className="xl:col-span-8 space-y-6">
+              {/* ── Sticky context strip (visible when tooth selected) ── */}
+              {selectedTooth && (() => {
+                const entry = form.toothDiagnoses?.find(t => t.tooth === selectedTooth);
+                if (!entry) return null;
+                return (
+                  <button type="button" onClick={() => document.getElementById('per-tooth-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                    <span className="font-bold">#{selectedTooth}</span>
+                    {entry.diagnoses?.length > 0 && <span className="text-gray-500">·</span>}
+                    {entry.diagnoses?.slice(0, 2).join(', ')}
+                    {entry.treatment && <><span className="text-gray-500">·</span><span className="text-emerald-600 dark:text-emerald-400 font-medium">{entry.treatment}</span></>}
+                    {entry.severity && <><span className="text-gray-500">·</span><span className="text-gray-400">{entry.severity}</span></>}
+                    <span className="ml-auto text-[10px] text-gray-400">Click to scroll</span>
+                  </button>
+                );
+              })()}
+
               {/* ── Chief Complaint (auto-expand) ── */}
               {patientProfile && (
                 <div>
@@ -1593,8 +1611,8 @@ function VisitPageInner() {
               <MediaCard mediaProps={mediaProps} />
             </div>
 
-            {/* ── Context Sidebar (Right) — xl:col-span-2 ── */}
-            <div className="xl:col-span-2">
+            {/* ── Context Sidebar (Right) — xl:col-span-4 ── */}
+            <div className="xl:col-span-4">
               <ContextSidebar
                 patientProfile={patientProfile}
                 patientVisits={patientVisits}
@@ -1606,6 +1624,7 @@ function VisitPageInner() {
                 onCheckout={() => handleSubmit()}
                 selectedTreatments={selectedTreatments}
                 treatmentFees={treatmentFees}
+                setTreatmentFees={setTreatmentFees}
                 totalFees={totalFees}
                 consultationFee={consultationFee}
                 setConsultationFee={setConsultationFee}
