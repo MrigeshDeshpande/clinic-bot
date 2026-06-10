@@ -1423,6 +1423,7 @@ function VisitPageInner() {
             <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-xs">Ctrl+Enter</kbd> to submit
           </div>
 
+          {/* <PatientSummaryCard> */}
           {/* ── Patient Profile + Appointment Context ── */}
           {(appointmentId && (appointmentMeta || patientProfile)) || patientProfile ? (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
@@ -1524,6 +1525,9 @@ function VisitPageInner() {
             </div>
           ) : null}
 
+          {/* </PatientSummaryCard> */}
+
+          {/* <MedicalAlertsCard> */}
           {/* ── Quick Stats Row ── */}
           {patientProfile && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1747,6 +1751,9 @@ function VisitPageInner() {
               </div>
           )}
 
+          {/* </MedicalAlertsCard> */}
+
+          {/* <WalkInPatientCard> */}
           {/* Patient Info — for walk-ins (no appointmentId, no patient selected yet) */}
           {!appointmentId && !patientProfile && (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm relative">
@@ -1930,6 +1937,9 @@ function VisitPageInner() {
             </div>
           )}
 
+          {/* </WalkInPatientCard> */}
+
+          {/* <GeneralTreatmentsAndBillingCard> */}
           {/* ══ Book-like two-page spread: Treatments left, Bill right ══ */}
           <div className="flex flex-col lg:flex-row rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
             {/* LEFT PAGE — Treatments */}
@@ -2260,6 +2270,7 @@ function VisitPageInner() {
             </div>
           </div>
 
+          {/* <ClinicalNotesCard> */}
           {/* ── General Examination ── */}
           {patientProfile && (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
@@ -2286,6 +2297,9 @@ function VisitPageInner() {
             </div>
           )}
 
+          {/* </ClinicalNotesCard> */}
+
+          {/* <ToothChartCard> */}
           {/* Tooth Grid + Per-Tooth Diagnosis */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-4">
@@ -2362,6 +2376,9 @@ function VisitPageInner() {
             )}
           </div>
 
+          {/* </ToothChartCard> */}
+
+          {/* <DiagnosisCard> */}
           {/* Diagnosis */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-3">
@@ -2372,6 +2389,9 @@ function VisitPageInner() {
               placeholder="Describe the diagnosis, observations, and any clinical notes..." />
           </div>
 
+          {/* </DiagnosisCard> */}
+
+          {/* <MediaCard> */}
           {/* ── Attachments ── */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4">
@@ -2447,6 +2467,9 @@ function VisitPageInner() {
               )}
             </div>
 
+          {/* </MediaCard> */}
+
+          {/* <FollowUpCard> */}
           {/* ── Follow-up & Additional Notes ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
@@ -2480,6 +2503,9 @@ function VisitPageInner() {
             </div>
           </div>
 
+          {/* </FollowUpCard> */}
+
+          {/* <MedicalHistoryCard> */}
           {/* ── Medical & Dental History (Editable) ── */}
           {patientProfile && (
             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
@@ -2604,6 +2630,9 @@ function VisitPageInner() {
             </div>
           )}
 
+          {/* </MedicalHistoryCard> */}
+
+          {/* <PrescriptionCard> */}
           {/* Medicines — full width */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-4">
@@ -2758,6 +2787,9 @@ function VisitPageInner() {
             )}
           </div>
 
+          {/* </PrescriptionCard> */}
+
+          {/* <AdviceCard> */}
           {/* Diet & Advice */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
             <div className="flex items-center gap-2.5 mb-4">
@@ -2799,6 +2831,9 @@ function VisitPageInner() {
             )}
           </div>
 
+          {/* </AdviceCard> */}
+
+          {/* <ActionCard> */}
           <button type="submit" disabled={submitting}
             className="block mx-auto w-full sm:w-auto sm:min-w-[360px] py-3.5 sm:py-3 px-8 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-semibold rounded-xl hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-[0.99] shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50">
             {submitting ? (
@@ -2813,6 +2848,7 @@ function VisitPageInner() {
               </span>
             )}
           </button>
+          {/* </ActionCard> */}
         </form>
         {showPreview && (
           <div className="fixed right-0 top-14 z-40 h-[calc(100vh-3.5rem)]">
