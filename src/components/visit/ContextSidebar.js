@@ -1,33 +1,33 @@
 'use client';
 import React, { useState } from 'react';
-import { AlertTriangle, Heart, ChevronDown, ChevronRight, CheckCircle2, Clock, Pencil, Save, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Activity } from 'lucide-react';
 
-const SIDEBAR_SECTIONS = [
+const MEDICAL_SECTIONS = [
   {
     id: 'demographics',
     title: 'Demographics',
     fields: [
-      { label: 'Address', key: 'address', type: 'text', placeholder: 'e.g. 123 Main St' },
-      { label: 'Occupation', key: 'occupation', type: 'text', placeholder: 'e.g. Engineer' },
-      { label: 'Blood Group', key: 'bloodGroup', type: 'text', placeholder: 'e.g. O+' },
-      { label: 'Weight (kg)', key: 'weight', type: 'text', placeholder: 'e.g. 72' },
-      { label: 'BP', key: 'bp', type: 'text', placeholder: 'e.g. 120/80' },
+      { label: 'Address', key: 'address', type: 'text' },
+      { label: 'Occupation', key: 'occupation', type: 'text' },
+      { label: 'Blood Group', key: 'bloodGroup', type: 'text' },
+      { label: 'Weight (kg)', key: 'weight', type: 'text' },
+      { label: 'BP', key: 'bp', type: 'text' },
     ],
   },
   {
     id: 'medical',
     title: 'Medical',
     fields: [
-      { label: 'Chronic Conditions', key: 'chronicConditions', type: 'text', placeholder: 'e.g. Diabetes, Hypertension' },
-      { label: 'Allergies', key: 'allergies', type: 'text', placeholder: 'e.g. Penicillin, Latex' },
-      { label: 'Current Medications', key: 'medications', type: 'text', placeholder: 'e.g. Metformin 500 mg' },
+      { label: 'Chronic Conditions', key: 'chronicConditions', type: 'text' },
+      { label: 'Allergies', key: 'allergies', type: 'text' },
+      { label: 'Current Medications', key: 'medications', type: 'text' },
     ],
   },
   {
     id: 'dental',
     title: 'Dental',
     fields: [
-      { label: 'Dental History', key: 'dentalHistory', type: 'textarea', placeholder: 'e.g. Previous RCT 46 (2022), Crown 16, Implants —' },
+      { label: 'Dental History', key: 'dentalHistory', type: 'textarea' },
     ],
   },
   {
@@ -46,12 +46,12 @@ const SIDEBAR_SECTIONS = [
     id: 'family',
     title: 'Family',
     fields: [
-      { label: 'Family History', key: 'familyHistory', type: 'textarea', placeholder: 'e.g. Diabetes (Mother), Hypertension (Father)' },
+      { label: 'Family History', key: 'familyHistory', type: 'textarea' },
     ],
   },
 ];
 
-function AlertBadge({ icon: Icon, label, severity }) {
+function AlertBadge({ label, severity }) {
   const styles = {
     critical: 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300',
     chronic: 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300',
@@ -61,8 +61,7 @@ function AlertBadge({ icon: Icon, label, severity }) {
   return (
     <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium border ${styles[severity] || styles.note}`}>
       <span>{icons[severity] || '🟡'}</span>
-      <Icon className="w-3.5 h-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{label}</span>
+      <span>{label}</span>
     </div>
   );
 }
@@ -73,149 +72,149 @@ function severityOf(source) {
   return 'note';
 }
 
-function EditableSection({ section, data, onSave, defaultOpen }) {
-  const [open, setOpen] = useState(defaultOpen || false);
-  const [editing, setEditing] = useState(false);
+function MedicalHistoryPanel({ medicalHistory, onMedicalHistorySave }) {
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState({});
+  const [editingSection, setEditingSection] = useState(null);
 
-  function getCurrentValue(field) {
+  const mh = medicalHistory || {};
+
+  function getValue(section, field) {
     if (section.nestedKey) {
-      const nested = data?.[section.nestedKey] || {};
-      return nested[field.key] || '';
+      return mh[section.nestedKey]?.[field.key] || '';
     }
-    return data?.[field.key] || '';
+    return mh[field.key] || '';
   }
 
-  function enterEdit() {
+  function startEdit(section) {
     const initial = {};
     for (const field of section.fields) {
-      initial[field.key] = getCurrentValue(field);
+      initial[field.key] = getValue(section, field);
     }
     setValues(initial);
-    setEditing(true);
+    setEditingSection(section.id);
   }
 
-  async function handleSave() {
-    if (!onSave) return;
+  async function handleSave(section) {
+    if (!onMedicalHistorySave) return;
     setSaving(true);
     try {
-      await onSave(section.id, values);
-      setEditing(false);
+      const payload = {};
+      if (section.nestedKey) {
+        const nested = { ...(mh[section.nestedKey] || {}) };
+        for (const field of section.fields) {
+          nested[field.key] = values[field.key] || '';
+        }
+        payload[section.nestedKey] = nested;
+      } else {
+        for (const field of section.fields) {
+          payload[field.key] = values[field.key] || '';
+        }
+      }
+      await onMedicalHistorySave(payload);
+      setEditingSection(null);
     } catch {
-      // error handled by parent
+      // handled by parent
     } finally {
       setSaving(false);
     }
   }
 
-  function cancelEdit() {
-    setEditing(false);
-    setValues({});
-  }
-
-  const hasValues = section.fields.some(f => getCurrentValue(f));
-
   return (
     <div className="border-t border-gray-100 dark:border-gray-800">
-      <div className="flex items-center justify-between px-4 py-2.5">
-        <button type="button" onClick={() => setOpen(o => !o)}
-          className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-          {open ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-400" />}
-          {section.title}
-        </button>
-        {open && !editing && (
-          <button type="button" onClick={enterEdit}
-            className="flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
-            <Pencil className="w-3 h-3" /> Edit
-          </button>
-        )}
-        {open && editing && (
-          <div className="flex items-center gap-1.5">
-            <button type="button" onClick={handleSave} disabled={saving}
-              className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors disabled:opacity-50">
-              <Save className="w-3 h-3" /> {saving ? 'Saving...' : 'Save'}
-            </button>
-            <button type="button" onClick={cancelEdit}
-              className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 w-full px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+        {open ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-400" />}
+        <Activity className="w-3.5 h-3.5 text-gray-400" />
+        Medical History
+      </button>
       {open && (
-        <div className="px-4 pb-3 space-y-2.5">
-          {!editing ? (
-            hasValues ? (
-              section.fields.map(field => {
-                const value = getCurrentValue(field);
-                if (!value) return null;
-                if (field.type === 'select') {
-                  return (
-                    <div key={field.key}>
-                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{field.label}</p>
-                      <p className="text-sm text-gray-900 dark:text-gray-100">{value}</p>
+        <div className="px-4 pb-3 space-y-3">
+          {MEDICAL_SECTIONS.map(section => {
+            const isEditing = editingSection === section.id;
+            const hasValues = section.fields.some(f => getValue(section, f));
+            return (
+              <div key={section.id}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{section.title}</span>
+                  {!isEditing && (
+                    <button type="button" onClick={() => startEdit(section)}
+                      className="text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+                      {hasValues ? 'Edit' : 'Add'}
+                    </button>
+                  )}
+                </div>
+                {!isEditing ? (
+                  hasValues ? (
+                    <div className="space-y-0.5">
+                      {section.fields.map(field => {
+                        const val = getValue(section, field);
+                        if (!val) return null;
+                        if (field.type === 'textarea') {
+                          return <p key={field.key} className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap leading-relaxed">{val}</p>;
+                        }
+                        return (
+                          <div key={field.key} className="flex items-start gap-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-20">{field.label}</span>
+                            <span className="text-sm text-gray-900 dark:text-gray-100">{val}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                }
-                if (field.type === 'textarea') {
-                  return (
-                    <div key={field.key}>
-                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">{field.label}</p>
-                      <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap leading-relaxed">{value}</p>
+                  ) : (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 italic">None recorded</p>
+                  )
+                ) : (
+                  <div className="space-y-2">
+                    {section.fields.map(field => {
+                      const val = values[field.key] || '';
+                      if (field.type === 'select') {
+                        return (
+                          <div key={field.key}>
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5 block">{field.label}</label>
+                            <select value={val} onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
+                              className="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800">
+                              <option value="">—</option>
+                              {field.options.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      }
+                      if (field.type === 'textarea') {
+                        return (
+                          <div key={field.key}>
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5 block">{field.label}</label>
+                            <textarea value={val} onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
+                              rows={2} className="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 resize-none" />
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={field.key}>
+                          <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5 block">{field.label}</label>
+                          <input type="text" value={val} onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
+                            className="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800" />
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button type="button" onClick={() => handleSave(section)} disabled={saving}
+                        className="px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
+                        {saving ? 'Saving...' : 'Save'}
+                      </button>
+                      <button type="button" onClick={() => setEditingSection(null)}
+                        className="px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors">
+                        Cancel
+                      </button>
                     </div>
-                  );
-                }
-                return (
-                  <div key={field.key}>
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{field.label}</p>
-                    <p className="text-sm text-gray-900 dark:text-gray-100">{value}</p>
                   </div>
-                );
-              })
-            ) : (
-              <p className="text-xs text-gray-400 dark:text-gray-500 italic">No data recorded</p>
-            )
-          ) : (
-            <div className="space-y-2.5">
-              {section.fields.map(field => {
-                const val = values[field.key] || '';
-                if (field.type === 'select') {
-                  return (
-                    <div key={field.key}>
-                      <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{field.label}</label>
-                      <select value={val} onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
-                        className="w-full px-2.5 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all">
-                        <option value="">—</option>
-                        {field.options.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                }
-                if (field.type === 'textarea') {
-                  return (
-                    <div key={field.key}>
-                      <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{field.label}</label>
-                      <textarea value={val} onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
-                        rows={3}
-                        placeholder={field.placeholder}
-                        className="w-full px-2.5 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400" />
-                    </div>
-                  );
-                }
-                return (
-                  <div key={field.key}>
-                    <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{field.label}</label>
-                    <input type="text" value={val} onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                      className="w-full px-2.5 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400" />
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -224,7 +223,6 @@ function EditableSection({ section, data, onSave, defaultOpen }) {
 
 export default function ContextSidebar({
   patientProfile,
-  patientVisits,
   medicalHistory,
   form, setForm,
   submitting, isEdit,
@@ -236,138 +234,95 @@ export default function ContextSidebar({
   onMedicalHistorySave,
 }) {
   const mh = medicalHistory || {};
-  const habits = mh.habits || {};
-  const medicinesCount = medicines.length || 0;
 
   const alerts = [];
-  if (mh.allergies) alerts.push({ icon: AlertTriangle, label: mh.allergies, severity: severityOf('allergy') });
-  if (mh.chronicConditions) alerts.push({ icon: Heart, label: mh.chronicConditions, severity: severityOf('chronic') });
+  if (mh.allergies) alerts.push({ label: `Allergy: ${mh.allergies}`, severity: severityOf('allergy') });
+  if (mh.chronicConditions) alerts.push({ label: `Chronic: ${mh.chronicConditions}`, severity: severityOf('chronic') });
 
-  async function handleSectionSave(sectionId, values) {
-    const section = SIDEBAR_SECTIONS.find(s => s.id === sectionId);
-    if (!section) return;
-
-    const payload = {};
-    if (section.nestedKey) {
-      const nested = { ...(mh[section.nestedKey] || {}) };
-      for (const field of section.fields) {
-        nested[field.key] = values[field.key] || '';
-      }
-      payload[section.nestedKey] = nested;
-    } else {
-      for (const field of section.fields) {
-        payload[field.key] = values[field.key] || '';
-      }
-    }
-
-    await onMedicalHistorySave?.(payload);
-  }
+  const medicinesCount = medicines.length || 0;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+
       {/* ── PATIENT ── */}
       <div className="p-4">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3 mb-1">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-base font-bold shrink-0">
             {(patientProfile?.name || '?')[0].toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="font-bold text-gray-900 dark:text-gray-100 text-base truncate">{patientProfile?.name || 'Patient'}</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {patientProfile?.age ? `${patientProfile.age} ${patientProfile?.sex?.[0]?.toUpperCase() || ''}` : ''}
+              {patientProfile?.age ? `${patientProfile.age} ${(patientProfile?.sex || '')?.[0]?.toUpperCase() || ''}` : ''}
               {patientProfile?.phone ? ` · ${patientProfile.phone}` : ''}
             </p>
           </div>
-          <button type="button" onClick={onEditPatient}
-            className="flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors shrink-0">
-            <Pencil className="w-3 h-3" /> Edit
-          </button>
         </div>
 
-        {/* Critical alerts — always visible */}
+        {/* Alerts */}
         {alerts.length > 0 && (
-          <div className="space-y-1.5 mt-2">
+          <div className="flex flex-wrap gap-1.5 mt-2">
             {alerts.map((a, i) => (
-              <AlertBadge key={i} icon={a.icon} label={a.label} severity={a.severity} />
+              <AlertBadge key={i} label={a.label} severity={a.severity} />
             ))}
           </div>
         )}
       </div>
 
-      {/* ── Configurable sidebar sections ── */}
-      {SIDEBAR_SECTIONS.map(section => (
-        <EditableSection
-          key={section.id}
-          section={section}
-          data={mh}
-          onSave={handleSectionSave}
-        />
-      ))}
-
-      <hr className="border-gray-100 dark:border-gray-800" />
-
-      {/* ── PROJECTED BILL — read-only for doctor ── */}
-      <div className="p-4 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">Projected Bill</span>
-          <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">₹{totalFees.toLocaleString('en-IN')}</span>
+      {/* ── PROJECTED BILL ── */}
+      <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">Current Bill</span>
+          <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">₹{totalFees.toLocaleString('en-IN')}</span>
         </div>
-
         {selectedTreatments.length > 0 && (
-          <div className="space-y-1.5 pt-1">
+          <div className="space-y-0.5">
             {selectedTreatments.map(key => {
               const item = treatmentFees[key];
-              const displayName = item.quantity > 1 ? `${item.label} ×${item.quantity}` : item.label;
               return (
-                <div key={key} className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
-                  <span className="flex-1 text-gray-700 dark:text-gray-300">{displayName}</span>
-                  <span className="font-medium text-gray-900 dark:text-gray-100">₹{(item.amount || 0).toLocaleString('en-IN')}</span>
+                <div key={key} className="flex items-center gap-2 text-xs">
+                  <span className="flex-1 text-gray-600 dark:text-gray-400 truncate">{item.label}{item.quantity > 1 ? ` ×${item.quantity}` : ''}</span>
+                  <span className="font-medium text-gray-800 dark:text-gray-200">₹{(item.amount || 0).toLocaleString('en-IN')}</span>
                 </div>
               );
             })}
-            <div className="flex items-center gap-2 text-sm pt-0.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
-              <span className="flex-1 text-gray-500 dark:text-gray-400">Consultation</span>
-              <span className="font-medium text-gray-900 dark:text-gray-100">₹{consultationFee.toLocaleString('en-IN')}</span>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="flex-1 text-gray-400">Consultation</span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">₹{consultationFee.toLocaleString('en-IN')}</span>
             </div>
             {medicinesCount > 0 && (
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
-                <span className="flex-1 text-gray-500 dark:text-gray-400">Medicines ({medicinesCount})</span>
-                <span className="text-sm text-gray-400">—</span>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="flex-1 text-gray-400">Medicines ({medicinesCount})</span>
+                <span className="text-gray-400">—</span>
               </div>
             )}
           </div>
         )}
-
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
-          <span className="text-base font-bold text-gray-900 dark:text-gray-100">Total</span>
-          <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">₹{totalFees.toLocaleString('en-IN')}</span>
-        </div>
       </div>
 
-      <hr className="border-gray-100 dark:border-gray-800" />
+      {/* ── MEDICAL HISTORY (collapsible) ── */}
+      <MedicalHistoryPanel
+        medicalHistory={mh}
+        onMedicalHistorySave={onMedicalHistorySave}
+      />
 
       {/* ── FOLLOW-UP ── */}
-      <div className="p-4">
+      <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-          <Clock className="w-3.5 h-3.5 inline mr-1" />
+          <Clock className="w-3 h-3 inline mr-1" />
           Follow-up
         </label>
         <div className="flex gap-2">
           <input type="date" value={form.followUpDate} onChange={e => setForm(f => ({ ...f, followUpDate: e.target.value }))}
-            className="flex-1 px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all" />
+            className="flex-1 px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800" />
           <input type="text" value={form.followUpInstructions} onChange={e => setForm(f => ({ ...f, followUpInstructions: e.target.value }))}
             placeholder="Instructions"
-            className="flex-[2] px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400" />
+            className="flex-[2] px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 placeholder-gray-400" />
         </div>
       </div>
 
-      <hr className="border-gray-100 dark:border-gray-800" />
-
       {/* ── SAVE / CHECKOUT ── */}
-      <div className="p-4 space-y-2">
+      <div className="p-4 space-y-2 border-t border-gray-100 dark:border-gray-800">
         <button type="submit" disabled={submitting}
           className={`w-full py-2.5 text-sm font-semibold rounded-xl transition-all active:scale-[0.99] ${
             submitting

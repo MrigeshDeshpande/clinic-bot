@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef, useContext, useCallback } from '
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext, SidebarContext } from '../layout';
-import { Stethoscope, ClipboardCheck, ArrowLeft, Search, X, CheckCircle2, Clock } from 'lucide-react';
+import { Stethoscope, ClipboardCheck, ArrowLeft, Search, X, CheckCircle2, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, getTreatmentName, getDefaultFee, normalizeTreatmentFee, resolveTreatmentId, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import { apiFetch } from '@/lib/clientApi';
@@ -363,6 +363,7 @@ function VisitPageInner() {
   const [visitSaved, setVisitSaved] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
   const formDirtyTimerRef = useRef(null);
+  const [examinationOpen, setExaminationOpen] = useState(null); // null=auto, true=open, false=collapsed
 
   useEffect(() => {
     setForm(f => ({
@@ -1603,7 +1604,7 @@ function VisitPageInner() {
           )}
 
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-            
+
             {/* ── Clinical Pane (Left) — xl:col-span-8 ── */}
             <div className="xl:col-span-8 space-y-6">
               {/* ── Sticky context strip (visible when tooth selected) ── */}
@@ -1623,7 +1624,7 @@ function VisitPageInner() {
                 );
               })()}
 
-              {/* ═══ Chief Complaint ═══ */}
+              {/* ═══ 1. Chief Complaint ═══ */}
               {patientProfile && (
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
                   <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Chief Complaint</h3>
@@ -1634,25 +1635,12 @@ function VisitPageInner() {
                 </div>
               )}
 
-              {/* ═══ Examination ═══ */}
-              {patientProfile && (
-                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6 space-y-3">
-                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Examination</h3>
-                  <textarea value={form.generalExamination} onChange={e => setForm(f => ({ ...f, generalExamination: e.target.value }))}
-                    rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
-                    placeholder="General Examination — e.g. Extraoral: no swelling, TMJ normal. Intraoral: poor OH, generalized calculus..." />
-                  <textarea value={form.extraOralExamination} onChange={e => setForm(f => ({ ...f, extraOralExamination: e.target.value }))}
-                    rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
-                    placeholder="Extra-Oral — e.g. Facial asymmetry, lymphadenopathy, TMJ tenderness..." />
-                </div>
-              )}
-
-              {/* ═══ Tooth Chart ═══ */}
+              {/* ═══ 2. Tooth Chart + Per-Tooth Editor (Hero) ═══ */}
               <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
                 <ToothChartCard toothChartProps={toothChartProps} />
               </div>
 
-              {/* ═══ Intra-Oral Findings ═══ */}
+              {/* ═══ 3. Clinical Findings (auto-derived) ═══ */}
               {patientProfile && (
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
                   <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
@@ -1666,7 +1654,100 @@ function VisitPageInner() {
                 </div>
               )}
 
-              {/* ═══ Provisional Diagnosis ═══ */}
+              {/* ═══ 4. Planned Procedures (auto-derived) ═══ */}
+              {patientProfile && (
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">Planned Procedures</h3>
+                  {(() => {
+                    const perTooth = form.toothDiagnoses.filter(e => e.diagnoses?.length > 0 || e.treatment);
+                    const toothTreatmentIds = new Set(form.toothDiagnoses.filter(e => e.treatment).map(e => e.treatment));
+                    const general = selectedTreatments.filter(t => !toothTreatmentIds.has(t));
+                    if (perTooth.length === 0 && general.length === 0) {
+                      return <p className="text-sm text-gray-400 dark:text-gray-500 italic">No procedures planned yet.</p>;
+                    }
+                    // Group by tooth with diagnosis + planned context
+                    return (
+                      <div className="space-y-3">
+                        {perTooth.map(e => (
+                          <div key={e.tooth} className="flex items-start gap-2">
+                            <span className="text-base shrink-0 mt-0.5">🦷</span>
+                            <div className="flex-1">
+                              <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Tooth {e.tooth}</span>
+                              {e.diagnoses?.length > 0 && (
+                                <div className="mt-0.5">
+                                  <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase">Diagnosis</span>
+                                  <div className="ml-2">
+                                    {e.diagnoses.map((d, di) => (
+                                      <p key={di} className="text-xs text-gray-700 dark:text-gray-300">• {d}</p>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {e.treatment && (
+                                <div className="mt-1">
+                                  <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase">Planned</span>
+                                  <div className="ml-2">
+                                    <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">• {getTreatmentName(e.treatment)}{e.surface ? ` (${e.surface})` : ''}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {general.length > 0 && (
+                          <div className="flex items-start gap-2">
+                            <span className="text-base shrink-0 mt-0.5">🌐</span>
+                            <div className="flex-1">
+                              <span className="text-sm font-bold text-gray-800 dark:text-gray-200">General</span>
+                              <div className="mt-1 ml-2">
+                                {general.map(g => (
+                                  <p key={g} className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">• {getTreatmentName(g)}</p>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* ── divider ── */}
+              <hr className="border-gray-200 dark:border-gray-700 my-2" />
+
+              {/* ═══ 5. Examination (smart disclosure) ═══ */}
+              {patientProfile && (() => {
+                const hasContent = form.generalExamination || form.extraOralExamination;
+                const isOpen = examinationOpen === true || (examinationOpen === null && hasContent);
+                return (
+                  <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                    <button type="button" onClick={() => setExaminationOpen(prev => prev === null ? false : !prev)}
+                      className="flex items-center gap-2 w-full text-left mb-3">
+                      {isOpen
+                        ? <ChevronDown className="w-4 h-4 text-gray-400" />
+                        : <ChevronRight className="w-4 h-4 text-gray-400" />
+                      }
+                      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Examination</h3>
+                    </button>
+                    {isOpen && (
+                      <div className="space-y-3">
+                        <textarea value={form.generalExamination} onChange={e => setForm(f => ({ ...f, generalExamination: e.target.value }))}
+                          rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
+                          placeholder="General Examination — e.g. Extraoral: no swelling, TMJ normal. Intraoral: poor OH, generalized calculus..." />
+                        <textarea value={form.extraOralExamination} onChange={e => setForm(f => ({ ...f, extraOralExamination: e.target.value }))}
+                          rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
+                          placeholder="Extra-Oral — e.g. Facial asymmetry, lymphadenopathy, TMJ tenderness..." />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ── divider ── */}
+              <hr className="border-gray-200 dark:border-gray-700 my-2" />
+
+              {/* ═══ 6. Provisional Diagnosis ═══ */}
               {patientProfile && (
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
                   <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
@@ -1688,65 +1769,22 @@ function VisitPageInner() {
                 </div>
               )}
 
-              {/* ═══ Planned Procedures ═══ */}
-              {patientProfile && (
-                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
-                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">Planned Procedures</h3>
-                  {(() => {
-                    const perTooth = form.toothDiagnoses.filter(e => e.treatment);
-                    const toothTreatmentIds = new Set(perTooth.map(e => e.treatment));
-                    const general = selectedTreatments.filter(t => !toothTreatmentIds.has(t));
-                    if (perTooth.length === 0 && general.length === 0) {
-                      return <p className="text-sm text-gray-400 dark:text-gray-500 italic">No procedures planned yet.</p>;
-                    }
-                    const groups = {};
-                    for (const e of perTooth) {
-                      const name = getTreatmentName(e.treatment);
-                      if (!groups[name]) groups[name] = [];
-                      groups[name].push(`Tooth ${e.tooth}`);
-                    }
-                    for (const g of general) {
-                      const name = getTreatmentName(g);
-                      if (!groups[name]) groups[name] = [];
-                      groups[name].push('General');
-                    }
-                    return (
-                      <div className="space-y-3">
-                        {Object.entries(groups).map(([treatment, items]) => (
-                          <div key={treatment}>
-                            <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{treatment}</p>
-                            <div className="mt-1 space-y-1 ml-4">
-                              {items.map((item, i) => (
-                                <p key={i} className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                                  {item}
-                                </p>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* ═══ Prescription ═══ */}
+              {/* ═══ 7. Prescription ═══ */}
               <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
                 <PrescriptionCard prescriptionProps={prescriptionProps} />
               </div>
 
-              {/* ═══ Advice ═══ */}
+              {/* ═══ 8. Advice ═══ */}
               <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
                 <AdviceCard adviceProps={adviceProps} />
               </div>
 
-              {/* ═══ Attachments ═══ */}
+              {/* ═══ 9. Attachments ═══ */}
               <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
                 <MediaCard mediaProps={mediaProps} />
               </div>
 
-              {/* ═══ Visit Summary ═══ */}
+              {/* ═══ 10. Visit Summary ═══ */}
               {patientProfile && (
                 <VisitSummary
                   form={form}
@@ -1759,8 +1797,8 @@ function VisitPageInner() {
               )}
             </div>
 
-            {/* ── Context Sidebar (Right) — xl:col-span-4 ── */}
-            <div className="xl:col-span-4">
+            {/* ── Context Sidebar (Right) — xl:col-span-4, sticky ── */}
+            <div className="xl:col-span-4 sticky top-20 self-start">
               <ContextSidebar
                 patientProfile={patientProfile}
                 patientVisits={patientVisits}

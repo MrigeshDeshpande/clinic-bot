@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pill, FileText, X, Plus, Search, Trash2, Zap } from 'lucide-react';
+import { Pill, X, Plus, Search, Trash2 } from 'lucide-react';
 
 const PRESET_COLORS = [
   { bg: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800', icon: '🟢' },
@@ -33,6 +33,8 @@ export default function PrescriptionCard({ prescriptionProps }) {
     DURATION_OPTIONS,
     TIMING_OPTIONS
   } = prescriptionProps;
+
+  const freqShort = { 'Daily one time': 'Once', 'Twice a day': 'BD', 'Thrice a day': 'TDS' };
 
   return (
     <div className="space-y-3">
@@ -79,7 +81,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
         )}
       </div>
 
-      {/* Search - visually faded */}
+      {/* Search */}
       <div className="relative">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-300 dark:text-gray-600" />
         <input type="text" value={saltSearch} onChange={e => setSaltSearch(e.target.value)}
@@ -122,45 +124,69 @@ export default function PrescriptionCard({ prescriptionProps }) {
         <Plus className="w-2.5 h-2.5" /> Add custom
       </button>
 
-      {/* Selected medicines */}
+      {/* Medicine table — compact */}
       {form.medicines.length > 0 && (
-        <div className="space-y-1.5">
-          {form.medicines.map((med, idx) => (
-            <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-100 dark:border-gray-700/50 group">
-              <div className="flex-1 grid grid-cols-5 gap-1.5 text-[10px]">
-                <input type="text" value={med.name} onChange={e => updateMedicine(idx, 'name', e.target.value)}
-                  placeholder="Medicine"
-                  className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-[10px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
-                <input type="text" value={med.dosage} onChange={e => updateMedicine(idx, 'dosage', e.target.value)}
-                  placeholder="Dosage"
-                  className="px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-[10px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
-                <select value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
-                  className="px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-[10px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
-                  <option value="">Freq</option>
-                  {FREQUENCY_OPTIONS.map(opt => (
-                    <option key={opt} value={opt}>{opt === 'Daily one time' ? 'Once' : opt === 'Twice a day' ? 'BD' : 'TDS'}</option>
-                  ))}
-                </select>
-                <select value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
-                  className="px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-[10px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
-                  <option value="">Dur</option>
-                  {DURATION_OPTIONS.map(d => (
-                    <option key={d} value={`${d} days`}>{d}d</option>
-                  ))}
-                </select>
-                <select value={med.timing || 'after'} onChange={e => updateMedicine(idx, 'timing', e.target.value)}
-                  className="px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-[10px] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
-                  {TIMING_OPTIONS.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label === 'After meal' ? 'After' : 'Before'}</option>
-                  ))}
-                </select>
-              </div>
-              <button type="button" onClick={() => removeMedicine(idx)}
-                className="p-0.5 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800">
+                <th className="text-left font-medium pb-1 pr-2">Medicine</th>
+                <th className="text-left font-medium pb-1 pr-2">Dose</th>
+                <th className="text-left font-medium pb-1 pr-2">Freq</th>
+                <th className="text-left font-medium pb-1 pr-2">Days</th>
+                <th className="text-left font-medium pb-1 pr-2">Timing</th>
+                <th className="w-5 pb-1" />
+              </tr>
+            </thead>
+            <tbody>
+              {form.medicines.map((med, idx) => (
+                <tr key={idx} className="border-b border-gray-50 dark:border-gray-800/50 group">
+                  <td className="py-1 pr-2">
+                    <input type="text" value={med.name} onChange={e => updateMedicine(idx, 'name', e.target.value)}
+                      placeholder="Medicine"
+                      className="w-full px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
+                  </td>
+                  <td className="py-1 pr-2">
+                    <input type="text" value={med.dosage} onChange={e => updateMedicine(idx, 'dosage', e.target.value)}
+                      placeholder="Dose"
+                      className="w-14 px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
+                  </td>
+                  <td className="py-1 pr-2">
+                    <select value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
+                      className="w-14 px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                      <option value="">—</option>
+                      {FREQUENCY_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{freqShort[opt] || opt}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-1 pr-2">
+                    <select value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
+                      className="w-14 px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                      <option value="">—</option>
+                      {DURATION_OPTIONS.map(d => (
+                        <option key={d} value={`${d} days`}>{d}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-1 pr-2">
+                    <select value={med.timing || 'after'} onChange={e => updateMedicine(idx, 'timing', e.target.value)}
+                      className="w-16 px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                      {TIMING_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label === 'After meal' ? 'After' : 'Before'}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-1">
+                    <button type="button" onClick={() => removeMedicine(idx)}
+                      className="p-0.5 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

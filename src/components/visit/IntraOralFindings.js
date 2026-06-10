@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function IntraOralFindings({ toothDiagnoses = [], notes, onNotesChange, onToothSelect }) {
+export default function ClinicalFindings({ toothDiagnoses = [], notes, onNotesChange, onToothSelect }) {
   const groups = {};
   for (const entry of toothDiagnoses) {
     for (const d of (entry.diagnoses || [])) {
@@ -12,11 +12,11 @@ export default function IntraOralFindings({ toothDiagnoses = [], notes, onNotesC
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Intra-Oral Findings</h3>
+      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Clinical Findings</h3>
 
       {keys.length === 0 && !notes ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 italic">
-          No intra-oral findings yet. Chart teeth above to populate.
+          No clinical findings yet. Chart teeth above to populate.
         </p>
       ) : (
         <div className="space-y-3">
@@ -24,8 +24,8 @@ export default function IntraOralFindings({ toothDiagnoses = [], notes, onNotesC
             <div className="space-y-2">
               {keys.map(diagnosis => (
                 <div key={diagnosis}>
-                  <p className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide">{diagnosis}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+                  <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{diagnosis}:</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5 ml-3">
                     {groups[diagnosis].map((tooth, i) => (
                       <React.Fragment key={tooth}>
                         {i > 0 && <span className="text-gray-300 dark:text-gray-600">, </span>}
