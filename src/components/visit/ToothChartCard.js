@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { X } from 'lucide-react';
+import { getTreatmentName } from '@/lib/treatments';
 import ToothGrid from '@/components/ToothGrid';
 import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
 
@@ -18,7 +19,9 @@ export default function ToothChartCard({ toothChartProps }) {
     appointmentMeta,
     handleToothSave,
     handleToothClose,
-    patientVisits = []
+    patientVisits = [],
+    treatmentFavorites = [],
+    customTreatments = [],
   } = toothChartProps;
 
   // Tooth history — filter visits for the selected tooth
@@ -62,6 +65,8 @@ export default function ToothChartCard({ toothChartProps }) {
                   toothNumber={selectedTooth}
                   currentEntry={form.toothDiagnoses.find(t => t.tooth === selectedTooth)}
                   diagnosisOptions={diagnosisOptions}
+                  treatmentsFavorites={treatmentFavorites}
+                  customTreatments={customTreatments}
                   onSave={handleToothSave}
                   onClose={handleToothClose}
                 />
@@ -90,7 +95,7 @@ export default function ToothChartCard({ toothChartProps }) {
                     <span>#{entry.tooth}</span>
                     {entry.surface && <span className="opacity-60">{entry.surface}</span>}
                     <span className="opacity-75">{entry.diagnoses.slice(0, 2).join(', ')}{entry.diagnoses.length > 2 ? ` +${entry.diagnoses.length - 2}` : ''}</span>
-                    {entry.treatment && <span className="text-[9px] text-emerald-500 dark:text-emerald-400 font-medium">{entry.treatment}</span>}
+                    {entry.treatment && <span className="text-[9px] text-emerald-500 dark:text-emerald-400 font-medium">{getTreatmentName(entry.treatment)}</span>}
                     {entry.severity && <span className={`text-[9px] font-medium ${entry.severity === 'severe' ? 'text-red-500' : entry.severity === 'moderate' ? 'text-orange-500' : 'text-amber-500'}`}>{entry.severity}</span>}
                     <X className="w-3 h-3 ml-0.5 opacity-40 hover:opacity-100" onClick={(e) => {
                       e.stopPropagation();
@@ -121,7 +126,7 @@ export default function ToothChartCard({ toothChartProps }) {
                         </span>
                         {e.treatment && (
                           <span className="text-emerald-600 dark:text-emerald-400 ml-1">
-                            — {e.treatment}
+                            — {getTreatmentName(e.treatment)}
                           </span>
                         )}
                       </div>

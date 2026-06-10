@@ -1,10 +1,5 @@
 import React from 'react';
-import { TREATMENTS } from '@/lib/treatments';
-
-function getTreatmentName(idOrName) {
-  const t = TREATMENTS.find(t => t.id === idOrName || t.name === idOrName);
-  return t ? t.name : idOrName;
-}
+import { getTreatmentName } from '@/lib/treatments';
 
 export default function VisitSummary({ form, toothDiagnoses = [], selectedTreatments = [], treatmentFees = {}, consultationFee, medicines = [] }) {
   const findings = {};

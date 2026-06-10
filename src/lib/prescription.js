@@ -4,6 +4,7 @@ import { getSql } from '@/db/pool';
 import { uploadToR2, getR2SignedUrl } from '@/lib/r2';
 import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
+import { getTreatmentName } from '@/lib/treatments';
 
 const PAGE_WIDTH = 595.28;
 const LM = 50;
@@ -300,7 +301,7 @@ export async function generatePrescription({ patient, visit, appointment }) {
     for (let i = 0; i < toothDiagnoses.length; i++) {
       const td = toothDiagnoses[i];
       const surface = td.surface || '\u2014';
-      const treatment = td.treatment || '\u2014';
+      const treatment = getTreatmentName(td.treatment) || '\u2014';
       const diagText = td.diagnoses.join(', ');
       const rowH = Math.max(rh, doc.heightOfString(diagText, { width: colW[3] - 4 }) + 6);
 
@@ -683,7 +684,7 @@ export async function generateDentalChart({ patient, visit, appointment }) {
       // Treatment label
       if (entry?.treatment && !isMissing) {
         doc.fontSize(4.5).fillColor('#059669');
-        doc.text(entry.treatment, x + (cellW - gap) / 2, y - 7, { width: cellW - gap, align: 'center' });
+        doc.text(getTreatmentName(entry.treatment), x + (cellW - gap) / 2, y - 7, { width: cellW - gap, align: 'center' });
       }
     }
   }

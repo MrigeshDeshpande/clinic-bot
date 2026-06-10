@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { formatDate as fmtDate } from '@/lib/date';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
+import { getTreatmentName } from '@/lib/treatments';
 import { ToastContext } from '../../layout';
 
 const PHONE_PREFIX = '+91';
@@ -700,7 +701,7 @@ export default function PatientDetailPage() {
                                 {td.surface && <span className="opacity-50">{td.surface}</span>}
                                 <span className="text-gray-300 dark:text-gray-600">—</span>
                                 {td.diagnoses.join(', ')}
-                                {td.treatment && <><span className="text-gray-300 dark:text-gray-600">|</span><span className="text-emerald-600 dark:text-emerald-400">{td.treatment}</span></>}
+                                {td.treatment && <><span className="text-gray-300 dark:text-gray-600">|</span><span className="text-emerald-600 dark:text-emerald-400">{getTreatmentName(td.treatment)}</span></>}
                                 {td.severity && (
                                   <span className={`text-[9px] px-1 py-0.5 rounded ${
                                     td.severity === 'severe' ? 'text-red-600 bg-red-50 dark:bg-red-900/30' :
@@ -1073,7 +1074,7 @@ export default function PatientDetailPage() {
                                   )}
                                 </div>
                                 <p className="text-gray-700 dark:text-gray-300 font-medium">{e.diagnoses.join(', ')}</p>
-                                {e.treatment && <p className="text-emerald-600 dark:text-emerald-400">Plan: {e.treatment}</p>}
+                                {e.treatment && <p className="text-emerald-600 dark:text-emerald-400">Plan: {getTreatmentName(e.treatment)}</p>}
                                 {e.outcome && <p className="font-medium" style={{ color: e.outcome === 'successful' ? '#059669' : e.outcome === 'complication' || e.outcome === 'failed' ? '#dc2626' : '#2563eb' }}>{outcomeIcon(e.outcome)} {e.outcome}</p>}
                                 {e.notes && <p className="text-gray-400 dark:text-gray-500 italic text-xs">{e.notes}</p>}
                               </div>

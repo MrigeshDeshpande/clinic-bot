@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext, SidebarContext } from '../layout';
 import { Stethoscope, ClipboardCheck, ArrowLeft, Search, X, CheckCircle2, Clock } from 'lucide-react';
-import { TREATMENTS, TREATMENT_NAMES, suggestTreatment } from '@/lib/treatments';
+import { TREATMENTS, TREATMENT_NAMES, getTreatmentName, getDefaultFee, normalizeTreatmentFee, resolveTreatmentId, suggestTreatment } from '@/lib/treatments';
 import { MEDICINE_SALTS } from '@/lib/medicines';
 import { apiFetch } from '@/lib/clientApi';
 import { fetchCached } from '@/lib/clientFetchCache';
@@ -49,28 +49,6 @@ function stripPhonePrefix(v) { return v?.replace(/^(\+91|91)/, '') || v || ''; }
 function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE_PREFIX}${s}` : ''; }
 const CONSULTATION_STEP = 100;
 const TREATMENT_STEP = 50;
-
-function getDefaultFee(idOrName) {
-  const t = TREATMENTS.find(t => t.id === idOrName || t.name === idOrName);
-  return t?.defaultFee || 0;
-}
-
-function getTreatmentName(idOrName) {
-  const t = TREATMENTS.find(t => t.id === idOrName || t.name === idOrName);
-  return t ? t.name : idOrName;
-}
-
-function normalizeTreatmentFee(value, key) {
-  if (typeof value === 'number') {
-    return { amount: value, quantity: 1, source: 'manual', label: getTreatmentName(key) };
-  }
-  return {
-    amount: value?.amount ?? 0,
-    quantity: value?.quantity ?? 1,
-    source: value?.source ?? 'manual',
-    label: value?.label ?? getTreatmentName(key),
-  };
-}
 
 const FREQUENCY_OPTIONS = ['Daily one time', 'Twice a day', 'Thrice a day'];
 const DURATION_OPTIONS = [3, 5, 7, 10, 14, 21, 30];
@@ -159,6 +137,15 @@ function VisitPageInner() {
   const [savingRatings, setSavingRatings] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [treatmentFavorites, setTreatmentFavorites] = useState([]);
+  const [feeOverrides, setFeeOverrides] = useState({});
+  const [customTreatments, setCustomTreatments] = useState([]);
+
+  // Merge catalog defaults with settings overrides
+  const getFee = useCallback((id) => {
+    if (feeOverrides[id] !== undefined) return feeOverrides[id];
+    return getDefaultFee(id);
+  }, [feeOverrides]);
 
   // Escape closes preview
   useEffect(() => {
@@ -170,12 +157,15 @@ function VisitPageInner() {
   // Restore sidebar on unmount
   useEffect(() => () => setSidebarCollapsed(false), [setSidebarCollapsed]);
 
-  // Load google maps review URL from settings
+  // Load settings — google maps URL + treatment favorites
   useEffect(() => {
     fetch('/api/dashboard/settings')
       .then(r => r.json())
       .then(data => {
         if (data.settings?.google_maps?.review_url) setGoogleMapsUrl(data.settings.google_maps.review_url);
+        if (data.settings?.treatments?.favorites) setTreatmentFavorites(data.settings.treatments.favorites);
+        if (data.settings?.treatments?.feeOverrides) setFeeOverrides(data.settings.treatments.feeOverrides);
+        if (data.settings?.treatments?.custom) setCustomTreatments(data.settings.treatments.custom);
       })
       .catch(() => {});
   }, []);
@@ -271,10 +261,10 @@ function VisitPageInner() {
       // 1. Add or update auto items
       for (const [key, { count, label }] of Object.entries(chartTreatments)) {
         if (!next[key]) {
-          next[key] = { amount: getDefaultFee(key) * count, quantity: count, source: 'auto', label };
+          next[key] = { amount: getFee(key) * count, quantity: count, source: 'auto', label };
           changed = true;
         } else if (next[key].source === 'auto' && next[key].quantity !== count) {
-          next[key] = { ...next[key], quantity: count, amount: getDefaultFee(key) * count };
+          next[key] = { ...next[key], quantity: count, amount: getFee(key) * count };
           changed = true;
         }
       }
@@ -289,7 +279,7 @@ function VisitPageInner() {
 
       return changed ? next : prev;
     });
-  }, [form.toothDiagnoses]);
+  }, [form.toothDiagnoses, feeOverrides]);
 
   function toggleTreatment(name) {
     setTreatmentFees(prev => {
@@ -299,7 +289,7 @@ function VisitPageInner() {
         delete next[key];
         return next;
       }
-      return { ...prev, [key]: { amount: getDefaultFee(key), quantity: 1, source: 'manual', label: getTreatmentName(key) } };
+      return { ...prev, [key]: { amount: getFee(key), quantity: 1, source: 'manual', label: getTreatmentName(key) } };
     });
   }
 
@@ -421,20 +411,24 @@ function VisitPageInner() {
             notes: a.notes || '',
             adviceSelected: Array.isArray(a.advice_selected) ? a.advice_selected : [],
             diagnosisSelected: Array.isArray(a.diagnosis_selected) ? a.diagnosis_selected : [],
-            toothDiagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
+            toothDiagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses.map(td => ({
+              ...td,
+              treatment: resolveTreatmentId(td.treatment) || td.treatment,
+            })) : [],
           });
           const savedTreatments = Array.isArray(a.treatments) && a.treatments.length > 0
             ? a.treatments
             : a.treatment ? [a.treatment] : [];
           const fees = {};
           const savedTotal = Number(a.treatment_charges) || 0;
-          const defaultTotal = savedTreatments.reduce((sum, n) => sum + getDefaultFee(n), 0);
+          const defaultTotal = savedTreatments.reduce((sum, n) => sum + getFee(n), 0);
           savedTreatments.forEach(name => {
-            const defaultFee = getDefaultFee(name);
+            const id = resolveTreatmentId(name) || name;
+            const defaultFee = getFee(id);
             const raw = savedTotal > 0 && defaultTotal > 0
               ? Math.round(defaultFee * savedTotal / defaultTotal)
               : defaultFee;
-            fees[name] = normalizeTreatmentFee(raw, name);
+            fees[id] = normalizeTreatmentFee(raw, id);
           });
           setTreatmentFees(fees);
           if (a.consultation_fee) {
@@ -688,7 +682,10 @@ function VisitPageInner() {
                 medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
                 adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
                 diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
-                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses : [],
+                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses.map(td => ({
+                  ...td,
+                  treatment: resolveTreatmentId(td.treatment) || td.treatment,
+                })) : [],
               }));
               const savedTreatments = Array.isArray(lastVisit.treatments) && lastVisit.treatments.length > 0
                 ? lastVisit.treatments
@@ -697,7 +694,8 @@ function VisitPageInner() {
               if (savedTreatments.length > 0) {
                 const fees = {};
                 savedTreatments.forEach(name => {
-                  fees[name] = normalizeTreatmentFee(getDefaultFee(name), name);
+                  const id = resolveTreatmentId(name) || name;
+                  fees[id] = normalizeTreatmentFee(getFee(id), id);
                 });
                 setTreatmentFees(fees);
               }
@@ -808,7 +806,10 @@ function VisitPageInner() {
                 medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
                 adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
                 diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
-                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses : [],
+                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses.map(td => ({
+                  ...td,
+                  treatment: resolveTreatmentId(td.treatment) || td.treatment,
+                })) : [],
               }));
               const savedTreatments = Array.isArray(lastVisit.treatments) && lastVisit.treatments.length > 0
                 ? lastVisit.treatments
@@ -817,7 +818,8 @@ function VisitPageInner() {
               if (savedTreatments.length > 0) {
                 const fees = {};
                 savedTreatments.forEach(name => {
-                  fees[name] = normalizeTreatmentFee(getDefaultFee(name), name);
+                  const id = resolveTreatmentId(name) || name;
+                  fees[id] = normalizeTreatmentFee(getFee(id), id);
                 });
                 setTreatmentFees(fees);
               }
@@ -1496,7 +1498,7 @@ function VisitPageInner() {
       </div>
     );
   }
-  const toothChartProps = { diagnosisOptions, form, setForm, stableSetSelectedTooth, selectedTooth, setSelectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta, handleToothSave, handleToothClose, patientVisits };
+  const toothChartProps = { diagnosisOptions, form, setForm, stableSetSelectedTooth, selectedTooth, setSelectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta, handleToothSave, handleToothClose, patientVisits, treatmentFavorites, customTreatments };
   const mediaProps = { fileInputRef, handleMediaUpload, uploadingMedia, setShowCamera, galleryInputRef, mediaFiles, getFilePreview, getFileIcon, removeMediaFile };
   const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS };
   const adviceProps = { adviceOptions, form, setForm };
@@ -1614,7 +1616,7 @@ function VisitPageInner() {
                     <span className="font-bold">#{selectedTooth}</span>
                     {entry.diagnoses?.length > 0 && <span className="text-gray-500">·</span>}
                     {entry.diagnoses?.slice(0, 2).join(', ')}
-                    {entry.treatment && <><span className="text-gray-500">·</span><span className="text-emerald-600 dark:text-emerald-400 font-medium">{entry.treatment}</span></>}
+                    {entry.treatment && <><span className="text-gray-500">·</span><span className="text-emerald-600 dark:text-emerald-400 font-medium">{getTreatmentName(entry.treatment)}</span></>}
                     {entry.severity && <><span className="text-gray-500">·</span><span className="text-gray-400">{entry.severity}</span></>}
                     <span className="ml-auto text-[10px] text-gray-400">Click to scroll</span>
                   </button>
@@ -1699,8 +1701,9 @@ function VisitPageInner() {
                     }
                     const groups = {};
                     for (const e of perTooth) {
-                      if (!groups[e.treatment]) groups[e.treatment] = [];
-                      groups[e.treatment].push(`Tooth ${e.tooth}`);
+                      const name = getTreatmentName(e.treatment);
+                      if (!groups[name]) groups[name] = [];
+                      groups[name].push(`Tooth ${e.tooth}`);
                     }
                     for (const g of general) {
                       const name = getTreatmentName(g);

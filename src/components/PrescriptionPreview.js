@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import PrescriptionHeader from './PrescriptionHeader';
+import { getTreatmentName } from '@/lib/treatments';
 
 const A4_W = 794;
 const A4_H = 1123;
@@ -139,7 +140,7 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
                       <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f3f4f6' }}>
                         <td style={{ ...styleTD, fontWeight: 700 }}>#{td.tooth}</td>
                         <td style={styleTD}>{td.surface || '—'}</td>
-                        <td style={styleTD}>{td.treatment || '—'}</td>
+                        <td style={styleTD}>{getTreatmentName(td.treatment) || '—'}</td>
                         <td style={{ ...styleTD, borderRight: 'none' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span>{td.diagnoses?.join(', ') || '—'}</span>

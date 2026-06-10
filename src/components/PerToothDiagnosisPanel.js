@@ -1,6 +1,7 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { X, Search, ChevronDown, ChevronRight, Star } from 'lucide-react';
+import { CATEGORIES, TREATMENTS, TREATMENT_CATEGORIES, getTreatmentById, getTreatmentName, getDefaultFee, resolveTreatmentId } from '@/lib/treatments';
 
 const TOOTH_NAMES = {
   1: 'Central Incisor', 2: 'Lateral Incisor', 3: 'Canine',
@@ -28,12 +29,163 @@ const OUTCOME_OPTIONS = [
   { id: 'failed', label: '✕ Failed', color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
 ];
 
-const TREATMENT_OPTIONS = [
-  'Filling', 'RCT', 'Extraction', 'Crown', 'Scaling',
-  'Fluoride Application', 'Sealant', 'Pulpotomy',
-  'Implant', 'Veneer', 'Bleaching', 'Orthodontic Treatment',
-  'Observe / Monitor',
-];
+// ── Category-based treatment selector component ──
+function TreatmentsSelector({ favorites = [], customTreatments = [], selected, onSelect }) {
+  const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState({});
+  const inputRef = useRef(null);
+
+  const allTreatments = useMemo(() => {
+    const custom = customTreatments.map(ct => ({
+      id: ct.id,
+      name: ct.name || 'Unnamed',
+      category: ct.category || 'other',
+      defaultFee: ct.fee || 0,
+      aliases: [ct.name || ''],
+      isCustom: true,
+    }));
+    return [...custom, ...TREATMENTS];
+  }, [customTreatments]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return null;
+    const q = search.toLowerCase().trim();
+    return allTreatments.filter(t =>
+      t.id.toLowerCase().includes(q) ||
+      t.name.toLowerCase().includes(q) ||
+      t.aliases.some(a => a.toLowerCase().includes(q))
+    );
+  }, [search, allTreatments]);
+
+  function handleClick(id) {
+    onSelect(id);
+    setSearch('');
+  }
+
+  const toggleCategory = (catId) => {
+    setCollapsed(prev => ({ ...prev, [catId]: !prev[catId] }));
+  };
+
+  const renderTreatment = (t) => {
+    const isSelected = selected === t.id;
+    return (
+      <button
+        key={t.id}
+        type="button"
+        onClick={() => handleClick(t.id)}
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all active:scale-[0.98] text-left ${
+          isSelected
+            ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-600 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200 dark:ring-emerald-700'
+            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-emerald-200 dark:hover:border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+        }`}
+      >
+        {isSelected && <Star className="w-3 h-3 shrink-0 text-emerald-500" />}
+        <span className="flex-1">{t.name}</span>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">₹{t.defaultFee}</span>
+      </button>
+    );
+  };
+
+  // Search mode — flat list, no categories
+  if (filtered) {
+    return (
+      <div className="space-y-1.5">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search treatments..."
+            className="w-full pl-6 pr-2 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800"
+            autoFocus
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        <div className="max-h-48 overflow-y-auto space-y-1">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-3">No treatments match &quot;{search}&quot;</p>
+          ) : (
+            filtered.map(t => renderTreatment(t))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Browse mode — Favorites + category sections
+  const customById = {};
+  for (const ct of customTreatments) customById[ct.id] = { ...ct, defaultFee: ct.fee, isCustom: true };
+  const favTreatments = favorites.map(id => getTreatmentById(id) || customById[id]).filter(Boolean);
+  const favIds = new Set(favorites);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="relative">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search treatments..."
+          className="w-full pl-6 pr-2 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800"
+          autoFocus
+        />
+      </div>
+
+      <div className="max-h-52 overflow-y-auto space-y-1.5">
+        {/* Favorites section */}
+        {favTreatments.length > 0 && (
+          <div className="mb-2">
+            <div className="flex items-center gap-1.5 mb-1 px-1">
+              <Star className="w-3 h-3 text-amber-500" />
+              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Favorites</span>
+            </div>
+            <div className="space-y-1">
+              {favTreatments.map(t => renderTreatment(t))}
+            </div>
+          </div>
+        )}
+
+        {/* Category sections */}
+        {CATEGORIES.map(cat => {
+          const catTreatments = TREATMENT_CATEGORIES[cat.id] || [];
+          const customInCat = customTreatments.filter(ct => !favIds.has(ct.id) && (ct.category === cat.id));
+          const combined = [...catTreatments, ...customInCat.map(ct => ({ ...ct, defaultFee: ct.fee, isCustom: true, aliases: [ct.name || ''] }))];
+          if (combined.length === 0) return null;
+          const nonFav = combined.filter(t => !favIds.has(t.id));
+          if (nonFav.length === 0 && favTreatments.length > 0) return null;
+          const isCollapsed = collapsed[cat.id];
+
+          return (
+            <div key={cat.id}>
+              <button
+                type="button"
+                onClick={() => toggleCategory(cat.id)}
+                className="flex items-center gap-1.5 w-full px-1 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                {isCollapsed ? <ChevronRight className="w-3 h-3 text-gray-400" /> : <ChevronDown className="w-3 h-3 text-gray-400" />}
+                <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{cat.label}</span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto">{nonFav.length}</span>
+              </button>
+              {!isCollapsed && (
+                <div className="space-y-1 ml-1 mt-1">
+                  {nonFav.map(t => renderTreatment(t))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function toothQuadrant(num) {
   const q = Math.floor(num / 10);
@@ -189,6 +341,8 @@ export default function PerToothDiagnosisPanel({
   toothNumber,
   currentEntry,
   diagnosisOptions = [],
+  treatmentsFavorites = [],
+  customTreatments = [],
   onSave,
   onClose,
 }) {
@@ -376,61 +530,12 @@ export default function PerToothDiagnosisPanel({
         {selectedDiagnoses.length > 0 && (
           <div>
             <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1.5 block">Treatment Plan</label>
-            <div className="flex flex-wrap gap-1.5">
-              {TREATMENT_OPTIONS.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTreatment(t)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all active:scale-95 ${
-                    selectedTreatment === t
-                      ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-600 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200 dark:ring-emerald-700'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-emerald-200 dark:hover:border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
-                  }`}
-                >
-                  {t}
-                  {selectedTreatment === t && <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">✓</span>}
-                </button>
-              ))}
-              {showTreatmentInput ? (
-                <div className="flex items-center gap-1 w-full mt-1">
-                  <input
-                    type="text"
-                    value={customTreatment}
-                    onChange={e => setCustomTreatment(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleAddCustomTreatment(); }}
-                    placeholder="Type custom treatment..."
-                    className="flex-1 px-2 py-1 text-[10px] border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    autoFocus
-                  />
-                  <button onClick={handleAddCustomTreatment} className="px-2 py-1 text-[10px] font-medium bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors">Add</button>
-                  <button onClick={() => setShowTreatmentInput(false)} className="px-2 py-1 text-[10px] text-gray-400 hover:text-gray-600">✕</button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    list="treatment-suggestions"
-                    value={treatmentInput}
-                    onChange={e => setTreatmentInput(e.target.value)}
-                    onKeyDown={handleTreatmentKeyDown}
-                    placeholder="Type to search or + Custom..."
-                    className="px-2 py-1 rounded-lg text-[10px] font-medium border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 placeholder-gray-400 dark:placeholder-gray-500 hover:border-emerald-300 hover:text-emerald-500 transition-all w-32 bg-transparent focus:outline-none focus:ring-1 focus:ring-emerald-200"
-                  />
-                  <datalist id="treatment-suggestions">
-                    {TREATMENT_OPTIONS.map(t => (
-                      <option key={t} value={t} />
-                    ))}
-                  </datalist>
-                  <button
-                    type="button"
-                    onClick={() => { setShowTreatmentInput(true); setTreatmentInput(''); }}
-                    className="px-2 py-1 rounded-lg text-[10px] font-medium border border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-emerald-300 hover:text-emerald-500 transition-all"
-                  >
-                    + Custom
-                  </button>
-                </>
-              )}
-            </div>
+            <TreatmentsSelector
+              favorites={treatmentsFavorites}
+              customTreatments={customTreatments}
+              selected={selectedTreatment}
+              onSelect={(id) => setTreatment(id)}
+            />
           </div>
         )}
 
@@ -504,7 +609,7 @@ export default function PerToothDiagnosisPanel({
             </p>
             {selectedTreatment && (
               <p className="text-[10px] text-emerald-600 dark:text-emerald-400">
-                Plan: {selectedTreatment}
+                Plan: {getTreatmentName(selectedTreatment)}
                 {selectedSeverity && <span className="text-gray-400 ml-1">· {selectedSeverity}</span>}
               </p>
             )}

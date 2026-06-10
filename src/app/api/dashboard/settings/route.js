@@ -14,6 +14,7 @@ const DEFAULTS = {
     diagnosis: ['Gingivitis', 'Halitosis', 'Caries', 'Deep caries', 'Periapical Abscess', 'Grossly Decayed', 'Missing', 'Pocket', 'Periodontitis', 'Mobility', 'Lesion', 'Pericoronitis', 'Impacted', 'Fractured Tooth / Cusp', 'Abrasion / Attrition / Erosion', 'Irregular Teeth', 'Calculus', 'Stains'],
     advice: ['Avoid hot/cold foods for 24 hours', 'Take prescribed medicines on time', 'Maintain oral hygiene', 'Use soft-bristled toothbrush', 'Rinse with warm salt water', 'Avoid hard/sticky foods'],
   },
+  treatments: { favorites: [], recent: [], hidden: [], custom: [] },
   google_maps: { review_url: '' },
 };
 
