@@ -26,7 +26,11 @@ const OUTCOME_OPTIONS = [
 // ── Category-based treatment selector component ──
 function TreatmentsSelector({ favorites = [], customTreatments = [], selected, onSelect }) {
   const [search, setSearch] = useState('');
-  const [collapsed, setCollapsed] = useState({});
+  const [collapsed, setCollapsed] = useState(() => {
+    const initial = {};
+    for (const cat of CATEGORIES) initial[cat.id] = true;
+    return initial;
+  });
   const inputRef = useRef(null);
 
   const allTreatments = useMemo(() => {

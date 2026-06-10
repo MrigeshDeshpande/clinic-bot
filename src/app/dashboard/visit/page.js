@@ -180,8 +180,9 @@ function VisitPageInner() {
       const diagnoses = prev?.diagnoses?.includes(diag)
         ? prev.diagnoses.filter(d => d !== diag)
         : [...(prev?.diagnoses || []), diag];
-      const next = diagnoses.length > 0
-        ? [...existing, { tooth, diagnoses, surface: prev?.surface || '', treatment: prev?.treatment || '', severity: prev?.severity || '', status: prev?.status || 'active' }]
+      const hasContent = diagnoses.length > 0 || prev?.severity || prev?.outcome || prev?.treatment || prev?.surface || prev?.notes;
+      const next = hasContent
+        ? [...existing, { tooth, diagnoses, surface: prev?.surface || '', treatment: prev?.treatment || '', severity: prev?.severity || '', status: prev?.status || 'active', outcome: prev?.outcome || '', notes: prev?.notes || '' }]
         : existing;
       return { ...f, toothDiagnoses: next };
     });
@@ -196,9 +197,8 @@ function VisitPageInner() {
   const handleToothSave = useCallback((entry) => {
     setForm(f => {
       const existing = f.toothDiagnoses.filter(t => t.tooth !== entry.tooth);
-      const next = entry.diagnoses.length > 0
-        ? [...existing, entry]
-        : existing;
+      const hasContent = entry.diagnoses?.length > 0 || entry.severity || entry.outcome || entry.treatment || entry.surface || entry.notes;
+      const next = hasContent ? [...existing, entry] : existing;
       return { ...f, toothDiagnoses: next };
     });
   }, []);
