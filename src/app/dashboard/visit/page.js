@@ -17,6 +17,7 @@ import CameraViewfinder from '@/components/CameraViewfinder';
 
 const DRAFT_KEY = 'visit_draft';
 const TEMPLATES_KEY = 'visit_templates';
+const RX_TEMPLATES_KEY = 'rx_templates';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash', icon: '\u{1F4B5}' },
@@ -33,22 +34,6 @@ function upiDeepLink(amount, txnRef, note) {
   return `upi://pay?pa=${pa}&am=${am}&tn=${tn}${tr ? `&tr=${tr}` : ''}`;
 }
 
-const PRESET_FEES = [
-  { label: 'General Checkup', fee: 300, icon: '🏥' },
-  { label: 'Teeth Cleaning', fee: 400, icon: '✨' },
-  { label: 'Root Canal', fee: 3000, icon: '🔬' },
-  { label: 'Dental Filling', fee: 800, icon: '🩹' },
-  { label: 'Whitening', fee: 2500, icon: '🦷' },
-  { label: 'Implants', fee: 8000, icon: '🦷' },
-  { label: 'Braces Adjustment', fee: 1500, icon: '😁' },
-  { label: 'Crown', fee: 3500, icon: '👑' },
-  { label: 'Extraction', fee: 600, icon: '🦷' },
-  { label: 'Scaling', fee: 500, icon: '🦷' },
-  { label: 'Veneers', fee: 5000, icon: '✨' },
-  { label: 'Pediatric Dentistry', fee: 400, icon: '🧒' },
-  { label: 'Other', fee: 500, icon: '🩺' },
-];
-
 const CONSULTATION_DEFAULT = 2000;
 const LOCATIONS = ['Hudco', 'Bhilai', 'Durg', 'Nehru Nagar', 'Borsi'];
 const PHONE_PREFIX = '+91';
@@ -57,11 +42,15 @@ function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE
 const CONSULTATION_STEP = 100;
 const TREATMENT_STEP = 50;
 
-function getDefaultFee(name) {
-  const preset = PRESET_FEES.find(p => p.label === name);
-  return preset?.fee || 0;
+function getDefaultFee(idOrName) {
+  const t = TREATMENTS.find(t => t.id === idOrName || t.name === idOrName);
+  return t?.defaultFee || 0;
 }
 
+function getTreatmentName(idOrName) {
+  const t = TREATMENTS.find(t => t.id === idOrName || t.name === idOrName);
+  return t ? t.name : idOrName;
+}
 const FREQUENCY_OPTIONS = ['Daily one time', 'Twice a day', 'Thrice a day'];
 const DURATION_OPTIONS = [3, 5, 7, 10, 14, 21, 30];
 const TIMING_OPTIONS = [
@@ -226,33 +215,80 @@ function VisitPageInner() {
   const [treatmentFees, setTreatmentFees] = useState(() => {
     const initial = {};
     if (prefillTreatment) {
-      initial[prefillTreatment] = getDefaultFee(prefillTreatment);
+      const key = TREATMENTS.find(t => t.id === prefillTreatment || t.name === prefillTreatment)?.id || prefillTreatment;
+      initial[key] = { amount: getDefaultFee(key), quantity: 1, source: 'manual', label: getTreatmentName(key) };
     }
     return initial;
   });
   const [consultationFee, setConsultationFee] = useState(CONSULTATION_DEFAULT);
 
   const selectedTreatments = Object.keys(treatmentFees);
-  const computedTreatmentCharges = Object.values(treatmentFees).reduce((sum, fee) => sum + (Number(fee) || 0), 0);
+  const computedTreatmentCharges = Object.values(treatmentFees).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const totalFees = consultationFee + computedTreatmentCharges + (Number(form.medicineCharges) || 0);
+
+  // --- NEW Chart -> Billing Sync Effect ---
+  useEffect(() => {
+    if (!form.toothDiagnoses) return;
+    
+    // Aggregate treatments from chart
+    const chartTreatments = {};
+    for (const td of form.toothDiagnoses) {
+      if (!td.treatment) continue;
+      const t = TREATMENTS.find(tr => tr.id === td.treatment || tr.name === td.treatment);
+      const key = t ? t.id : td.treatment;
+      
+      if (!chartTreatments[key]) {
+        chartTreatments[key] = { count: 0, label: t ? t.name : td.treatment };
+      }
+      chartTreatments[key].count += 1;
+    }
+
+    setTreatmentFees(prev => {
+      let changed = false;
+      const next = { ...prev };
+
+      // 1. Add or update auto items
+      for (const [key, { count, label }] of Object.entries(chartTreatments)) {
+        if (!next[key]) {
+          next[key] = { amount: getDefaultFee(key) * count, quantity: count, source: 'auto', label };
+          changed = true;
+        } else if (next[key].source === 'auto' && next[key].quantity !== count) {
+          next[key] = { ...next[key], quantity: count, amount: getDefaultFee(key) * count };
+          changed = true;
+        }
+      }
+
+      // 2. Remove auto items that are no longer in chart
+      for (const key of Object.keys(next)) {
+        if (next[key].source === 'auto' && !chartTreatments[key]) {
+          delete next[key];
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [form.toothDiagnoses]);
 
   function toggleTreatment(name) {
     setTreatmentFees(prev => {
-      if (prev[name] !== undefined) {
+      const key = TREATMENTS.find(t => t.id === name || t.name === name)?.id || name;
+      if (prev[key] !== undefined) {
         const next = { ...prev };
-        delete next[name];
+        delete next[key];
         return next;
       }
-      return { ...prev, [name]: getDefaultFee(name) };
+      return { ...prev, [key]: { amount: getDefaultFee(key), quantity: 1, source: 'manual', label: getTreatmentName(key) } };
     });
   }
 
   function addCustomTreatment() {
     const name = prompt('Enter treatment name:');
     if (name && name.trim()) {
+      const trimmed = name.trim();
       setTreatmentFees(prev => {
-        if (prev[name.trim()] !== undefined) return prev;
-        return { ...prev, [name.trim()]: 0 };
+        if (prev[trimmed] !== undefined) return prev;
+        return { ...prev, [trimmed]: { amount: 0, quantity: 1, source: 'manual', label: trimmed } };
       });
     }
   }
@@ -261,11 +297,18 @@ function VisitPageInner() {
     setConsultationFee(prev => Math.max(0, prev + delta));
   }
 
-  function adjustTreatmentFee(name, delta) {
-    setTreatmentFees(prev => ({
-      ...prev,
-      [name]: Math.max(0, (prev[name] || 0) + delta),
-    }));
+  function adjustTreatmentFee(key, delta) {
+    setTreatmentFees(prev => {
+      if (!prev[key]) return prev;
+      return {
+        ...prev,
+        [key]: {
+          ...prev[key],
+          amount: Math.max(0, (prev[key].amount || 0) + delta),
+          source: 'manual' // Explicitly mark as manual on user edit
+        }
+      };
+    });
   }
   const [symptomInput, setSymptomInput] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -285,6 +328,12 @@ function VisitPageInner() {
   const [templateName, setTemplateName] = useState('');
   const [showTemplateInput, setShowTemplateInput] = useState(false);
   const [showTemplateLoad, setShowTemplateLoad] = useState(false);
+
+  // Rx Templates
+  const [rxTemplates, setRxTemplates] = useState([]);
+  const [rxTemplateName, setRxTemplateName] = useState('');
+  const [showRxTemplateInput, setShowRxTemplateInput] = useState(false);
+  const [showRxTemplateLoad, setShowRxTemplateLoad] = useState(false);
 
   // Salt search
   const [saltSearch, setSaltSearch] = useState('');
@@ -642,6 +691,8 @@ function VisitPageInner() {
     try {
       const saved = localStorage.getItem(TEMPLATES_KEY);
       if (saved) setTemplates(JSON.parse(saved));
+      const savedRx = localStorage.getItem(RX_TEMPLATES_KEY);
+      if (savedRx) setRxTemplates(JSON.parse(savedRx));
     } catch {}
   }, []);
 
@@ -775,6 +826,43 @@ function VisitPageInner() {
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updated));
   }
 
+  // ── Rx Templates ──
+  function saveRxTemplate() {
+    if (!rxTemplateName.trim()) { showToast('Enter a preset name', 'error'); return; }
+    const newTemplate = {
+      id: Date.now().toString(),
+      name: rxTemplateName.trim(),
+      medicines: [...form.medicines],
+      advice: [...form.adviceSelected],
+      diet: [],
+      followUp: form.followUpDate || null
+    };
+    const updated = [...rxTemplates, newTemplate];
+    setRxTemplates(updated);
+    localStorage.setItem(RX_TEMPLATES_KEY, JSON.stringify(updated));
+    setRxTemplateName('');
+    setShowRxTemplateInput(false);
+    showToast(`Preset "${newTemplate.name}" saved`, 'success');
+  }
+
+  function loadRxTemplate(tpl) {
+    setForm(f => ({
+      ...f,
+      medicines: tpl.medicines && tpl.medicines.length > 0 ? [...tpl.medicines] : f.medicines,
+      adviceSelected: tpl.advice && tpl.advice.length > 0 ? [...tpl.advice] : f.adviceSelected,
+      followUpDate: tpl.followUp || f.followUpDate
+    }));
+    setShowRxTemplateLoad(false);
+    showToast(`Preset "${tpl.name}" loaded`, 'success');
+  }
+
+  function deleteRxTemplate(id) {
+    const updated = rxTemplates.filter(t => t.id !== id);
+    setRxTemplates(updated);
+    localStorage.setItem(RX_TEMPLATES_KEY, JSON.stringify(updated));
+    showToast('Preset deleted', 'info');
+  }
+
   // ── Salt tap-to-add ──
   function toggleSalt(salt) {
     const existing = form.medicines.findIndex(m => m.name === salt);
@@ -887,7 +975,8 @@ function VisitPageInner() {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      const primaryTreatment = selectedTreatments[0] || form.treatment || 'Walk-in';
+      const mappedTreatments = selectedTreatments.map(id => getTreatmentName(id));
+      const primaryTreatment = mappedTreatments[0] || form.treatment || 'Walk-in';
       const walkInAge = form.patientAge ? parseInt(form.patientAge, 10) : undefined;
       const paymentPayload = {
         paymentStatus,
@@ -900,7 +989,7 @@ function VisitPageInner() {
         ? {
             appointmentId,
             treatment: primaryTreatment,
-            treatments: selectedTreatments,
+            treatments: mappedTreatments,
             diagnosis: form.diagnosis.trim() || undefined,
             medicines: form.medicines.filter(m => m.name.trim()),
             consultationFee,
@@ -925,7 +1014,7 @@ function VisitPageInner() {
             patient_sex: form.patientSex || undefined,
             patient_location: form.patientLocation.trim() || undefined,
             treatment: primaryTreatment,
-            treatments: selectedTreatments,
+            treatments: mappedTreatments,
             consultationFee,
             treatmentCharges: computedTreatmentCharges,
             medicineCharges: Number(form.medicineCharges) || 0,
@@ -1947,21 +2036,20 @@ function VisitPageInner() {
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5">Tap treatments to add — select all that apply</p>
 
               <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
-                {TREATMENT_NAMES.map(name => {
-                  const isSelected = selectedTreatments.includes(name);
-                  const preset = PRESET_FEES.find(p => p.label === name);
+                {TREATMENTS.map(t => {
+                  const isSelected = selectedTreatments.includes(t.id);
                   return (
-                    <button key={name} type="button" onClick={() => toggleTreatment(name)}
+                    <button key={t.id} type="button" onClick={() => toggleTreatment(t.id)}
                       className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all active:scale-[0.98] ${
                         isSelected
                           ? 'bg-emerald-50 dark:bg-emerald-900/25 border-emerald-200 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-700'
                           : 'bg-white dark:bg-gray-800/50 border-gray-150 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-emerald-200 dark:hover:border-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
                       }`}>
-                      <span className="text-base shrink-0 w-5 text-center">{preset?.icon || '🩺'}</span>
-                      <span className="text-left truncate">{name}</span>
-                      {preset && (
+                      <span className="text-base shrink-0 w-5 text-center">🩺</span>
+                      <span className="text-left truncate">{t.name}</span>
+                      {t.defaultFee > 0 && (
                         <span className={`ml-auto text-xs font-semibold shrink-0 ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                          ₹{preset.fee}
+                          ₹{t.defaultFee}
                         </span>
                       )}
                       {isSelected && (
@@ -2028,23 +2116,31 @@ function VisitPageInner() {
                   </div>
                 ) : (
                   <div className="max-h-[200px] overflow-y-auto space-y-1.5 pr-0.5">
-                    {selectedTreatments.map(name => (
-                      <div key={name} className="flex items-center justify-between py-0.5">
-                        <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[120px]" title={name}>{name}</span>
+                    {selectedTreatments.map(key => {
+                      const item = treatmentFees[key];
+                      const displayName = item.quantity > 1 ? `${item.label} ×${item.quantity}` : item.label;
+                      return (
+                      <div key={key} className="flex items-center justify-between py-0.5">
+                        <div className="flex items-center gap-1.5 truncate max-w-[140px]">
+                          <span className="text-xs text-gray-700 dark:text-gray-300 truncate" title={displayName}>{displayName}</span>
+                          {item.source === 'auto' && (
+                            <span className="text-[9px] font-medium px-1 py-0.5 bg-blue-50 text-blue-500 rounded border border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50" title="Auto-added from chart">Auto</span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button type="button" onClick={() => adjustTreatmentFee(name, -TREATMENT_STEP)} disabled={(treatmentFees[name] || 0) <= 0}
+                          <button type="button" onClick={() => adjustTreatmentFee(key, -TREATMENT_STEP)} disabled={(item.amount || 0) <= 0}
                             className="w-5 h-5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-200 transition-all flex items-center justify-center text-xs font-medium active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed shrink-0">−</button>
                           <div className="relative">
                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">₹</span>
-                            <input type="number" min="0" value={treatmentFees[name] || 0}
-                              onChange={e => adjustTreatmentFee(name, (Number(e.target.value) || 0) - (treatmentFees[name] || 0))}
+                            <input type="number" min="0" value={item.amount || 0}
+                              onChange={e => adjustTreatmentFee(key, (Number(e.target.value) || 0) - (item.amount || 0))}
                               className="w-24 pl-5 pr-2 py-1.5 text-sm text-center font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-800 focus:border-emerald-400 dark:focus:border-emerald-500 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                           </div>
-                          <button type="button" onClick={() => adjustTreatmentFee(name, TREATMENT_STEP)}
+                          <button type="button" onClick={() => adjustTreatmentFee(key, TREATMENT_STEP)}
                             className="w-5 h-5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-200 transition-all flex items-center justify-center text-xs font-medium active:scale-90 shrink-0">+</button>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
 
@@ -2514,6 +2610,49 @@ function VisitPageInner() {
               <div className="p-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/30"><Pill className="w-4 h-4 text-violet-500 dark:text-violet-400" /></div>
               <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Prescribed Medicines</h2>
               <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">Tap a salt to add</span>
+            </div>
+
+            {/* Rx Presets */}
+            <div className="flex flex-wrap items-center gap-2 mb-4 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-1.5 px-2 text-xs font-medium text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">
+                <FileText className="w-3.5 h-3.5" /> Presets
+              </div>
+              
+              <div className="flex flex-wrap gap-1.5 flex-1 items-center">
+                {rxTemplates.map(tpl => (
+                  <div key={tpl.id} className="relative group flex items-center">
+                    <button type="button" onClick={() => loadRxTemplate(tpl)}
+                      className="px-2.5 py-1 text-xs font-medium bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-violet-700 dark:text-violet-300 rounded hover:bg-violet-50 dark:hover:bg-violet-900/30 transition-all rounded-r-none border-r-0">
+                      {tpl.name}
+                    </button>
+                    <button type="button" onClick={() => deleteRxTemplate(tpl.id)}
+                      className="px-1.5 py-1 text-xs bg-white dark:bg-gray-800 border border-violet-200 dark:border-violet-800/50 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all rounded-l-none border-l-0 rounded">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {!showRxTemplateInput ? (
+                <button type="button" onClick={() => setShowRxTemplateInput(true)} disabled={form.medicines.length === 0 && form.adviceSelected.length === 0}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/40 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Plus className="w-3.5 h-3.5" /> Save Current
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <input type="text" value={rxTemplateName} onChange={e => setRxTemplateName(e.target.value)}
+                    placeholder="Preset name..." autoFocus
+                    className="w-32 px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-violet-300 dark:border-violet-700 rounded focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800" />
+                  <button type="button" onClick={saveRxTemplate}
+                    className="px-2 py-1 text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 rounded transition-colors">
+                    Save
+                  </button>
+                  <button type="button" onClick={() => setShowRxTemplateInput(false)}
+                    className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Salt search */}

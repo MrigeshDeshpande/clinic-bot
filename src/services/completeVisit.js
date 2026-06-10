@@ -123,48 +123,56 @@ export async function completeVisit(sql, body) {
     ? `WHERE id = $${p} AND status = 'confirmed'`
     : `WHERE id = $${p} AND status NOT IN ('cancelled', 'no_show', 'superseded')`;
 
-  const txQueries = [];
-  txQueries.push(sql.query(
-    `UPDATE appointments SET ${setClauses.join(', ')} ${whereClause} RETURNING id, patient_id`,
-    params
-  ));
+  let updateResult;
 
-  if (isCompletion) {
-    const paidAmt = paidAmount !== undefined ? (parseInt(paidAmount, 10) || 0) : 0;
-    if (paidAmt > 0) {
-      txQueries.push(sql`
-        WITH inserted AS (
-          INSERT INTO payments (appointment_id, patient_id, amount, direction, kind, method, notes, recorded_by)
-          SELECT ${appointmentId}, a.patient_id, ${paidAmt}, 'credit', 'payment', ${paymentMethod || null}, NULL, 'reception'
-          FROM appointments a
-          WHERE a.id = ${appointmentId} AND a.status = 'completed'
-          ON CONFLICT (idempotency_key) DO NOTHING
-          RETURNING *
-        ),
-        net AS (
-          SELECT COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0) AS amount
-          FROM payments WHERE appointment_id = ${appointmentId}
-        ),
-        sync AS (
-          UPDATE appointments a SET
-            paid_amount = net.amount,
-            payment_status = CASE
-              WHEN net.amount >= a.consultation_fee + a.treatment_charges + a.medicine_charges THEN 'paid'
-              WHEN net.amount > 0 THEN 'partial' ELSE 'pending'
-            END,
-            paid_at = CASE WHEN net.amount > 0 THEN COALESCE(a.paid_at, NOW()) ELSE NULL END,
-            payment_method = ${paymentMethod || null}
-          FROM net
-          WHERE a.id = ${appointmentId}
-          RETURNING a.id
-        )
-        SELECT (SELECT row_to_json(inserted.*) FROM inserted) AS payment
-      `);
-    }
+  if (isCompletion && paidAmount !== undefined && (parseInt(paidAmount, 10) || 0) > 0) {
+    const paidAmt = parseInt(paidAmount, 10) || 0;
+    const paymentMethodParam = paymentMethod || null;
+    
+    // We add two more parameters for the CTE
+    const amtIndex = p + 1;
+    const methodIndex = p + 2;
+    params.push(paidAmt, paymentMethodParam);
+
+    const combinedQuery = `
+      WITH upd AS (
+        UPDATE appointments SET ${setClauses.join(', ')} ${whereClause}
+        RETURNING id, patient_id, consultation_fee, treatment_charges, medicine_charges, paid_amount, payment_status, paid_at, payment_method
+      ),
+      inserted AS (
+        INSERT INTO payments (appointment_id, patient_id, amount, direction, kind, method, notes, recorded_by)
+        SELECT upd.id, upd.patient_id, $${amtIndex}, 'credit', 'payment', $${methodIndex}, NULL, 'reception'
+        FROM upd
+        ON CONFLICT (idempotency_key) DO NOTHING
+        RETURNING *
+      ),
+      net AS (
+        SELECT COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0) AS amount
+        FROM payments WHERE appointment_id = $${p}
+      ),
+      sync AS (
+        UPDATE appointments a SET
+          paid_amount = net.amount,
+          payment_status = CASE
+            WHEN net.amount >= a.consultation_fee + a.treatment_charges + a.medicine_charges THEN 'paid'
+            WHEN net.amount > 0 THEN 'partial' ELSE 'pending'
+          END,
+          paid_at = CASE WHEN net.amount > 0 THEN COALESCE(a.paid_at, NOW()) ELSE NULL END,
+          payment_method = $${methodIndex}
+        FROM net
+        WHERE a.id = $${p}
+        RETURNING a.id
+      )
+      SELECT (SELECT row_to_json(inserted.*) FROM inserted) AS payment, (SELECT row_to_json(upd.*) FROM upd) AS upd
+    `;
+    
+    const result = await sql.query(combinedQuery, params);
+    updateResult = result;
+  } else {
+    // Standard update without payment logic
+    const query = `UPDATE appointments SET ${setClauses.join(', ')} ${whereClause} RETURNING id, patient_id`;
+    updateResult = await sql.query(query, params);
   }
-
-  const results = await sql.transaction(txQueries);
-  const updateResult = results[0];
 
   if (updateResult.rowCount === 0) {
     const errorMsg = isCompletion
