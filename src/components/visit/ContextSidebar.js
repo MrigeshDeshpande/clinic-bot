@@ -4,17 +4,6 @@ import { ChevronDown, ChevronRight, Clock, Activity } from 'lucide-react';
 
 const MEDICAL_SECTIONS = [
   {
-    id: 'demographics',
-    title: 'Demographics',
-    fields: [
-      { label: 'Address', key: 'address', type: 'text' },
-      { label: 'Occupation', key: 'occupation', type: 'text' },
-      { label: 'Blood Group', key: 'bloodGroup', type: 'text' },
-      { label: 'Weight (kg)', key: 'weight', type: 'text' },
-      { label: 'BP', key: 'bp', type: 'text' },
-    ],
-  },
-  {
     id: 'medical',
     title: 'Medical',
     fields: [
@@ -224,6 +213,7 @@ function MedicalHistoryPanel({ medicalHistory, onMedicalHistorySave }) {
 export default function ContextSidebar({
   patientProfile,
   medicalHistory,
+  patientVisits,
   form, setForm,
   submitting, isEdit,
   visitSaved, onCheckout,
@@ -234,6 +224,12 @@ export default function ContextSidebar({
   onMedicalHistorySave,
 }) {
   const mh = medicalHistory || {};
+
+  // Last visit date
+  const lastVisit = (patientVisits || []).length > 0
+    ? patientVisits.reduce((latest, v) => v.date > latest ? v.date : latest, '')
+    : null;
+  const visitCount = (patientVisits || []).length;
 
   const alerts = [];
   if (mh.allergies) alerts.push({ label: `Allergy: ${mh.allergies}`, severity: severityOf('allergy') });
@@ -256,6 +252,10 @@ export default function ContextSidebar({
               {patientProfile?.age ? `${patientProfile.age} ${(patientProfile?.sex || '')?.[0]?.toUpperCase() || ''}` : ''}
               {patientProfile?.phone ? ` · ${patientProfile.phone}` : ''}
             </p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+              {lastVisit ? `Last Visit: ${lastVisit}` : 'No prior visits'}
+              {visitCount > 0 ? ` · Visits: ${visitCount}` : ''}
+            </p>
           </div>
         </div>
 
@@ -270,28 +270,28 @@ export default function ContextSidebar({
       </div>
 
       {/* ── PROJECTED BILL ── */}
-      <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+      <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">Current Bill</span>
-          <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">₹{totalFees.toLocaleString('en-IN')}</span>
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Projected Bill</span>
+          <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">₹{totalFees.toLocaleString('en-IN')}</span>
         </div>
         {selectedTreatments.length > 0 && (
           <div className="space-y-0.5">
             {selectedTreatments.map(key => {
               const item = treatmentFees[key];
               return (
-                <div key={key} className="flex items-center gap-2 text-xs">
+                <div key={key} className="flex items-center gap-2 text-[11px]">
                   <span className="flex-1 text-gray-600 dark:text-gray-400 truncate">{item.label}{item.quantity > 1 ? ` ×${item.quantity}` : ''}</span>
                   <span className="font-medium text-gray-800 dark:text-gray-200">₹{(item.amount || 0).toLocaleString('en-IN')}</span>
                 </div>
               );
             })}
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-2 text-[11px]">
               <span className="flex-1 text-gray-400">Consultation</span>
               <span className="font-medium text-gray-800 dark:text-gray-200">₹{consultationFee.toLocaleString('en-IN')}</span>
             </div>
             {medicinesCount > 0 && (
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-[11px]">
                 <span className="flex-1 text-gray-400">Medicines ({medicinesCount})</span>
                 <span className="text-gray-400">—</span>
               </div>
@@ -339,10 +339,10 @@ export default function ContextSidebar({
           ) : visitSaved ? (
             <span className="flex items-center justify-center gap-2">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Clinical Record Saved
+              Visit Saved
             </span>
           ) : (
-            <span>{isEdit ? 'Save Changes' : 'Save Clinical Record'}</span>
+            <span>{isEdit ? 'Save Changes' : 'Complete Visit'}</span>
           )}
         </button>
 
