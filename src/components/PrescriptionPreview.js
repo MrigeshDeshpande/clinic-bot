@@ -45,8 +45,9 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
   const pSex = patientProfile?.sex || form.patientSex || '';
   const ageSex = [pAge, pSex].filter(Boolean).join(' / ') || '__________';
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const getFeeAmount = (v) => typeof v === 'number' ? v : (v?.amount ?? 0);
   const selectedTreatments = Object.keys(treatmentFees || {});
-  const totalFees = (consultationFee || 0) + Object.values(treatmentFees || {}).reduce((s, v) => s + (Number(v) || 0), 0) + (Number(form.medicineCharges) || 0);
+  const totalFees = (consultationFee || 0) + Object.values(treatmentFees || {}).reduce((s, v) => s + getFeeAmount(v), 0) + (Number(form.medicineCharges) || 0);
   const scaledW = A4_W * scale;
   const scaledH = A4_H * scale;
 
@@ -211,12 +212,16 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
                       <span style={{ fontWeight: 500 }}>Rs. {consultationFee.toLocaleString('en-IN')}</span>
                     </div>
                   )}
-                  {selectedTreatments.map(t => (
-                    <div key={t} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                      <span style={{ color: '#4b5563' }}>{t}</span>
-                      <span style={{ fontWeight: 500 }}>Rs. {(treatmentFees[t] || 0).toLocaleString('en-IN')}</span>
-                    </div>
-                  ))}
+                  {selectedTreatments.map(t => {
+                    const fee = treatmentFees[t];
+                    const amount = getFeeAmount(fee);
+                    return (
+                      <div key={t} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#4b5563' }}>{t}</span>
+                        <span style={{ fontWeight: 500 }}>Rs. {amount.toLocaleString('en-IN')}</span>
+                      </div>
+                    );
+                  })}
                   {Number(form.medicineCharges) > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                       <span style={{ color: '#4b5563' }}>Medicine Charges</span>

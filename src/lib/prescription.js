@@ -422,11 +422,13 @@ export async function generatePrescription({ patient, visit, appointment }) {
 
   // ─── FEES ───
   const tf = visit?.treatmentFees || {};
+  const getAmount = (v) => typeof v === 'number' ? v : (v?.amount ?? 0);
+  const getLabel = (v, fallback) => typeof v === 'object' && v ? (v.label || v.treatment || fallback) : fallback;
   const feeItems = [
     { label: 'Consultation Fee', amount: Number(visit?.consultationFee) || 0 },
-    ...Object.entries(tf).map(([, entry]) => ({
-      label: entry.label || entry.treatment,
-      amount: Number(entry.amount) || 0,
+    ...Object.entries(tf).map(([key, entry]) => ({
+      label: getLabel(entry, key),
+      amount: getAmount(entry),
     })),
     { label: 'Medicine Charges', amount: Number(visit?.medicineCharges) || 0 },
   ];

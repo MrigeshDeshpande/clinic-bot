@@ -59,6 +59,19 @@ function getTreatmentName(idOrName) {
   const t = TREATMENTS.find(t => t.id === idOrName || t.name === idOrName);
   return t ? t.name : idOrName;
 }
+
+function normalizeTreatmentFee(value, key) {
+  if (typeof value === 'number') {
+    return { amount: value, quantity: 1, source: 'manual', label: getTreatmentName(key) };
+  }
+  return {
+    amount: value?.amount ?? 0,
+    quantity: value?.quantity ?? 1,
+    source: value?.source ?? 'manual',
+    label: value?.label ?? getTreatmentName(key),
+  };
+}
+
 const FREQUENCY_OPTIONS = ['Daily one time', 'Twice a day', 'Thrice a day'];
 const DURATION_OPTIONS = [3, 5, 7, 10, 14, 21, 30];
 const TIMING_OPTIONS = [
@@ -418,9 +431,10 @@ function VisitPageInner() {
           const defaultTotal = savedTreatments.reduce((sum, n) => sum + getDefaultFee(n), 0);
           savedTreatments.forEach(name => {
             const defaultFee = getDefaultFee(name);
-            fees[name] = savedTotal > 0 && defaultTotal > 0
+            const raw = savedTotal > 0 && defaultTotal > 0
               ? Math.round(defaultFee * savedTotal / defaultTotal)
               : defaultFee;
+            fees[name] = normalizeTreatmentFee(raw, name);
           });
           setTreatmentFees(fees);
           if (a.consultation_fee) {
@@ -634,7 +648,9 @@ function VisitPageInner() {
       const draft = JSON.parse(saved);
       if (draft.appointmentId !== appointmentId) return;
       setForm(draft.form);
-      setTreatmentFees(draft.treatmentFees || {});
+      const restoredFees = {};
+      Object.entries(draft.treatmentFees || {}).forEach(([k, v]) => { restoredFees[k] = normalizeTreatmentFee(v, k); });
+      setTreatmentFees(restoredFees);
       if (draft.consultationFee) setConsultationFee(draft.consultationFee);
       if (draft.medicalHistory) setMedicalHistory(draft.medicalHistory);
       if (draft.paymentStatus) setPaymentStatus(draft.paymentStatus);
@@ -681,7 +697,7 @@ function VisitPageInner() {
               if (savedTreatments.length > 0) {
                 const fees = {};
                 savedTreatments.forEach(name => {
-                  fees[name] = getDefaultFee(name);
+                  fees[name] = normalizeTreatmentFee(getDefaultFee(name), name);
                 });
                 setTreatmentFees(fees);
               }
@@ -801,7 +817,7 @@ function VisitPageInner() {
               if (savedTreatments.length > 0) {
                 const fees = {};
                 savedTreatments.forEach(name => {
-                  fees[name] = getDefaultFee(name);
+                  fees[name] = normalizeTreatmentFee(getDefaultFee(name), name);
                 });
                 setTreatmentFees(fees);
               }
@@ -876,7 +892,9 @@ function VisitPageInner() {
   }
 
   function loadTemplate(tpl) {
-    setTreatmentFees({ ...tpl.treatmentFees });
+    const normalized = {};
+    Object.entries(tpl.treatmentFees || {}).forEach(([k, v]) => { normalized[k] = normalizeTreatmentFee(v, k); });
+    setTreatmentFees(normalized);
     if (tpl.consultationFee) setConsultationFee(tpl.consultationFee);
     setShowTemplateLoad(false);
     showToast(`Template "${tpl.name}" loaded`, 'success');
