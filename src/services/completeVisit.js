@@ -2,7 +2,7 @@ import { toPgTextArray } from '@/lib/pgArray';
 
 export async function completeVisit(sql, body) {
   const {
-    appointmentId, treatment, treatments, tooth_diagnoses, diagnosis, medicines,
+    appointmentId, treatment, treatments, treatmentFees, tooth_diagnoses, diagnosis, medicines,
     consultationFee, treatmentCharges, medicineCharges, notes,
     followUpDate, followUpInstructions, advice_selected, diagnosis_selected,
     status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount,
@@ -30,6 +30,10 @@ export async function completeVisit(sql, body) {
   if (medicines !== undefined) {
     setClauses.push(`medicines = $${p++}`);
     params.push(JSON.stringify(medicines));
+  }
+  if (treatmentFees !== undefined) {
+    setClauses.push(`treatment_fees = $${p++}`);
+    params.push(JSON.stringify(treatmentFees));
   }
   if (consultationFee !== undefined) {
     setClauses.push(`consultation_fee = $${p++}`);

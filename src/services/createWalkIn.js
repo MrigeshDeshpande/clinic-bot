@@ -4,7 +4,7 @@ import { recordPayment } from './recordPayment';
 export async function createWalkIn(sql, body) {
   const {
     patient_name, patient_phone, patient_age, patient_sex, patient_location,
-    treatment, treatments, diagnosis, medicines,
+    treatment, treatments, treatmentFees, diagnosis, medicines,
     consultationFee, treatmentCharges, medicineCharges, notes,
     followUpDate, followUpInstructions, advice_selected, diagnosis_selected,
     tooth_diagnoses, paymentStatus, paymentMethod, paidAmount,
@@ -67,6 +67,7 @@ export async function createWalkIn(sql, body) {
       logical_id, version, wa_id, patient_name, patient_phone, patient_id,
       date, time, treatment, treatments, status,
       consultation_fee, treatment_charges, medicine_charges,
+      treatment_fees,
       diagnosis, medicines, notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected,
       tooth_diagnoses,
       arrival_status,
@@ -76,6 +77,7 @@ export async function createWalkIn(sql, body) {
       gen_random_uuid(), 1, ${patient_phone || null}, ${patient_name}, ${patient_phone || null}, ${patientId},
       ${today}, NULL, ${treatment || 'Walk-in'}, ${JSON.stringify(treatments || [])}, 'completed',
       ${consFee}, ${treatFee}, ${medFee},
+      ${JSON.stringify(treatmentFees || {})},
       ${diagnosis || ''}, ${JSON.stringify(medicines || [])}, ${notes || ''},
       ${followUpDate || null}, ${followUpInstructions || ''},
       ${advice_selected || []}, ${diagnosis_selected || []},

@@ -421,10 +421,14 @@ export async function generatePrescription({ patient, visit, appointment }) {
   }
 
   // ─── FEES ───
+  const tf = visit?.treatmentFees || {};
   const feeItems = [
-    { label: 'Consultation Fee', amount: visit?.consultationFee || 0 },
-    { label: 'Treatment Charges', amount: visit?.treatmentCharges || 0 },
-    { label: 'Medicine Charges', amount: visit?.medicineCharges || 0 },
+    { label: 'Consultation Fee', amount: Number(visit?.consultationFee) || 0 },
+    ...Object.entries(tf).map(([, entry]) => ({
+      label: entry.label || entry.treatment,
+      amount: Number(entry.amount) || 0,
+    })),
+    { label: 'Medicine Charges', amount: Number(visit?.medicineCharges) || 0 },
   ];
   const hasFees = feeItems.some(f => f.amount > 0);
   if (hasFees) {
@@ -439,7 +443,7 @@ export async function generatePrescription({ patient, visit, appointment }) {
         y += 16;
       }
     }
-    const total = (visit?.consultationFee || 0) + (visit?.treatmentCharges || 0) + (visit?.medicineCharges || 0);
+    const total = feeItems.reduce((s, f) => s + f.amount, 0);
     if (total > 0) {
       doc.moveTo(LM, y).lineTo(LM + 450, y).stroke('#cccccc');
       y += 8;

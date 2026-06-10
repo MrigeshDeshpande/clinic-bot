@@ -20,6 +20,7 @@ export async function POST(req, { params }) {
              a.patient_id, a.date, a.treatment, a.treatments,
              a.consultation_fee, a.treatment_charges, a.medicine_charges,
              a.diagnosis, a.medicines, a.notes, a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
+             a.treatment_fees,
              a.follow_up_date, a.follow_up_instructions,
              a.prescription_key,
              p.name AS p_name, p.age AS p_age, p.sex AS p_sex
@@ -55,6 +56,7 @@ export async function POST(req, { params }) {
     const visit = {
       treatment: a.treatment,
       treatments: Array.isArray(a.treatments) ? a.treatments : [],
+      treatmentFees: (typeof a.treatment_fees === 'object' && a.treatment_fees !== null) ? a.treatment_fees : {},
       tooth_diagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
       diagnosis: a.diagnosis,
       medicines: Array.isArray(a.medicines) ? a.medicines : [],

@@ -452,6 +452,12 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS tooth_diagnoses JSONB DEFAULT '[]';
     `;
 
+    // treatment_fees — per-treatment fee map (JSONB object keyed by treatment id)
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS treatment_fees JSONB DEFAULT '{}';
+    `;
+
     // due_reminder_log — history of due reminder triggers (manual + cron)
     await db`
       CREATE TABLE IF NOT EXISTS due_reminder_log (
