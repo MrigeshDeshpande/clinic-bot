@@ -154,6 +154,7 @@ function GlobalSearch() {
 
 function SidebarContent({ pathname, onNavClick }) {
   const router = useRouter();
+  const { sidebarCollapsed: collapsed, setSidebarCollapsed } = useContext(SidebarContext);
 
   async function handleLogout() {
     await fetch('/api/dashboard/logout', { method: 'POST' });
@@ -163,31 +164,38 @@ function SidebarContent({ pathname, onNavClick }) {
   return (
     <>
       {/* Logo */}
-      <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800">
-        <Link href="/dashboard" onClick={onNavClick} className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
-            <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-9 h-9 rounded-lg object-contain" />
+      <div className={`border-b border-gray-100 dark:border-gray-800 ${collapsed ? 'flex justify-center py-3' : 'p-4 md:p-6'}`}>
+        <Link href="/dashboard" onClick={onNavClick} className={`flex items-center ${collapsed ? '' : 'gap-3'}`}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+            <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-7 h-7 rounded-lg object-contain" />
           </div>
-          <div>
-            <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
-          </div>
+          {!collapsed && (
+            <div>
+              <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
+            </div>
+          )}
         </Link>
       </div>
 
       {/* Search */}
-      <div className="px-4 py-3">
-        <GlobalSearch />
-      </div>
+      {!collapsed && (
+        <div className="px-4 py-3">
+          <GlobalSearch />
+        </div>
+      )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 pb-4 overflow-y-auto">
+      <nav className={`flex-1 overflow-y-auto ${collapsed ? 'px-1.5 py-3 space-y-5' : 'px-3 pb-4'}`}>
         {NAV_GROUPS.map((group, gi) => (
-          <div key={group.label} className={gi > 0 ? 'mt-4' : ''}>
-            <p className="px-3.5 pb-0.5 text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-500 font-semibold select-none">
-              {group.label}
-            </p>
-            <div className="space-y-0.5">
+          <div key={group.label}>
+            {!collapsed && gi > 0 && <div className="mt-4" />}
+            {!collapsed && (
+              <p className="px-3.5 pb-1 text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-semibold select-none">
+                {group.label}
+              </p>
+            )}
+            <div className={`${collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0.5'}`}>
               {group.items.map(item => {
                 const Icon = item.icon;
                 const active = pathname === item.href;
@@ -196,14 +204,25 @@ function SidebarContent({ pathname, onNavClick }) {
                     key={item.href}
                     href={item.href}
                     onClick={onNavClick}
-                    className={`flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-150 relative ${
+                    title={collapsed ? item.label : undefined}
+                    className={`relative flex items-center transition-all duration-200 ${
+                      collapsed
+                        ? 'w-10 h-10 justify-center rounded-xl'
+                        : 'gap-3 px-3.5 py-2 rounded-xl text-sm font-medium'
+                    } ${
                       active
-                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
+                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
-                    {item.label}
+                    {active && !collapsed && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-500 rounded-full" />
+                    )}
+                    {active && collapsed && (
+                      <span className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-500 rounded-full" />
+                    )}
+                    <Icon className={`${collapsed ? 'w-5 h-5' : 'w-4 h-4'} ${active ? 'text-blue-600 dark:text-blue-400' : ''}`} />
+                    {!collapsed && item.label}
                   </Link>
                 );
               })}
@@ -213,23 +232,40 @@ function SidebarContent({ pathname, onNavClick }) {
       </nav>
 
       {/* Notifications */}
-      <div className="px-3">
-        <NotificationPanel />
+      <div className={collapsed ? 'border-t border-gray-100 dark:border-gray-800 flex justify-center py-2' : 'px-3'}>
+        <NotificationPanel compact={collapsed} />
       </div>
 
-      {/* Logout + Theme */}
-      <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">
-        <ThemeToggle />
+      {/* Bottom section */}
+      <div className={`border-t border-gray-100 dark:border-gray-800 ${collapsed ? 'py-2 flex flex-col items-center gap-1' : 'p-4 space-y-1'}`}>
+        <ThemeToggle compact={collapsed} />
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all w-full group"
+          title={collapsed ? 'Logout' : undefined}
+          className={`flex items-center rounded-xl transition-all ${
+            collapsed
+              ? 'w-10 h-10 justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+              : 'gap-3 px-3.5 py-2.5 w-full text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+          }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
-          Logout
+          {!collapsed && 'Logout'}
+        </button>
+        <button
+          onClick={() => setSidebarCollapsed(!collapsed)}
+          className={`flex items-center rounded-xl transition-all ${
+            collapsed
+              ? 'w-10 h-10 justify-center text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
+              : 'gap-2 px-3.5 py-2.5 w-full text-sm font-medium text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
+          }`}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <svg className={`w-4 h-4 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          {!collapsed && <span className="text-xs">Collapse</span>}
         </button>
       </div>
     </>
@@ -367,27 +403,14 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Desktop Sidebar */}
-          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-56'}`}>
-            <div className="min-w-56 flex-1 flex flex-col">
+          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-16 overflow-hidden' : 'w-56'}`}>
+            <div className="flex-1 flex flex-col">
               <SidebarContent pathname={pathname} />
             </div>
           </aside>
 
-          {/* Sidebar expand tab (visible when collapsed) */}
-          {sidebarCollapsed && (
-            <button
-              onClick={() => setSidebarCollapsed(false)}
-              className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-20 w-5 h-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-r-lg items-center justify-center shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-400 dark:text-gray-500"
-              title="Expand sidebar"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-
           {/* Main Content */}
-          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-56'}`}>
+          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-56'}`}>
             <div className="animate-fade-in mx-auto">
               {children}
             </div>
