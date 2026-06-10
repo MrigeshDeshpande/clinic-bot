@@ -147,6 +147,9 @@
   --text-sm: 0.925rem;
   --text-base: 1.05rem;
 
+  /* Grid utilities for 16-column tooth chart */
+  --grid-template-columns-16: repeat(16, minmax(0, 1fr));
+
   /* Map standard colors dynamically to the active variables */
   --color-gray-50: var(--gray-50);
   --color-gray-100: var(--gray-100);

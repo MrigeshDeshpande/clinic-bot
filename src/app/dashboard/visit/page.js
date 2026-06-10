@@ -1601,20 +1601,21 @@ function VisitPageInner() {
                 );
               })()}
 
-              {/* ── Chief Complaint (auto-expand) ── */}
+              {/* ═══ Chief Complaint ═══ */}
               {patientProfile && (
-                <div>
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Chief Complaint</h3>
                   <textarea value={form.chiefComplaint} onChange={e => setForm(f => ({ ...f, chiefComplaint: e.target.value }))}
-                    rows={Math.min(4, Math.max(1, (form.chiefComplaint || '').split('\n').length))}
+                    rows={Math.min(4, Math.max(2, (form.chiefComplaint || '').split('\n').length))}
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
                     placeholder="Chief Complaint — e.g. Pt complains of pain in upper left back tooth region, since 4 days." />
                 </div>
               )}
 
-              {/* ── Examination (shared heading, two textareas) ── */}
+              {/* ═══ Examination ═══ */}
               {patientProfile && (
-                <div className="space-y-3">
-                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400">Examination</h3>
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6 space-y-3">
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Examination</h3>
                   <textarea value={form.generalExamination} onChange={e => setForm(f => ({ ...f, generalExamination: e.target.value }))}
                     rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
                     placeholder="General Examination — e.g. Extraoral: no swelling, TMJ normal. Intraoral: poor OH, generalized calculus..." />
@@ -1624,51 +1625,57 @@ function VisitPageInner() {
                 </div>
               )}
 
-              {/* ── Tooth Chart (hero) ── */}
-              <ToothChartCard toothChartProps={toothChartProps} />
+              {/* ═══ Tooth Chart ═══ */}
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                <ToothChartCard toothChartProps={toothChartProps} />
+              </div>
 
-              {/* ── Intra-Oral Findings (derived) ── */}
+              {/* ═══ Intra-Oral Findings ═══ */}
               {patientProfile && (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
-                  <IntraOralFindings
-                    toothDiagnoses={form.toothDiagnoses}
-                    notes={form.notes}
-                    onNotesChange={(v) => setForm(f => ({ ...f, notes: v }))}
-                    onToothSelect={(t) => { setSelectedTooth(t); setTimeout(() => document.getElementById('per-tooth-editor')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
-                  />
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
+                    <IntraOralFindings
+                      toothDiagnoses={form.toothDiagnoses}
+                      notes={form.notes}
+                      onNotesChange={(v) => setForm(f => ({ ...f, notes: v }))}
+                      onToothSelect={(t) => { setSelectedTooth(t); setTimeout(() => document.getElementById('per-tooth-editor')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
+                    />
+                  </div>
                 </div>
               )}
 
-              {/* ── Provisional Diagnosis ── */}
+              {/* ═══ Provisional Diagnosis ═══ */}
               {patientProfile && (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
-                  <ProvisionalDiagnosisCard
-                    diagnosisOptions={diagnosisOptions}
-                    selectedDiagnoses={form.diagnosisSelected}
-                    diagnosisNotes={form.diagnosis}
-                    onToggleDiagnosis={(item) => {
-                      setForm(f => ({
-                        ...f,
-                        diagnosisSelected: f.diagnosisSelected.includes(item)
-                          ? f.diagnosisSelected.filter(d => d !== item)
-                          : [...f.diagnosisSelected, item],
-                      }));
-                    }}
-                    onNotesChange={(v) => setForm(f => ({ ...f, diagnosis: v }))}
-                  />
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4">
+                    <ProvisionalDiagnosisCard
+                      diagnosisOptions={diagnosisOptions}
+                      selectedDiagnoses={form.diagnosisSelected}
+                      diagnosisNotes={form.diagnosis}
+                      onToggleDiagnosis={(item) => {
+                        setForm(f => ({
+                          ...f,
+                          diagnosisSelected: f.diagnosisSelected.includes(item)
+                            ? f.diagnosisSelected.filter(d => d !== item)
+                            : [...f.diagnosisSelected, item],
+                        }));
+                      }}
+                      onNotesChange={(v) => setForm(f => ({ ...f, diagnosis: v }))}
+                    />
+                  </div>
                 </div>
               )}
 
-              {/* ── Planned Procedures (derived, grouped) ── */}
+              {/* ═══ Planned Procedures ═══ */}
               {patientProfile && (
-                <div>
-                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Planned Procedures</h3>
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">Planned Procedures</h3>
                   {(() => {
                     const perTooth = form.toothDiagnoses.filter(e => e.treatment);
                     const toothTreatmentIds = new Set(perTooth.map(e => e.treatment));
                     const general = selectedTreatments.filter(t => !toothTreatmentIds.has(t));
                     if (perTooth.length === 0 && general.length === 0) {
-                      return <p className="text-xs text-gray-400 dark:text-gray-500 italic">No procedures planned yet.</p>;
+                      return <p className="text-sm text-gray-400 dark:text-gray-500 italic">No procedures planned yet.</p>;
                     }
                     const groups = {};
                     for (const e of perTooth) {
@@ -1681,14 +1688,14 @@ function VisitPageInner() {
                       groups[name].push('General');
                     }
                     return (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {Object.entries(groups).map(([treatment, items]) => (
                           <div key={treatment}>
-                            <p className="text-xs font-semibold text-gray-800 dark:text-gray-200">{treatment}</p>
-                            <div className="mt-0.5 space-y-0.5 ml-2">
+                            <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{treatment}</p>
+                            <div className="mt-1 space-y-1 ml-4">
                               {items.map((item, i) => (
-                                <p key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                <p key={i} className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
                                   {item}
                                 </p>
                               ))}
@@ -1701,16 +1708,22 @@ function VisitPageInner() {
                 </div>
               )}
 
-              {/* ── Prescription ── */}
-              <PrescriptionCard prescriptionProps={prescriptionProps} />
+              {/* ═══ Prescription ═══ */}
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                <PrescriptionCard prescriptionProps={prescriptionProps} />
+              </div>
 
-              {/* ── Advice — inline pills, no card chrome ── */}
-              <AdviceCard adviceProps={adviceProps} />
+              {/* ═══ Advice ═══ */}
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                <AdviceCard adviceProps={adviceProps} />
+              </div>
 
-              {/* ── Media (collapsed by default) ── */}
-              <MediaCard mediaProps={mediaProps} />
+              {/* ═══ Attachments ═══ */}
+              <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
+                <MediaCard mediaProps={mediaProps} />
+              </div>
 
-              {/* ── Visit Summary (read-only) ── */}
+              {/* ═══ Visit Summary ═══ */}
               {patientProfile && (
                 <VisitSummary
                   form={form}
@@ -1739,6 +1752,26 @@ function VisitPageInner() {
                 consultationFee={consultationFee}
                 medicines={form.medicines}
                 onEditPatient={() => setShowEditDrawer(true)}
+                onMedicalHistorySave={async (payload) => {
+                  const patientId = patientProfile?.id || appointmentMeta?.patient_id;
+                  if (!patientId) { showToast('No patient selected', 'error'); return; }
+                  try {
+                    const res = await fetch(`/api/dashboard/patients/${patientId}/medical-history`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      setMedicalHistory(prev => ({ ...prev, ...payload }));
+                      showToast('Saved', 'success');
+                    } else {
+                      showToast('Failed to save', 'error');
+                    }
+                  } catch {
+                    showToast('Network error', 'error');
+                  }
+                }}
               />
             </div>
           </div>

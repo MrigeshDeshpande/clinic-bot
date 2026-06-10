@@ -6,18 +6,7 @@ function getTreatmentName(idOrName) {
   return t ? t.name : idOrName;
 }
 
-function SummaryBlock({ label, children }) {
-  if (!children || (Array.isArray(children) && children.length === 0)) return null;
-  return (
-    <div>
-      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-0.5">{label}</p>
-      <div className="text-xs text-gray-800 dark:text-gray-200 leading-relaxed">{children}</div>
-    </div>
-  );
-}
-
 export default function VisitSummary({ form, toothDiagnoses = [], selectedTreatments = [], treatmentFees = {}, consultationFee, medicines = [] }) {
-  // Derived intra-oral findings
   const findings = {};
   for (const entry of toothDiagnoses) {
     for (const d of (entry.diagnoses || [])) {
@@ -26,10 +15,7 @@ export default function VisitSummary({ form, toothDiagnoses = [], selectedTreatm
     }
   }
 
-  // Derived planned procedures (per-tooth)
   const perToothProcs = toothDiagnoses.filter(e => e.treatment).map(e => ({ tooth: e.tooth, treatment: e.treatment }));
-
-  // Derived planned procedures (general — treatments not tied to any tooth)
   const toothTreatmentIds = new Set(toothDiagnoses.map(e => e.treatment).filter(Boolean));
   const generalProcs = selectedTreatments.filter(t => !toothTreatmentIds.has(t));
 
@@ -37,88 +23,93 @@ export default function VisitSummary({ form, toothDiagnoses = [], selectedTreatm
 
   if (!hasAny) return null;
 
+  const groups = {};
+  for (const p of perToothProcs) {
+    if (!groups[p.treatment]) groups[p.treatment] = [];
+    groups[p.treatment].push(`Tooth ${p.tooth}`);
+  }
+  for (const g of generalProcs) {
+    const name = getTreatmentName(g);
+    if (!groups[name]) groups[name] = [];
+    groups[name].push('General');
+  }
+
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-2">
-      <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Visit Summary</p>
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-3 shadow-sm">
+      <p className="text-sm font-bold text-gray-800 dark:text-gray-200">Visit Summary</p>
 
-      <SummaryBlock label="Chief Complaint">
-        {form.chiefComplaint}
-      </SummaryBlock>
+      {form.chiefComplaint && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Chief Complaint</p>
+          <p className="text-sm text-gray-900 dark:text-gray-100 mt-0.5">{form.chiefComplaint}</p>
+        </div>
+      )}
 
-      <SummaryBlock label="Clinical Findings">
-        {Object.keys(findings).length > 0 && (
-          <div className="space-y-1.5">
+      {Object.keys(findings).length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Clinical Findings</p>
+          <div className="space-y-1 mt-1">
             {Object.entries(findings).map(([diag, teeth]) => (
-              <div key={diag}>
-                <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">{diag}</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">{teeth.join(', ')}</p>
+              <div key={diag} className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
+                <div>
+                  <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 uppercase">{diag}</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400"> {teeth.join(', ')}</span>
+                </div>
               </div>
             ))}
           </div>
-        )}
-      </SummaryBlock>
+        </div>
+      )}
 
-      <SummaryBlock label="Diagnosis">
-        {form.diagnosisSelected?.length > 0 && (
-          <p>{form.diagnosisSelected.join(', ')}</p>
-        )}
-        {form.diagnosis && (
-          <p className="text-gray-500 dark:text-gray-400">{form.diagnosis}</p>
-        )}
-      </SummaryBlock>
+      {(form.diagnosisSelected?.length > 0 || form.diagnosis) && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Diagnosis</p>
+          {form.diagnosisSelected?.length > 0 && (
+            <p className="text-sm text-gray-900 dark:text-gray-100 mt-0.5">{form.diagnosisSelected.join(', ')}</p>
+          )}
+          {form.diagnosis && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{form.diagnosis}</p>
+          )}
+        </div>
+      )}
 
-      <SummaryBlock label="Planned Procedures">
-        {(() => {
-          const groups = {};
-          for (const p of perToothProcs) {
-            if (!groups[p.treatment]) groups[p.treatment] = [];
-            groups[p.treatment].push(`Tooth ${p.tooth}`);
-          }
-          for (const g of generalProcs) {
-            const name = getTreatmentName(g);
-            if (!groups[name]) groups[name] = [];
-            groups[name].push('General');
-          }
-          const entries = Object.entries(groups);
-          if (entries.length === 0) return null;
-          return (
-            <div className="space-y-1.5">
-              {entries.map(([treatment, items]) => (
-                <div key={treatment}>
-                  <p className="text-[11px] font-semibold text-gray-800 dark:text-gray-200">{treatment}</p>
-                  <div className="space-y-0.5 ml-1">
-                    {items.map((item, i) => (
-                      <p key={i} className="text-xs text-gray-600 dark:text-gray-400">• {item}</p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-      </SummaryBlock>
-
-      <SummaryBlock label="Prescription">
-        {medicines.length > 0 && (
-          <div className="space-y-0.5">
-            {medicines.map((m, i) => (
-              <p key={i}>{m.name} {m.dosage ? `(${m.dosage})` : ''} — {m.frequency || ''} {m.duration ? `× ${m.duration}d` : ''} {m.timing ? m.timing : ''}</p>
+      {Object.keys(groups).length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Procedures</p>
+          <div className="space-y-1 mt-1 ml-1">
+            {Object.entries(groups).map(([treatment, items]) => (
+              <p key={treatment} className="text-sm text-gray-800 dark:text-gray-200">
+                <span className="font-semibold">{treatment}</span>
+                {' — '}{items.join(', ')}
+              </p>
             ))}
           </div>
-        )}
-      </SummaryBlock>
+        </div>
+      )}
 
-      <SummaryBlock label="Advice">
-        {form.adviceSelected?.length > 0 && (
-          <p>{form.adviceSelected.join(' · ')}</p>
-        )}
-      </SummaryBlock>
+      {medicines.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rx</p>
+          <p className="text-sm text-gray-900 dark:text-gray-100 mt-0.5">{medicines.length} medicine{medicines.length > 1 ? 's' : ''}</p>
+        </div>
+      )}
 
-      <SummaryBlock label="Follow-up">
-        {form.followUpDate && (
-          <p>{form.followUpDate}{form.followUpInstructions ? ` — ${form.followUpInstructions}` : ''}</p>
-        )}
-      </SummaryBlock>
+      {form.adviceSelected?.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Advice</p>
+          <p className="text-sm text-gray-900 dark:text-gray-100 mt-0.5">{form.adviceSelected.length} selected</p>
+        </div>
+      )}
+
+      {form.followUpDate && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Follow-up</p>
+          <p className="text-sm text-gray-900 dark:text-gray-100 mt-0.5">
+            {form.followUpDate}{form.followUpInstructions ? ` — ${form.followUpInstructions}` : ''}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
