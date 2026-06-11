@@ -3,8 +3,11 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ToastContext } from '../layout';
-import { Settings, Stethoscope, FileText, ClipboardCheck, Star, Plus, Trash2, Save, Image, Palette, CheckSquare, Languages, AlertTriangle, Pill, Search, ChevronDown, RotateCcw } from 'lucide-react';
+import { Settings, Stethoscope, FileText, ClipboardCheck, Star, Plus, Trash2, Save, Image, Palette, CheckSquare, Languages, AlertTriangle, Pill, Search, ChevronDown, RotateCcw, GripVertical, Eye, EyeOff, LayoutPanelTop } from 'lucide-react';
 import { CATEGORIES, TREATMENTS, getTreatmentName } from '@/lib/treatments';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 
 const MEDICINE_CATEGORIES = {
   antibiotics: { label: 'Antibiotics', salts: ['Amoxicillin', 'Amoxicillin + Clavulanic Acid', 'Azithromycin', 'Cefixime', 'Ceftriaxone Injection', 'Cefuroxime', 'Cephalexin', 'Ciprofloxacin', 'Clindamycin', 'Doxycycline', 'Erythromycin', 'Metronidazole', 'Penicillin V', 'Tetracycline', 'Mouthwash - Chlorhexidine', 'Mouthwash - Povidone Iodine'] },
@@ -29,7 +32,28 @@ const TABS = [
   { id: 'treatments', label: 'Treatments', icon: Star },
   { id: 'checklists', label: 'Checklists', icon: ClipboardCheck },
   { id: 'medicines', label: 'Medicines', icon: Pill },
+  { id: 'visit_layout', label: 'Visit Layout', icon: LayoutPanelTop },
 ];
+
+const DEFAULT_VISIT_LAYOUT = {
+  leftColumn: [
+    { id: 'chiefComplaint', label: 'Chief Complaint', enabled: true },
+    { id: 'medicalHistory', label: 'Medical / Dental History', enabled: true },
+    { id: 'toothChart', label: 'Tooth Chart', enabled: true },
+    { id: 'perToothEditor', label: 'Per-Tooth Editor', enabled: true },
+    { id: 'findings', label: 'Findings', enabled: true },
+    { id: 'overallDiagnosis', label: 'Overall Diagnosis', enabled: true },
+    { id: 'treatmentPlan', label: 'Treatment Plan', enabled: true },
+    { id: 'examination', label: 'Examination', enabled: true },
+    { id: 'prescription', label: 'Prescription', enabled: true },
+    { id: 'advice', label: 'Advice', enabled: true },
+    { id: 'visitSummary', label: 'Visit Summary', enabled: true },
+  ],
+  rightColumn: [
+    { id: 'attachments', label: 'Attachments', enabled: true },
+    { id: 'contextSidebar', label: 'Context Sidebar', enabled: true },
+  ],
+};
 
 const DEFAULT_COLOR = '#0d1b2a';
 const DEFAULT_ACCENT = '#3a86c8';
@@ -303,6 +327,138 @@ export default function SettingsPage() {
       list.splice(index, 1);
       return { ...prev, [key]: { ...prev[key], [field]: list } };
     });
+  }
+
+  // ── Visit Layout: Sortable Section ──
+  function SortableSection({ item, onToggle, isContextSidebar }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+    const style = transform ? {
+      transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+      transition,
+      zIndex: isDragging ? 50 : undefined,
+      position: 'relative',
+    } : undefined;
+
+    return (
+      <div ref={setNodeRef} style={style}
+        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
+          isDragging
+            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-700 shadow-lg'
+            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-600'
+        }`}>
+        <button {...attributes} {...listeners}
+          className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-grab active:cursor-grabbing transition-all touch-none">
+          <GripVertical className="w-4 h-4" />
+        </button>
+        <span className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">{item.label}</span>
+        {isContextSidebar ? (
+          <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">Always visible</span>
+        ) : (
+          <button onClick={() => onToggle(item.id)}
+            className={`p-1.5 rounded-lg transition-all ${
+              item.enabled
+                ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
+                : 'text-gray-300 dark:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}>
+            {item.enabled ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  function VisitLayoutTab() {
+    const sensors = useSensors(
+      useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+      useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+    const layout = settings.visit_layout || DEFAULT_VISIT_LAYOUT;
+
+    function handleDragEnd(column, event) {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const items = [...layout[column]];
+      const oldIdx = items.findIndex(i => i.id === active.id);
+      const newIdx = items.findIndex(i => i.id === over.id);
+      if (oldIdx === -1 || newIdx === -1) return;
+      const reordered = arrayMove(items, oldIdx, newIdx);
+      setSettings(prev => ({
+        ...prev,
+        visit_layout: { ...prev.visit_layout, [column]: reordered },
+      }));
+    }
+
+    function toggleItem(column, id) {
+      setSettings(prev => {
+        const items = (prev.visit_layout?.[column] || DEFAULT_VISIT_LAYOUT[column]).map(i =>
+          i.id === id ? { ...i, enabled: !i.enabled } : i
+        );
+        return { ...prev, visit_layout: { ...prev.visit_layout, [column]: items } };
+      });
+    }
+
+    function resetLayout() {
+      setSettings(prev => ({ ...prev, visit_layout: JSON.parse(JSON.stringify(DEFAULT_VISIT_LAYOUT)) }));
+      showToast('Visit layout reset to default', 'success');
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className={cardClass()}>
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-blue-50/80 dark:from-gray-800/50 dark:to-blue-900/20 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Clinical Pane (Left Column)</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Drag to reorder — toggle visibility with the eye icon</p>
+            </div>
+          </div>
+          <div className="p-6">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd('leftColumn', e)} modifiers={[restrictToVerticalAxis]}>
+              <SortableContext items={layout.leftColumn.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {layout.leftColumn.map(item => (
+                    <SortableSection key={item.id} item={item} onToggle={(id) => toggleItem('leftColumn', id)} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+        </div>
+
+        <div className={cardClass()}>
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-blue-50/80 dark:from-gray-800/50 dark:to-blue-900/20 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Sidebar (Right Column)</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Attachments can be hidden; Context Sidebar is always shown but position is adjustable</p>
+            </div>
+          </div>
+          <div className="p-6">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd('rightColumn', e)} modifiers={[restrictToVerticalAxis]}>
+              <SortableContext items={layout.rightColumn.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {layout.rightColumn.map(item => (
+                    <SortableSection key={item.id} item={item} onToggle={(id) => toggleItem('rightColumn', id)} isContextSidebar={item.id === 'contextSidebar'} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+          <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <p className="text-xs text-gray-400">Changes apply immediately after saving.</p>
+            <div className="flex gap-2">
+              <button onClick={resetLayout}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
+                <RotateCcw className="w-3 h-3" /> Reset Default
+              </button>
+              <button onClick={() => saveSettings('visit_layout')} disabled={saving}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50">
+                <Save className="w-4 h-4" />
+                {saving ? 'Saving...' : 'Save Layout'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   function inputClass() {
@@ -1038,8 +1194,11 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
-        )}
+            )}
+
+          {/* ── VISIT LAYOUT TAB ── */}
+          {activeTab === 'visit_layout' && <VisitLayoutTab />}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }

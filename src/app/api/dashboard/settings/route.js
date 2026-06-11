@@ -16,6 +16,25 @@ const DEFAULTS = {
   },
   treatments: { favorites: [], recent: [], hidden: [], custom: [] },
   google_maps: { review_url: '' },
+  visit_layout: {
+    leftColumn: [
+      { id: 'chiefComplaint', label: 'Chief Complaint', enabled: true },
+      { id: 'medicalHistory', label: 'Medical / Dental History', enabled: true },
+      { id: 'toothChart', label: 'Tooth Chart', enabled: true },
+      { id: 'perToothEditor', label: 'Per-Tooth Editor', enabled: true },
+      { id: 'findings', label: 'Findings', enabled: true },
+      { id: 'overallDiagnosis', label: 'Overall Diagnosis', enabled: true },
+      { id: 'treatmentPlan', label: 'Treatment Plan', enabled: true },
+      { id: 'examination', label: 'Examination', enabled: true },
+      { id: 'prescription', label: 'Prescription', enabled: true },
+      { id: 'advice', label: 'Advice', enabled: true },
+      { id: 'visitSummary', label: 'Visit Summary', enabled: true },
+    ],
+    rightColumn: [
+      { id: 'attachments', label: 'Attachments', enabled: true },
+      { id: 'contextSidebar', label: 'Context Sidebar', enabled: true },
+    ],
+  },
   medicines: {
     salts: {
       // Antibiotics
