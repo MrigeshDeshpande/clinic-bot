@@ -1689,10 +1689,10 @@ function VisitPageInner() {
               {/* ═══ 1. Chief Complaint ═══ */}
               {patientProfile && (
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
-                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Chief Complaint</h3>
+                  <h3 className="text-xl font-bold leading-7 text-gray-900 dark:text-gray-100 mb-3">Chief Complaint</h3>
                   <textarea value={form.chiefComplaint} onChange={e => setForm(f => ({ ...f, chiefComplaint: e.target.value }))}
                     rows={Math.min(4, Math.max(2, (form.chiefComplaint || '').split('\n').length))}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
+                    className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-base leading-7 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-200 dark:focus:ring-orange-800 focus:border-orange-400 dark:focus:border-orange-500 transition-all resize-none placeholder-gray-400"
                     placeholder="Chief Complaint — e.g. Pt complains of pain in upper left back tooth region, since 4 days." />
                 </div>
               )}
@@ -1709,10 +1709,10 @@ function VisitPageInner() {
                           ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         }
-                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Medical History</span>
+                        <span className="text-base font-bold leading-6 text-gray-700 dark:text-gray-300 uppercase tracking-wide">Medical History</span>
                       </button>
                       {showMedicalSummary && (
-                        <div className="mt-2 ml-5 text-xs text-gray-600 dark:text-gray-400 space-y-1 leading-relaxed">
+                        <div className="mt-2 ml-5 text-base text-gray-700 dark:text-gray-300 space-y-1.5 leading-7">
                           {medicalHistory.allergies && <p><span className="font-medium">Allergies:</span> {medicalHistory.allergies}</p>}
                           {medicalHistory.chronicConditions && <p><span className="font-medium">Conditions:</span> {medicalHistory.chronicConditions}</p>}
                           {medicalHistory.bloodGroup && <p><span className="font-medium">Blood Group:</span> {medicalHistory.bloodGroup}</p>}
@@ -1732,10 +1732,10 @@ function VisitPageInner() {
                           ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         }
-                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dental History</span>
+                        <span className="text-base font-bold leading-6 text-gray-700 dark:text-gray-300 uppercase tracking-wide">Dental History</span>
                       </button>
                       {showDentalSummary && (
-                        <div className="mt-2 ml-5 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                        <div className="mt-2 ml-5 text-base text-gray-700 dark:text-gray-300 leading-7">
                           {medicalHistory.dentalHistory}
                         </div>
                       )}
@@ -1746,7 +1746,7 @@ function VisitPageInner() {
 
               {/* ═══ 3. Tooth Chart (Navigation Only) ═══ */}
               <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
-                <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Tooth Chart</h2>
+                <h2 className="text-xl font-bold leading-7 text-gray-900 dark:text-gray-100 mb-3">Tooth Chart</h2>
                 <ToothChartCard toothChartProps={toothChartProps} />
               </div>
 
@@ -1780,9 +1780,9 @@ function VisitPageInner() {
               {/* ═══ 6. Overall Diagnosis (free text) ═══ */}
               {patientProfile && (
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
-                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">Overall Diagnosis</h3>
+                  <h3 className="text-xl font-bold leading-7 text-gray-900 dark:text-gray-100 mb-3">Overall Diagnosis</h3>
                   <input type="text" value={form.diagnosis} onChange={e => setForm(f => ({ ...f, diagnosis: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400"
+                    className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-base leading-7 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400"
                     placeholder="Overall diagnosis — e.g. Generalized chronic periodontitis with focal carious lesions" />
                 </div>
               )}
@@ -1790,36 +1790,36 @@ function VisitPageInner() {
               {/* ═══ 7. Treatment Plan (auto-derived, read-only) ═══ */}
               {patientProfile && (
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
-                  <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">Treatment Plan</h3>
+                  <h3 className="text-xl font-bold leading-7 text-gray-900 dark:text-gray-100 mb-3">Treatment Plan</h3>
                   {(() => {
                     const perTooth = form.toothDiagnoses.filter(e => e.diagnoses?.length > 0 || e.treatment);
                     const toothTreatmentIds = new Set(form.toothDiagnoses.filter(e => e.treatment).map(e => e.treatment));
                     const general = selectedTreatments.filter(t => !toothTreatmentIds.has(t));
                     if (perTooth.length === 0 && general.length === 0) {
-                      return <p className="text-sm text-gray-400 dark:text-gray-500 italic">No procedures planned yet.</p>;
+                      return <p className="text-base leading-7 text-gray-400 dark:text-gray-500 italic">No procedures planned yet.</p>;
                     }
                     return (
                       <div className="space-y-3">
                         {perTooth.map(e => (
-                          <div key={e.tooth} className="flex items-start gap-2">
-                            <span className="text-base shrink-0 mt-0.5">🦷</span>
+                          <div key={e.tooth} className="flex items-start gap-3">
+                            <span className="text-xl shrink-0 mt-0.5">🦷</span>
                             <div className="flex-1">
-                              <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Tooth {e.tooth}</span>
+                              <span className="text-lg font-bold leading-7 text-gray-900 dark:text-gray-100">Tooth {e.tooth}</span>
                               {e.diagnoses?.length > 0 && (
-                                <div className="mt-0.5">
-                                  <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase">Diagnosis</span>
-                                  <div className="ml-2">
+                                <div className="mt-1">
+                                  <span className="text-sm font-bold leading-6 text-gray-600 dark:text-gray-300 uppercase tracking-wide">Diagnosis</span>
+                                  <div className="ml-3 mt-0.5 space-y-0.5">
                                     {e.diagnoses.map((d, di) => (
-                                      <p key={di} className="text-xs text-gray-700 dark:text-gray-300">• {d}</p>
+                                      <p key={di} className="text-base leading-7 text-gray-700 dark:text-gray-300">• {d}</p>
                                     ))}
                                   </div>
                                 </div>
                               )}
                               {e.treatment && (
                                 <div className="mt-1">
-                                  <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase">Planned</span>
-                                  <div className="ml-2">
-                                    <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">• {getTreatmentName(e.treatment)}{e.surface ? ` (${e.surface})` : ''}</p>
+                                  <span className="text-sm font-bold leading-6 text-gray-600 dark:text-gray-300 uppercase tracking-wide">Planned</span>
+                                  <div className="ml-3 mt-0.5">
+                                    <p className="text-base leading-7 text-emerald-700 dark:text-emerald-300 font-semibold">• {getTreatmentName(e.treatment)}{e.surface ? ` (${e.surface})` : ''}</p>
                                   </div>
                                 </div>
                               )}
@@ -1827,13 +1827,13 @@ function VisitPageInner() {
                           </div>
                         ))}
                         {general.length > 0 && (
-                          <div className="flex items-start gap-2">
-                            <span className="text-base shrink-0 mt-0.5">🌐</span>
+                          <div className="flex items-start gap-3">
+                            <span className="text-xl shrink-0 mt-0.5">🌐</span>
                             <div className="flex-1">
-                              <span className="text-sm font-bold text-gray-800 dark:text-gray-200">General</span>
-                              <div className="mt-1 ml-2">
+                              <span className="text-lg font-bold leading-7 text-gray-900 dark:text-gray-100">General</span>
+                              <div className="mt-1 ml-3 space-y-0.5">
                                 {general.map(g => (
-                                  <p key={g} className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">• {getTreatmentName(g)}</p>
+                                  <p key={g} className="text-base leading-7 text-emerald-700 dark:text-emerald-300 font-semibold">• {getTreatmentName(g)}</p>
                                 ))}
                               </div>
                             </div>
@@ -1857,15 +1857,15 @@ function VisitPageInner() {
                         ? <ChevronDown className="w-4 h-4 text-gray-400" />
                         : <ChevronRight className="w-4 h-4 text-gray-400" />
                       }
-                      <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Examination</h3>
+                      <h3 className="text-xl font-bold leading-7 text-gray-900 dark:text-gray-100">Examination</h3>
                     </button>
                     {isOpen && (
                       <div className="space-y-3">
                         <textarea value={form.generalExamination} onChange={e => setForm(f => ({ ...f, generalExamination: e.target.value }))}
-                          rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
+                          rows={2} className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-base leading-7 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
                           placeholder="General Examination — e.g. Extraoral: no swelling, TMJ normal. Intraoral: poor OH, generalized calculus..." />
                         <textarea value={form.extraOralExamination} onChange={e => setForm(f => ({ ...f, extraOralExamination: e.target.value }))}
-                          rows={2} className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
+                          rows={2} className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-base leading-7 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all resize-none placeholder-gray-400"
                           placeholder="Extra-Oral — e.g. Facial asymmetry, lymphadenopathy, TMJ tenderness..." />
                       </div>
                     )}

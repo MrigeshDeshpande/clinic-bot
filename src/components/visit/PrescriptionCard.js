@@ -104,7 +104,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
   const allSelected = form.medicines.map(m => m.name);
 
   function chipClass(salt, isSelected) {
-    return `px-2 py-0.5 rounded text-[10px] font-medium border transition-all active:scale-95 cursor-pointer ${
+    return `px-3 py-1.5 rounded-lg text-sm font-semibold leading-6 border transition-all active:scale-95 cursor-pointer ${
       isSelected
         ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-600 text-violet-800 dark:text-violet-200'
         : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-violet-200 dark:hover:border-violet-600'
@@ -112,10 +112,10 @@ export default function PrescriptionCard({ prescriptionProps }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Pill className="w-4 h-4 text-violet-500 dark:text-violet-400" />
-        <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Prescription</h2>
+        <Pill className="w-5 h-5 text-violet-500 dark:text-violet-400" />
+        <h2 className="text-xl font-bold leading-7 text-gray-900 dark:text-gray-100">Prescription</h2>
       </div>
 
       {/* Presets (saved templates) */}
@@ -125,7 +125,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
           return (
             <div key={tpl.id} className="relative group">
               <button type="button" onClick={() => loadRxTemplate(tpl)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all active:scale-95 ${c.bg}`}>
+                className={`px-3 py-1.5 text-sm font-semibold leading-6 rounded-lg border transition-all active:scale-95 ${c.bg}`}>
                 <span className="mr-1">{c.icon}</span>
                 {tpl.name}
               </button>
@@ -138,16 +138,16 @@ export default function PrescriptionCard({ prescriptionProps }) {
         })}
         {!showRxTemplateInput ? (
           <button type="button" onClick={() => setShowRxTemplateInput(true)} disabled={form.medicines.length === 0 && form.adviceSelected.length === 0}
-            className="px-2.5 py-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-dashed border-violet-300 dark:border-violet-700 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            className="px-3 py-1.5 text-sm font-semibold leading-6 text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-dashed border-violet-300 dark:border-violet-700 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
             <Plus className="w-3 h-3 inline mr-0.5" /> Save Template
           </button>
         ) : (
           <div className="flex items-center gap-1.5">
             <input type="text" value={rxTemplateName} onChange={e => setRxTemplateName(e.target.value)}
               placeholder="Template name..." autoFocus
-              className="w-28 px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-violet-300 dark:border-violet-700 rounded focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800" />
+              className="w-40 px-2.5 py-1.5 text-base leading-6 bg-white dark:bg-gray-800 border border-violet-300 dark:border-violet-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800" />
             <button type="button" onClick={saveRxTemplate}
-              className="px-2 py-1 text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 rounded transition-colors">Save</button>
+              className="px-3 py-1.5 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-lg transition-colors">Save</button>
             <button type="button" onClick={() => setShowRxTemplateInput(false)}
               className="p-1 text-gray-500 hover:text-gray-700 transition-all">
               <X className="w-3 h-3" />
@@ -161,7 +161,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-300 dark:text-gray-600" />
         <input type="text" value={saltSearch} onChange={e => setSaltSearch(e.target.value)}
           placeholder="Search medicines..."
-          className="w-full pl-6 pr-3 py-1.5 bg-gray-50/50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-700/50 rounded-lg text-xs text-gray-500 dark:text-gray-400 focus:outline-none focus:ring-1 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-300 dark:focus:border-violet-700 transition-all placeholder-gray-300 dark:placeholder-gray-600" />
+          className="w-full pl-7 pr-3 py-2 bg-gray-50/50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-700/50 rounded-lg text-base leading-6 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-violet-200 dark:focus:ring-violet-800 focus:border-violet-300 dark:focus:border-violet-700 transition-all placeholder-gray-400 dark:placeholder-gray-500" />
         {saltSearch && (
           <button type="button" onClick={() => setSaltSearch('')}
             className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-300 dark:text-gray-600 hover:text-gray-500 transition-colors">
@@ -175,7 +175,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <Zap className="w-3 h-3 text-amber-500" />
-            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Most Used</span>
+            <span className="text-sm font-bold leading-6 text-gray-600 dark:text-gray-300 uppercase tracking-wide">Most Used</span>
           </div>
           {mostUsed.length > 0 ? (
             <div className="flex flex-wrap gap-1">
@@ -191,7 +191,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
               })}
             </div>
           ) : (
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 italic py-1">
+            <p className="text-base leading-7 text-gray-400 dark:text-gray-500 italic py-1">
               Start prescribing medicines and your most-used list will appear here automatically.
             </p>
           )}
@@ -204,15 +204,15 @@ export default function PrescriptionCard({ prescriptionProps }) {
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <Clock className="w-3 h-3 text-violet-500" />
-            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Quick Templates</span>
+            <span className="text-sm font-bold leading-6 text-gray-600 dark:text-gray-300 uppercase tracking-wide">Quick Templates</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {templates.map(tpl => (
               <button key={tpl.id} type="button" onClick={() => loadMedicineTemplate(tpl)}
-                className="group relative px-3 py-1.5 text-xs font-medium rounded-lg border border-violet-200 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-all active:scale-95">
+                className="group relative px-3 py-1.5 text-sm font-semibold leading-6 rounded-lg border border-violet-200 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-all active:scale-95">
                 <Zap className="w-2.5 h-2.5 inline mr-1 text-violet-400" />
                 {tpl.name}
-                <span className="ml-1 text-[9px] text-violet-400">({tpl.medicines.length})</span>
+                <span className="ml-1 text-[10px] text-violet-500 dark:text-violet-400">({tpl.medicines.length})</span>
               </button>
             ))}
           </div>
@@ -234,7 +234,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
             );
           })}
           {filteredSalts.length === 0 && (
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 py-1">No matches</p>
+            <p className="text-base leading-7 text-gray-400 dark:text-gray-500 py-1">No matches</p>
           )}
         </div>
       )}
@@ -246,54 +246,54 @@ export default function PrescriptionCard({ prescriptionProps }) {
             <div className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-900/40">
               <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300">{form.medicines.length}</span>
             </div>
-            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Selected Medicines</span>
+            <span className="text-base font-bold leading-6 text-gray-800 dark:text-gray-200">Selected Medicines</span>
           </div>
           <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-800">
-            <table className="w-full text-xs">
+            <table className="w-full text-base leading-6">
               <thead>
-                <tr className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider bg-gray-50/50 dark:bg-gray-800/30">
-                  <th className="text-left font-medium px-2 py-1.5">Medicine</th>
-                  <th className="text-left font-medium px-2 py-1.5">Dose</th>
-                  <th className="text-left font-medium px-2 py-1.5">Freq</th>
-                  <th className="text-left font-medium px-2 py-1.5">Days</th>
-                  <th className="text-left font-medium px-2 py-1.5">Timing</th>
+                <tr className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide bg-gray-50/50 dark:bg-gray-800/30">
+                  <th className="text-left font-bold px-2 py-2">Medicine</th>
+                  <th className="text-left font-bold px-2 py-2">Dose</th>
+                  <th className="text-left font-bold px-2 py-2">Freq</th>
+                  <th className="text-left font-bold px-2 py-2">Days</th>
+                  <th className="text-left font-bold px-2 py-2">Timing</th>
                   <th className="w-6 px-2 py-1.5" />
                 </tr>
               </thead>
               <tbody>
                 {form.medicines.map((med, idx) => (
                   <tr key={idx} className="border-t border-gray-50 dark:border-gray-800/50 group hover:bg-gray-50/50 dark:hover:bg-gray-800/20 transition-colors">
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1.5">
                       <input type="text" value={med.name} onChange={e => updateMedicine(idx, 'name', e.target.value)}
                         placeholder="Medicine name"
-                        className="w-full px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
+                        className="w-full px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-base leading-6 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1.5">
                       <input type="text" value={med.dosage} onChange={e => updateMedicine(idx, 'dosage', e.target.value)}
                         placeholder="Dose"
-                        className="w-14 px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
+                        className="w-24 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-base leading-6 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1.5">
                       <select value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
-                        className="w-14 px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                        className="w-24 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-base leading-6 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
                         <option value="">—</option>
                         {FREQUENCY_OPTIONS.map(opt => (
                           <option key={opt} value={opt}>{freqShort[opt] || opt}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1.5">
                       <select value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
-                        className="w-14 px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                        className="w-24 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-base leading-6 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
                         <option value="">—</option>
                         {DURATION_OPTIONS.map(d => (
                           <option key={d} value={`${d} days`}>{d}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1.5">
                       <select value={med.timing || 'after'} onChange={e => updateMedicine(idx, 'timing', e.target.value)}
-                        className="w-16 px-1 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                        className="w-28 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-base leading-6 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
                         {TIMING_OPTIONS.map(opt => (
                           <option key={opt.value} value={opt.value}>{opt.label === 'After meal' ? 'After' : 'Before'}</option>
                         ))}
@@ -316,7 +316,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
       {/* Custom add button */}
       <div className="flex items-center gap-2 pt-1">
         <button type="button" onClick={addMedicine}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-violet-200 dark:border-violet-700 bg-white dark:bg-gray-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all active:scale-95">
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-base font-semibold leading-6 rounded-lg border border-violet-200 dark:border-violet-700 bg-white dark:bg-gray-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all active:scale-95">
           <Plus className="w-3 h-3" /> Custom Medicine
         </button>
       </div>

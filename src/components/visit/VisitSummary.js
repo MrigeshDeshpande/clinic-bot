@@ -43,53 +43,53 @@ export default function VisitSummary({ form, toothDiagnoses = [], selectedTreatm
           ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
           : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
         }
-        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Visit Summary</span>
+        <span className="text-xl font-bold leading-7 text-gray-900 dark:text-gray-100">Visit Summary</span>
       </button>
       {open && (
-        <div className="space-y-1.5 text-sm">
+        <div className="space-y-2 text-base leading-7">
           {form.chiefComplaint && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-20 shrink-0">CC</span>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-baseline gap-3">
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">CC</span>
               <span className="text-gray-900 dark:text-gray-100">{form.chiefComplaint}</span>
             </div>
           )}
           {Object.keys(findings).length > 0 && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-20 shrink-0">Findings</span>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-baseline gap-3">
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Findings</span>
               <span className="text-gray-700 dark:text-gray-300">
                 {Object.entries(findings).map(([diag, teeth]) => `${diag} (${teeth.join(', ')})`).join('; ')}
               </span>
             </div>
           )}
           {(form.diagnosisSelected?.length > 0 || form.diagnosis) && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-20 shrink-0">Diagnosis</span>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-baseline gap-3">
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Diagnosis</span>
               <span className="text-gray-900 dark:text-gray-100">
                 {form.diagnosisSelected?.join(', ')}{form.diagnosis ? ` — ${form.diagnosis}` : ''}
               </span>
             </div>
           )}
           {procSummary && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-20 shrink-0">Procedures</span>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-baseline gap-3">
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Procedures</span>
               <span className="text-gray-700 dark:text-gray-300">{procSummary}</span>
             </div>
           )}
           {medicines.length > 0 && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-20 shrink-0">Rx</span>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-baseline gap-3">
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Rx</span>
               <span className="text-gray-900 dark:text-gray-100">{medicines.length} medicine{medicines.length > 1 ? 's' : ''}</span>
             </div>
           )}
           {form.adviceSelected?.length > 0 && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-20 shrink-0">Advice</span>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-baseline gap-3">
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Advice</span>
               <span className="text-gray-900 dark:text-gray-100">{form.adviceSelected.length} items</span>
             </div>
           )}
           {form.followUpDate && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-20 shrink-0">Follow-up</span>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-baseline gap-3">
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Follow-up</span>
               <span className="text-gray-900 dark:text-gray-100">{form.followUpDate}{form.followUpInstructions ? ` — ${form.followUpInstructions}` : ''}</span>
             </div>
           )}

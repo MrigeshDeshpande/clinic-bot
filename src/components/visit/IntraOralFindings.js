@@ -12,16 +12,16 @@ export default function Findings({ toothDiagnoses = [], notes, onToothSelect }) 
 
   return (
     <div className="bg-gray-50 dark:bg-gray-800/40 rounded-xl px-4 py-3">
-      <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Findings</h3>
+      <h3 className="text-xl font-bold leading-7 text-gray-900 dark:text-gray-100 mb-3">Findings</h3>
 
       {keys.length === 0 && !notes ? (
-        <p className="text-xs text-gray-400 dark:text-gray-500 italic">No findings yet. Chart teeth above to populate.</p>
+        <p className="text-base leading-7 text-gray-400 dark:text-gray-500 italic">No findings yet. Chart teeth above to populate.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {keys.map(diagnosis => (
             <div key={diagnosis}>
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{diagnosis}</span>
-              <div className="mt-0.5 ml-3 text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+              <span className="text-lg font-bold leading-7 text-gray-800 dark:text-gray-200">{diagnosis}</span>
+              <div className="mt-1 ml-3 text-base text-gray-700 dark:text-gray-300 leading-7">
                 {groups[diagnosis].map((tooth, i) => (
                   <React.Fragment key={tooth}>
                     {i > 0 && <span className="text-gray-300 dark:text-gray-600">, </span>}
@@ -35,8 +35,8 @@ export default function Findings({ toothDiagnoses = [], notes, onToothSelect }) 
             </div>
           ))}
           {notes && (
-            <div className="mt-1 pt-1 border-t border-gray-200 dark:border-gray-700">
-              <span className="text-xs text-gray-500 dark:text-gray-400">{notes}</span>
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <span className="text-base leading-7 text-gray-600 dark:text-gray-300">{notes}</span>
             </div>
           )}
         </div>
