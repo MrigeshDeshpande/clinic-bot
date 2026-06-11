@@ -78,6 +78,12 @@ export default function PrescriptionCard({ prescriptionProps }) {
     medicineUsage,
     medicineTemplates,
     loadMedicineTemplate,
+    showMedicineTemplateInput,
+    setShowMedicineTemplateInput,
+    medicineTemplateName,
+    setMedicineTemplateName,
+    saveMedicineTemplate,
+    savingMedicineTemplate,
   } = prescriptionProps;
 
   const freqShort = { 'Daily one time': 'Once', 'Twice a day': 'BD', 'Thrice a day': 'TDS' };
@@ -202,10 +208,34 @@ export default function PrescriptionCard({ prescriptionProps }) {
       {/* Quick Templates */}
       {!hasSearch && (
         <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Clock className="w-3 h-3 text-violet-500" />
-            <span className="text-sm font-bold leading-6 text-gray-600 dark:text-gray-300 uppercase tracking-wide">Quick Templates</span>
+          <div className="flex items-center justify-between gap-3 mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3 h-3 text-violet-500" />
+              <span className="text-sm font-bold leading-6 text-gray-600 dark:text-gray-300 uppercase tracking-wide">Quick Templates</span>
+            </div>
+            {!showMedicineTemplateInput && (
+              <button type="button" onClick={() => setShowMedicineTemplateInput(true)} disabled={form.medicines.length === 0}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-semibold leading-5 rounded-lg border border-dashed border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <Plus className="w-3 h-3" />
+                Save Medicines
+              </button>
+            )}
           </div>
+          {showMedicineTemplateInput && (
+            <div className="flex items-center gap-2 mb-2">
+              <input type="text" value={medicineTemplateName} onChange={e => setMedicineTemplateName(e.target.value)}
+                placeholder="Medicine template name..." autoFocus
+                className="flex-1 min-w-0 px-3 py-1.5 text-base leading-6 bg-white dark:bg-gray-800 border border-violet-300 dark:border-violet-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-800 placeholder-gray-400" />
+              <button type="button" onClick={saveMedicineTemplate} disabled={savingMedicineTemplate}
+                className="px-3 py-1.5 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                {savingMedicineTemplate ? 'Saving...' : 'Save'}
+              </button>
+              <button type="button" onClick={() => { setShowMedicineTemplateInput(false); setMedicineTemplateName(''); }}
+                className="p-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-all">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {templates.map(tpl => (
               <button key={tpl.id} type="button" onClick={() => loadMedicineTemplate(tpl)}

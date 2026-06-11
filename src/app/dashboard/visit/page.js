@@ -155,7 +155,11 @@ function VisitPageInner() {
   const [feeOverrides, setFeeOverrides] = useState({});
   const [customTreatments, setCustomTreatments] = useState([]);
   const [medicineList, setMedicineList] = useState([]);
+  const [medicineSettings, setMedicineSettings] = useState({ salts: {}, custom: [], usage: {}, templates: [] });
   const [medicineTemplates, setMedicineTemplates] = useState([]);
+  const [showMedicineTemplateInput, setShowMedicineTemplateInput] = useState(false);
+  const [medicineTemplateName, setMedicineTemplateName] = useState('');
+  const [savingMedicineTemplate, setSavingMedicineTemplate] = useState(false);
   const [medicineUsage, setMedicineUsage] = useState({});
 
   // Merge catalog defaults with settings overrides
@@ -195,6 +199,7 @@ function VisitPageInner() {
         } else {
           setMedicineList(COMMON_MEDICINES);
         }
+        if (ms) setMedicineSettings({ salts: ms.salts || {}, custom: ms.custom || [], usage: ms.usage || {}, templates: ms.templates || [] });
         if (ms?.usage) setMedicineUsage(ms.usage);
         if (ms?.templates) setMedicineTemplates(ms.templates);
       })
@@ -1035,6 +1040,61 @@ function VisitPageInner() {
     });
   }
 
+  async function saveMedicineTemplate() {
+    if (form.medicines.length === 0) {
+      showToast('Add medicines before saving a quick template', 'error');
+      return;
+    }
+    if (!medicineTemplateName.trim()) {
+      showToast('Enter a medicine template name', 'error');
+      return;
+    }
+
+    const newTemplate = {
+      id: `tpl_${Date.now()}`,
+      name: medicineTemplateName.trim(),
+      medicines: form.medicines
+        .map(m => ({
+          name: m.name || '',
+          dosage: m.dosage || '',
+          frequency: m.frequency || '',
+          duration: m.duration || '',
+          timing: m.timing || 'after',
+        }))
+        .filter(m => m.name),
+    };
+
+    if (newTemplate.medicines.length === 0) {
+      showToast('Add at least one named medicine', 'error');
+      return;
+    }
+
+    setSavingMedicineTemplate(true);
+    try {
+      const nextTemplates = [...medicineTemplates, newTemplate];
+      const nextSettings = {
+        ...medicineSettings,
+        usage: medicineUsage || medicineSettings.usage || {},
+        templates: nextTemplates,
+      };
+      const res = await apiFetch('/api/dashboard/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'medicines', value: nextSettings }),
+      });
+      if (!res.ok) throw new Error('Failed to save medicine template');
+      setMedicineSettings(nextSettings);
+      setMedicineTemplates(nextTemplates);
+      setMedicineTemplateName('');
+      setShowMedicineTemplateInput(false);
+      showToast(`Medicine template "${newTemplate.name}" saved`, 'success');
+    } catch {
+      showToast('Failed to save medicine template', 'error');
+    } finally {
+      setSavingMedicineTemplate(false);
+    }
+  }
+
   async function saveRatings() {
     const patientId = patientProfile?.id || appointmentMeta?.patient_id;
     if (!patientId) { showToast('No patient selected — cannot save ratings', 'error'); return; }
@@ -1580,7 +1640,7 @@ function VisitPageInner() {
   }
   const toothChartProps = { diagnosisOptions, form, stableSetSelectedTooth, selectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta };
   const mediaProps = { fileInputRef, handleMediaUpload, uploadingMedia, setShowCamera, galleryInputRef, mediaFiles, getFilePreview, getFileIcon, removeMediaFile };
-  const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS, medicineUsage, medicineTemplates, loadMedicineTemplate };
+  const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS, medicineUsage, medicineTemplates, loadMedicineTemplate, showMedicineTemplateInput, setShowMedicineTemplateInput, medicineTemplateName, setMedicineTemplateName, saveMedicineTemplate, savingMedicineTemplate };
   const adviceProps = { adviceOptions, form, setForm };
 
   return (

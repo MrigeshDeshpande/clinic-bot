@@ -1015,6 +1015,10 @@ export default function SettingsPage() {
                 <div className="p-6">
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(settings.medicines.usage)
+                      .map(([name, value]) => {
+                        const count = typeof value === 'number' ? value : Number(value?.count || 0);
+                        return [name, count];
+                      })
                       .sort(([, a], [, b]) => b - a)
                       .slice(0, 20)
                       .map(([name, count]) => {
