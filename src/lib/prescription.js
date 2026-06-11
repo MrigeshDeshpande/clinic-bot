@@ -4,6 +4,7 @@ import { getSql } from '@/db/pool';
 import { uploadToR2, getR2SignedUrl } from '@/lib/r2';
 import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
+import { getTreatmentName } from '@/lib/treatments';
 
 const PAGE_WIDTH = 595.28;
 const LM = 50;
@@ -300,7 +301,7 @@ export async function generatePrescription({ patient, visit, appointment }) {
     for (let i = 0; i < toothDiagnoses.length; i++) {
       const td = toothDiagnoses[i];
       const surface = td.surface || '\u2014';
-      const treatment = td.treatment || '\u2014';
+      const treatment = getTreatmentName(td.treatment) || '\u2014';
       const diagText = td.diagnoses.join(', ');
       const rowH = Math.max(rh, doc.heightOfString(diagText, { width: colW[3] - 4 }) + 6);
 
@@ -421,10 +422,16 @@ export async function generatePrescription({ patient, visit, appointment }) {
   }
 
   // ─── FEES ───
+  const tf = visit?.treatmentFees || {};
+  const getAmount = (v) => typeof v === 'number' ? v : (v?.amount ?? 0);
+  const getLabel = (v, fallback) => typeof v === 'object' && v ? (v.label || v.treatment || fallback) : fallback;
   const feeItems = [
-    { label: 'Consultation Fee', amount: visit?.consultationFee || 0 },
-    { label: 'Treatment Charges', amount: visit?.treatmentCharges || 0 },
-    { label: 'Medicine Charges', amount: visit?.medicineCharges || 0 },
+    { label: 'Consultation Fee', amount: Number(visit?.consultationFee) || 0 },
+    ...Object.entries(tf).map(([key, entry]) => ({
+      label: getLabel(entry, key),
+      amount: getAmount(entry),
+    })),
+    { label: 'Medicine Charges', amount: Number(visit?.medicineCharges) || 0 },
   ];
   const hasFees = feeItems.some(f => f.amount > 0);
   if (hasFees) {
@@ -439,7 +446,7 @@ export async function generatePrescription({ patient, visit, appointment }) {
         y += 16;
       }
     }
-    const total = (visit?.consultationFee || 0) + (visit?.treatmentCharges || 0) + (visit?.medicineCharges || 0);
+    const total = feeItems.reduce((s, f) => s + f.amount, 0);
     if (total > 0) {
       doc.moveTo(LM, y).lineTo(LM + 450, y).stroke('#cccccc');
       y += 8;
@@ -677,7 +684,7 @@ export async function generateDentalChart({ patient, visit, appointment }) {
       // Treatment label
       if (entry?.treatment && !isMissing) {
         doc.fontSize(4.5).fillColor('#059669');
-        doc.text(entry.treatment, x + (cellW - gap) / 2, y - 7, { width: cellW - gap, align: 'center' });
+        doc.text(getTreatmentName(entry.treatment), x + (cellW - gap) / 2, y - 7, { width: cellW - gap, align: 'center' });
       }
     }
   }

@@ -22,7 +22,8 @@ export async function GET(req, { params }) {
     const [patientRows, visits] = await Promise.all([
       sql`
         SELECT p.id, p.name, p.phone, p.age, p.sex, p.wa_id, p.created_at,
-          p.location, p.allergies, p.chronic_conditions, p.blood_group, p.bp, p.weight, p.medications, p.patient_ratings,
+          p.location, p.allergies, p.chronic_conditions, p.blood_group, p.bp, p.weight, p.medications, p.patient_ratings, p.habits,
+          p.address, p.occupation, p.dental_history, p.family_history,
           (SELECT COUNT(*) FROM appointments a WHERE a.patient_id = p.id AND a.status = 'completed') AS visit_count,
           (SELECT COALESCE(SUM(a.consultation_fee + a.treatment_charges + a.medicine_charges), 0)
            FROM appointments a WHERE a.patient_id = p.id AND a.status = 'completed') AS total_spent
@@ -34,8 +35,9 @@ export async function GET(req, { params }) {
         SELECT a.id, a.date, a.time, a.treatment, a.treatments, a.diagnosis, a.medicines,
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
                a.notes, a.follow_up_date, a.follow_up_instructions,
-               a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
-               a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at,
+         a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
+                a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at,
+                a.chief_complaint, a.general_examination, a.extra_oral_examination,
                a.payment_status, a.paid_amount,
                COALESCE(p.name, a.patient_name) AS patient_name
         FROM appointments a
@@ -73,7 +75,7 @@ export async function PATCH(req, { params }) {
     const sql = getSql();
     const { id } = await params;
     const body = await req.json();
-    const { name, age, sex, phone, location, patient_ratings } = body;
+    const { name, age, sex, phone, location, patient_ratings, address, occupation } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Patient ID required' }, { status: 400 });
@@ -106,6 +108,14 @@ export async function PATCH(req, { params }) {
     if (patient_ratings !== undefined) {
       setClauses.push(`patient_ratings = $${p++}::jsonb`);
       queryParams.push(JSON.stringify(patient_ratings));
+    }
+    if (address !== undefined) {
+      setClauses.push(`address = $${p++}`);
+      queryParams.push(address);
+    }
+    if (occupation !== undefined) {
+      setClauses.push(`occupation = $${p++}`);
+      queryParams.push(occupation);
     }
 
     if (setClauses.length === 0) {

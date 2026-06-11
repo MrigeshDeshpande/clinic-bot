@@ -13,17 +13,32 @@ export const ThemeContext = createContext();
 export const ToastContext = createContext();
 export const SidebarContext = createContext();
 
-const NAV = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { href: '/dashboard/appointments', label: 'Appointments', icon: CalendarDays },
-  { href: '/dashboard/patients', label: 'Patients', icon: Users },
-  { href: '/dashboard/stats', label: 'Statistics', icon: BarChart3 },
-  { href: '/dashboard/visit', label: 'Log Visit', icon: PenSquare },
-  { href: '/dashboard/queue', label: 'Queue Board', icon: ClipboardList },
-  { href: '/dashboard/feedback', label: 'Feedback', icon: Star },
-  { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
-  { href: '/dashboard/due-reminders', label: 'Due Reminders', icon: Bell },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+const NAV_GROUPS = [
+  {
+    label: 'MAIN',
+    items: [
+      { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+      { href: '/dashboard/appointments', label: 'Appointments', icon: CalendarDays },
+      { href: '/dashboard/patients', label: 'Patients', icon: Users },
+      { href: '/dashboard/stats', label: 'Statistics', icon: BarChart3 },
+      { href: '/dashboard/visit', label: 'Log Visit', icon: PenSquare },
+    ],
+  },
+  {
+    label: 'OPERATIONS',
+    items: [
+      { href: '/dashboard/queue', label: 'Queue Board', icon: ClipboardList },
+      { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
+      { href: '/dashboard/feedback', label: 'Feedback', icon: Star },
+      { href: '/dashboard/due-reminders', label: 'Due Reminders', icon: Bell },
+    ],
+  },
+  {
+    label: 'SYSTEM',
+    items: [
+      { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ];
 
 function ThemeToggle({ compact }) {
@@ -50,6 +65,7 @@ function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const ref = useRef(null);
+  const inputRef = useRef(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -58,6 +74,17 @@ function GlobalSearch() {
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   useEffect(() => {
@@ -85,15 +112,19 @@ function GlobalSearch() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={e => { setQuery(e.target.value); if (e.target.value.length < 2) { setResults([]); } }}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder="Search patients..."
-          className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 outline-none text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"
+          className="w-full pl-9 pr-10 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 outline-none text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"
         />
+        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-xs font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded leading-none">
+          ⌘K
+        </kbd>
         {loading && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          <div className="absolute right-10 top-1/2 -translate-y-1/2">
             <div className="animate-spin w-3 h-3 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full" />
           </div>
         )}
@@ -123,6 +154,7 @@ function GlobalSearch() {
 
 function SidebarContent({ pathname, onNavClick }) {
   const router = useRouter();
+  const { sidebarCollapsed: collapsed, setSidebarCollapsed } = useContext(SidebarContext);
 
   async function handleLogout() {
     await fetch('/api/dashboard/logout', { method: 'POST' });
@@ -132,64 +164,108 @@ function SidebarContent({ pathname, onNavClick }) {
   return (
     <>
       {/* Logo */}
-      <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-800">
-        <Link href="/dashboard" onClick={onNavClick} className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
-            <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-9 h-9 rounded-lg object-contain" />
+      <div className={`border-b border-gray-100 dark:border-gray-800 ${collapsed ? 'flex justify-center py-3' : 'p-4 md:p-6'}`}>
+        <Link href="/dashboard" onClick={onNavClick} className={`flex items-center ${collapsed ? '' : 'gap-3'}`}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+            <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-7 h-7 rounded-lg object-contain" />
           </div>
-          <div>
-            <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
-          </div>
+          {!collapsed && (
+            <div>
+              <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-tight">Shri Balaji</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Dental Clinic</p>
+            </div>
+          )}
         </Link>
       </div>
 
       {/* Search */}
-      <div className="px-4 py-3">
-        <GlobalSearch />
-      </div>
+      {!collapsed && (
+        <div className="px-4 py-3">
+          <GlobalSearch />
+        </div>
+      )}
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 pb-4 space-y-0.5 overflow-y-auto">
-        {NAV.map(item => {
-          const Icon = item.icon;
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavClick}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative ${
-                active
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              <Icon className={`w-4 h-4 ${active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}`} />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className={`flex-1 overflow-y-auto ${collapsed ? 'px-1.5 py-3 space-y-5' : 'px-3 pb-4'}`}>
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={group.label}>
+            {!collapsed && gi > 0 && <div className="mt-4" />}
+            {!collapsed && (
+              <p className="px-3.5 pb-1 text-xs uppercase tracking-widest text-gray-400 dark:text-gray-500 font-semibold select-none">
+                {group.label}
+              </p>
+            )}
+            <div className={`${collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0.5'}`}>
+              {group.items.map(item => {
+                const Icon = item.icon;
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavClick}
+                    title={collapsed ? item.label : undefined}
+                    className={`relative flex items-center transition-all duration-200 ${
+                      collapsed
+                        ? 'w-10 h-10 justify-center rounded-xl'
+                        : 'gap-3 px-3.5 py-2 rounded-xl text-sm font-medium'
+                    } ${
+                      active
+                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    {active && !collapsed && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-500 rounded-full" />
+                    )}
+                    {active && collapsed && (
+                      <span className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-500 rounded-full" />
+                    )}
+                    <Icon className={`${collapsed ? 'w-5 h-5' : 'w-4 h-4'} ${active ? 'text-blue-600 dark:text-blue-400' : ''}`} />
+                    {!collapsed && item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Notifications */}
-      <div className="px-3">
-        <NotificationPanel />
+      <div className={collapsed ? 'border-t border-gray-100 dark:border-gray-800 flex justify-center py-2' : 'px-3'}>
+        <NotificationPanel compact={collapsed} />
       </div>
 
-      {/* Logout + Theme */}
-      <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-1">
-        <ThemeToggle />
+      {/* Bottom section */}
+      <div className={`border-t border-gray-100 dark:border-gray-800 ${collapsed ? 'py-2 flex flex-col items-center gap-1' : 'p-4 space-y-1'}`}>
+        <ThemeToggle compact={collapsed} />
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all w-full group"
+          title={collapsed ? 'Logout' : undefined}
+          className={`flex items-center rounded-xl transition-all ${
+            collapsed
+              ? 'w-10 h-10 justify-center text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+              : 'gap-3 px-3.5 py-2.5 w-full text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+          }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
-          Logout
+          {!collapsed && 'Logout'}
+        </button>
+        <button
+          onClick={() => setSidebarCollapsed(!collapsed)}
+          className={`flex items-center rounded-xl transition-all ${
+            collapsed
+              ? 'w-10 h-10 justify-center text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
+              : 'gap-2 px-3.5 py-2.5 w-full text-sm font-medium text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
+          }`}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <svg className={`w-4 h-4 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          {!collapsed && <span className="text-xs">Collapse</span>}
         </button>
       </div>
     </>
@@ -327,27 +403,14 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Desktop Sidebar */}
-          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-64'}`}>
-            <div className="min-w-64 flex-1 flex flex-col">
+          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-16 overflow-hidden' : 'w-64'}`}>
+            <div className="flex-1 flex flex-col">
               <SidebarContent pathname={pathname} />
             </div>
           </aside>
 
-          {/* Sidebar expand tab (visible when collapsed) */}
-          {sidebarCollapsed && (
-            <button
-              onClick={() => setSidebarCollapsed(false)}
-              className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-20 w-5 h-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-r-lg items-center justify-center shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-400 dark:text-gray-500"
-              title="Expand sidebar"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-
           {/* Main Content */}
-          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-64'}`}>
+          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
             <div className="animate-fade-in mx-auto">
               {children}
             </div>

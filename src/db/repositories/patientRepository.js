@@ -1,13 +1,18 @@
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
+function normalizePhone(phone) {
+  return phone ? phone.replace(/\D/g, '') : phone;
+}
+
 export async function createPatient({ name, age, sex, phone, waId, location }) {
   const sql = getSql();
   if (!sql) return null;
+  const cleanPhone = normalizePhone(phone);
   try {
     const rows = await sql`
       INSERT INTO patients (name, age, sex, phone, wa_id, location)
-      VALUES (${name}, ${age || null}, ${sex || null}, ${phone}, ${waId || null}, ${location || null})
+      VALUES (${name}, ${age || null}, ${sex || null}, ${cleanPhone}, ${waId || null}, ${location || null})
       ON CONFLICT (phone) DO UPDATE
         SET name = COALESCE(NULLIF(EXCLUDED.name, ''), patients.name),
             age = COALESCE(EXCLUDED.age, patients.age),
@@ -19,7 +24,7 @@ export async function createPatient({ name, age, sex, phone, waId, location }) {
     `;
     return rows[0] || null;
   } catch (error) {
-    logger.error('PATIENT_CREATE_ERROR', { name, phone, error: error.message });
+    logger.error('PATIENT_CREATE_ERROR', { name, phone: cleanPhone, error: error.message });
     return null;
   }
 }
@@ -29,7 +34,7 @@ export async function findPatientByPhone(phone) {
   if (!sql) return null;
   try {
     const rows = await sql`
-      SELECT * FROM patients WHERE phone = ${phone}
+      SELECT * FROM patients WHERE phone = ${normalizePhone(phone)}
     `;
     return rows[0] || null;
   } catch (error) {
@@ -42,13 +47,26 @@ export async function searchPatients(query) {
   const sql = getSql();
   if (!sql) return [];
   try {
+    const start = performance.now();
     const term = `%${query}%`;
-    const rows = await sql`
-      SELECT * FROM patients
-      WHERE name ILIKE ${term} OR phone ILIKE ${term}
-      ORDER BY updated_at DESC
-      LIMIT 10
-    `;
+    const cleanedPhone = normalizePhone(query);
+    let rows;
+    if (cleanedPhone) {
+      const phoneTerm = `%${cleanedPhone}%`;
+      rows = await sql`
+        SELECT * FROM patients
+        WHERE name ILIKE ${term} OR phone ILIKE ${phoneTerm}
+        LIMIT 10
+      `;
+    } else {
+      rows = await sql`
+        SELECT * FROM patients
+        WHERE name ILIKE ${term}
+        LIMIT 10
+      `;
+    }
+    const elapsed = performance.now() - start;
+    if (elapsed > 100) logger.warn('SLOW_PATIENT_SEARCH', { query, elapsed: `${elapsed.toFixed(0)}ms` });
     return rows;
   } catch (error) {
     logger.error('PATIENT_SEARCH_ERROR', { query, error: error.message });

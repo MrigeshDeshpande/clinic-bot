@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
+import { cancelAppointment } from '@/services/cancelAppointment';
 
 export async function PATCH(req, { params }) {
   const csrfErr = requireCsrf(req);
@@ -16,7 +17,15 @@ export async function PATCH(req, { params }) {
     const { id } = await params;
     const body = await req.json();
 
-    const allowed = ['patient_name', 'patient_phone', 'treatment', 'status',
+    // Delegate cancellation to the domain service
+    if (body.status === 'cancelled') {
+      const { cancellation_reason } = body;
+      const result = await cancelAppointment(sql, id, cancellation_reason);
+      return NextResponse.json({ appointment: sanitizeResponse(result) });
+    }
+
+    // Generic field update (non-cancellation)
+    const allowed = ['patient_name', 'patient_phone', 'treatment',
       'consultation_fee', 'treatment_charges', 'medicine_charges', 'location',
       'diagnosis', 'medicines', 'notes', 'follow_up_date', 'follow_up_instructions',
       'treatments', 'advice_selected', 'diagnosis_selected',
@@ -44,12 +53,15 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    setClauses.push(`prescription_key = NULL`, `compiled_document_key = NULL`, `updated_at = NOW()`);
+    setClauses.push('prescription_key = NULL', 'compiled_document_key = NULL', 'updated_at = NOW()');
     values.push(id);
 
-    await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${idx}`, values);
+    await sql.query(
+      `UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${idx}`,
+      values
+    );
 
-    const updated = await sql`
+    const [updated] = await sql`
       SELECT id, logical_id, wa_id, patient_name, patient_phone, patient_id,
              date, time, treatment, treatments, diagnosis, medicines, status,
              consultation_fee, treatment_charges, medicine_charges, location,
@@ -60,8 +72,11 @@ export async function PATCH(req, { params }) {
       FROM appointments WHERE id = ${id}
     `;
 
-    return NextResponse.json({ appointment: sanitizeResponse(updated[0] || null) });
+    return NextResponse.json({ appointment: sanitizeResponse(updated) });
   } catch (error) {
+    if (error.status) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     logger.error('APPOINTMENT_PATCH_ERROR', { error: error.message });
     return jsonError(error);
   }

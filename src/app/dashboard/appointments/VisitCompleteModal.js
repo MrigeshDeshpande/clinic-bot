@@ -192,7 +192,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Complete Visit</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Complete Visit</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {appointment.patient_name || 'Patient'}
                 {appointment.time && <span> · {appointment.time?.slice(0, 5)}</span>}
@@ -220,7 +220,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
                 <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <h4 className="text-xs font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider">Treatments</h4>
+                <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wide">Treatments</h4>
               </div>
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-2.5">Tap to select — add all that apply</p>
 
@@ -274,7 +274,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
                 <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
-                <h4 className="text-xs font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wider">Bill Details</h4>
+                <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 uppercase tracking-wide">Bill Details</h4>
               </div>
 
               <div className="space-y-2.5">

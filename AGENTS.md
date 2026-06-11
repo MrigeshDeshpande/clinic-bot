@@ -1,5 +1,8 @@
 ## Goal
-Transform the clinic-bot into a dentist-specific clinical record system with per-tooth diagnosis tracking, treatment planning, severity/outcome tracking, interactive tooth grid, and professional PDF exports.
+Transform the clinic-bot into a dentist-specific clinical record system with per-tooth diagnosis tracking, treatment planning, severity/outcome tracking, interactive tooth grid, professional PDF exports, and a receptionist-focused quick checkout & walk-in workflow.
+
+## Architecture — Completion
+One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call the existing `POST /api/dashboard/visit` — same business logic, different UI. No duplicate completion engines.
 
 ## Constraints & Preferences
 - Use FDI (ISO 3950) tooth numbering (11-48) instead of Universal #1-32
@@ -35,9 +38,23 @@ Transform the clinic-bot into a dentist-specific clinical record system with per
 - Updated `onQuickDiagnosis` handler in visit page to preserve treatment, severity, status fields
 - Updated patient profile chips and visit summary to show treatment, severity, outcome, status
 - Added `chartKey` and `Chart` button UI on patient profile (per-visit + header)
+- Medical History → collapsible accordion (single-line header with chevron, `showMedical` state toggle)
+- Per-Tooth History → tighter padding (`p-3 md:p-5` instead of `p-4 md:p-8`)
+- Feedback → hidden when count=0, collapsed accordion header with count badge when >0, expand on click
+- Messages → hidden when count=0, collapsed accordion header with count badge when >0, expand on click; pre-loaded on page init
+- Messages section: reduced visual weight (smaller avatars, condensed spacing, compact header)
+- **Quick Checkout modal**: Receptionist-only completion with Fee + Paid + Payment Mode + Notes — `src/components/QuickCheckoutModal.js`
+- **Appointment Details modal**: Lightweight routing hub on calendar click → [Edit Visit] [Quick Checkout] [Cancel] — `src/components/AppointmentDetailsModal.js`
+- **Rapid Walk-In modal**: 15-second walk-in with Name\* + Phone + Fee + Paid + Payment Mode + Notes, no treatment required — `src/components/RapidWalkInModal.js`
+- **FAB dropdown menu**: Dashboard FAB expanded to `[Quick Walk-In] [New Appointment]` on week/day views
+- **Reschedule discoverability**: `cursor: grab`/`grabbing` on confirmed appointment blocks + one-time "Drag to reschedule" tooltip in WeekView and DayTimeline
+- **Quick Checkout in appointments table**: Replaces old "Done" flow — `₹ Quick Checkout` button opens QuickCheckoutModal, calls same `POST /api/dashboard/visit`
+- **Single completion path**: Quick Checkout and Rapid Walk-In reuse `POST /api/dashboard/visit` — no separate completion engine
 
 ### Fixed
 - **`column a.tooth_diagnoses does not exist`** — Added missing `tooth_diagnoses JSONB` column to `appointments` table via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (was already in pool.js:391-395 migration but needed a server restart to apply, or the DB was created before the migration was added). Ran manually via psql and verified API returns 401 instead of 500.
+- **Reschedule 500 (unique constraint `idx_appointments_unique_slot`)** — Three-part fix: (1) `supersedeAppointment` now sets `status='superseded'` on the old version so it doesn't hold the slot in the `WHERE status='confirmed'` constraint, (2) reschedule route now checks slot availability upfront and returns 409 if taken, (3) WeekView/DayTimeline call `invalidateFetchCache('/api/dashboard/appointments')` after successful drop so the 60s cache doesn't hide the new position.
+- **Reschedule 500 (CHECK constraint `valid_appt_status`)** — `status='superseded'` was not in the allowed list (`confirmed,cancelled,completed,no_show`). Fix: (1) Updated `CREATE TABLE IF NOT EXISTS` constraint to include `'superseded'`, (2) Added migration block to DROP/ADD constraint in `pool.js`, (3) Added `await runMigrations()` to reschedule route (was missing), (4) Applied ALTER TABLE manually. Root cause: migration code didn't run before the reschedule POST since that route never called `runMigrations()`.
 
 ### In Progress
 - (none)
@@ -52,6 +69,10 @@ Transform the clinic-bot into a dentist-specific clinical record system with per
 - **Single `expandedTooth` state**: Used instead of per-item `useState` since hooks can't be called inside JSX map callbacks
 - **`tooth_diagnoses` JSONB is additive**: Backward-compatible — old `diagnosis_selected TEXT[]` column kept unchanged
 - **Status dots render after tooth stroke**: Moved `circle` elements after the `<path>` outline so they appear on top, opacity increased from 0.5 → 0.7
+- **One completion path**: Both Quick Checkout and Rapid Walk-In call `POST /api/dashboard/visit` — no separate API endpoints. Different UI, same business logic.
+- **Appointment Details modal as single entry point**: Calendar appointments no longer navigate directly to patient profiles. Single click → AppointmentDetailsModal → [Edit] [Quick Checkout] [Cancel]
+- **Fee maps to treatment_charges**: Quick Checkout uses a single `Fee` input mapped to `treatment_charges`. Consultation and medicine charges are preserved from prior data.
+- **Discount-ready structure**: Quick Checkout uses `subtotal → discount → total → paid → outstanding` internally, even though discount is hidden for V1.
 
 ## Next Steps
 1. ~~Add `tooth_diagnoses` JSONB column to `appointments` table via DB migration~~ ✅ Done
@@ -80,3 +101,6 @@ Transform the clinic-bot into a dentist-specific clinical record system with per
 - `src/app/api/dashboard/visits/[id]/chart/route.js`: New route for printable dental chart PDF
 - `src/app/dashboard/patients/[id]/page.js`: Per-tooth diagnosis chips with treatment/severity/outcome, per-tooth history timeline with clickable expand/collapse, progress dot visualization, Chart + Print buttons
 - `src/app/dashboard/visit/page.js`: Integration of ToothGrid + PerToothDiagnosisPanel, `onQuickDiagnosis` handler preserves all fields, summary chips with surface/treatment/severity
+- `src/components/WeekView.js`: 7-column weekly calendar with time-slot grid (8am-8pm), appointment blocks positioned by time, **drag-to-reschedule** via native HTML5 DnD, click empty slot to book, click appointment to view patient
+- `src/components/DayTimeline.js`: Single-day vertical timeline with hour rows, wider appointment blocks (name/time/treatment/location/phone/status), drag-to-reschedule
+- `src/app/dashboard/page.js`: View switcher `[Month] [Week] [Day]` in header — Month renders existing Calendar+SlotGrid, Week renders WeekView, Day renders DayTimeline; `?book=time` query param auto-opens QuickBook modal

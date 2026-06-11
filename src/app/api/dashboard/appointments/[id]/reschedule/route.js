@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSql } from '@/db/pool';
+import { getSql, runMigrations } from '@/db/pool';
 import { supersedeAppointment } from '@/db/repositories/appointmentRepository';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
@@ -10,6 +10,7 @@ export async function POST(req, { params }) {
   const rateErr = checkRateLimit(req);
   if (rateErr) return rateErr;
   try {
+    await runMigrations();
     const sql = getSql();
     const { id } = await params;
     const body = await req.json();
@@ -28,8 +29,15 @@ export async function POST(req, { params }) {
     }
 
     const logicalId = rows[0].logical_id;
+
     const result = await supersedeAppointment(logicalId, { date, time, treatment: treatment || null });
 
+    if (result?.reason === 'slot_conflict') {
+      return NextResponse.json({ error: 'This time slot is already booked' }, { status: 409 });
+    }
+    if (result?.reason === 'invalid_state') {
+      return NextResponse.json({ error: 'Cannot reschedule a completed or cancelled appointment' }, { status: 400 });
+    }
     if (!result) {
       return NextResponse.json({ error: 'Failed to reschedule appointment' }, { status: 500 });
     }

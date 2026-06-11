@@ -106,7 +106,7 @@ const ToothButton = memo(function ToothButton({
       onContextMenu={(e) => onContextMenu?.(num, e)}
       className={`
         relative flex flex-col items-center justify-center
-        p-px rounded-lg transition-all duration-150 cursor-pointer min-w-[52px]
+        p-px rounded-lg transition-all duration-150 cursor-pointer min-w-[80px]
         ${!multiSelect ? 'hover:scale-110 hover:z-10 hover:drop-shadow-lg active:scale-95' : ''}
         ${isActive && !multiSelect ? 'scale-110 z-10 ring-2 ring-blue-500/50 ring-offset-1 dark:ring-offset-gray-900 drop-shadow-lg' : ''}
         ${isSelected ? 'ring-2 ring-violet-500/60 ring-offset-1 dark:ring-offset-gray-900' : ''}
@@ -168,7 +168,7 @@ const ToothButton = memo(function ToothButton({
         )}
       </svg>
       <span className={`
-        text-[7px] sm:text-[8px] font-semibold leading-none select-none transition-colors mt-px
+        text-sm sm:text-base font-semibold leading-none select-none transition-colors mt-px
         ${isActive && !multiSelect ? 'text-blue-600 dark:text-blue-400' : ''}
         ${isSelected ? 'text-violet-600 dark:text-violet-400' : ''}
         ${color && !isActive && !isSelected && !isMissing ? 'text-gray-600 dark:text-gray-300' : ''}
@@ -177,15 +177,15 @@ const ToothButton = memo(function ToothButton({
         {num}
       </span>
       {showDiagDot && (
-        <div className="flex items-center gap-[1.5px] mt-[2px] h-[3px]">
+        <div className="flex items-center gap-[2.5px] mt-[3px] h-[4.5px]">
           {diagnoses.slice(0, 3).map((d, i) => (
-            <span key={i} className="w-[3px] h-[3px] rounded-full" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
+            <span key={i} className="w-[4.5px] h-[4.5px] rounded-full" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
           ))}
-          {diagnoses.length > 3 && <span className="text-[5px] font-medium text-gray-400 dark:text-gray-500 leading-none ml-[1px]">+{diagnoses.length - 3}</span>}
+          {diagnoses.length > 3 && <span className="text-xs font-medium text-gray-400 dark:text-gray-500 leading-none ml-[2px]">+{diagnoses.length - 3}</span>}
         </div>
       )}
       {treatment && !isMissing && (
-        <span className="text-[5px] text-emerald-500 dark:text-emerald-400 leading-none mt-[1px] font-medium truncate max-w-full px-0.5">
+        <span className="text-xs text-emerald-500 dark:text-emerald-400 leading-none mt-[2px] font-medium truncate max-w-full px-0.5">
           {treatment}
         </span>
       )}
@@ -210,7 +210,7 @@ function LoadingSkeleton() {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 sm:p-4">
       <div className="flex items-center justify-between mb-2 px-0.5">
-        <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Dental Chart</span>
+        <span className="text-base font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Dental Chart</span>
         <div className="w-10 h-4 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
       </div>
       <div className="space-y-1">
@@ -385,7 +385,7 @@ export default function ToothGrid({
     return (
       <div className="flex items-start gap-0">
         <div className="flex flex-col items-center pt-6 w-5 shrink-0">
-          <span className="text-[8px] font-bold text-gray-400 dark:text-gray-500">{labelLeft}</span>
+          <span className="text-sm font-bold text-gray-400 dark:text-gray-500">{labelLeft}</span>
         </div>
         <div className="flex-1 min-w-0">
           <div className="hidden sm:grid sm:grid-cols-16 gap-0">
@@ -406,7 +406,7 @@ export default function ToothGrid({
             ))}
           </div>
           <div className="sm:hidden overflow-x-auto snap-x snap-mandatory scrollbar-thin">
-            <div className="grid grid-cols-16 gap-0 min-w-[900px]">
+            <div className="grid grid-cols-16 gap-0 min-w-[1280px]">
               {teeth.map(num => (
                 <ToothButton
                   key={num}
@@ -426,7 +426,7 @@ export default function ToothGrid({
           </div>
         </div>
         <div className="flex flex-col items-center pt-6 w-5 shrink-0">
-          <span className="text-[8px] font-bold text-gray-400 dark:text-gray-500">{labelRight}</span>
+          <span className="text-sm font-bold text-gray-400 dark:text-gray-500">{labelRight}</span>
         </div>
       </div>
     );
@@ -436,12 +436,12 @@ export default function ToothGrid({
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-3 sm:p-4" ref={gridRef} tabIndex={multiSelect ? -1 : 0} onKeyDown={() => {}}>
       {/* Header */}
       <div className="flex items-center justify-between mb-2 px-0.5">
-        <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Dental Chart</span>
+        <span className="text-base font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Dental Chart</span>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => { setMultiSelect(!multiSelect); setSelectedTeeth(new Set()); }}
-            className={`text-[8px] font-medium px-2 py-0.5 rounded-md border transition-all ${
+            className={`text-sm font-medium px-3 py-1 rounded-md border transition-all ${
               multiSelect
                 ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-600 text-violet-700 dark:text-violet-300'
                 : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-violet-300'
@@ -449,7 +449,7 @@ export default function ToothGrid({
           >
             {multiSelect ? 'Exit Multi' : 'Multi'}
           </button>
-          <span className="text-[8px] text-gray-400 dark:text-gray-500 font-medium">FDI</span>
+          <span className="text-sm text-gray-400 dark:text-gray-500 font-medium">FDI</span>
         </div>
       </div>
 
@@ -464,14 +464,14 @@ export default function ToothGrid({
       {/* Bulk action bar */}
       {multiSelect && selectedTeeth.size > 0 && (
         <div className="mt-2 flex items-center gap-2 px-2 py-1.5 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg flex-wrap">
-          <span className="text-[10px] font-medium text-violet-700 dark:text-violet-300 shrink-0">{selectedTeeth.size} selected</span>
+          <span className="text-xs font-medium text-violet-700 dark:text-violet-300 shrink-0">{selectedTeeth.size} selected</span>
           <div className="flex gap-1 flex-wrap">
             {QUICK_DIAG.slice(0, 4).map(d => (
               <button
                 key={d}
                 type="button"
                 onClick={() => bulkAction(d)}
-                className="px-2 py-0.5 text-[9px] font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-600 dark:text-gray-400 hover:border-blue-300 transition-all"
+                className="px-2 py-0.5 text-xs font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-600 dark:text-gray-400 hover:border-blue-300 transition-all"
               >
                 {d}
               </button>
@@ -482,7 +482,7 @@ export default function ToothGrid({
               <button
                 type="button"
                 onClick={handleSelectAll}
-                className="px-2 py-0.5 text-[9px] font-medium text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md transition-all"
+                className="px-2 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md transition-all"
               >
                 Select all
               </button>
@@ -491,7 +491,7 @@ export default function ToothGrid({
               <button
                 type="button"
                 onClick={handleDeselectAll}
-                className="px-2 py-0.5 text-[9px] font-medium text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md transition-all"
+                className="px-2 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md transition-all"
               >
                 Deselect all
               </button>
@@ -499,7 +499,7 @@ export default function ToothGrid({
             <button
               type="button"
               onClick={handleBulkClear}
-              className="px-2 py-0.5 text-[9px] font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"
+              className="px-2 py-0.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"
             >
               Clear
             </button>
@@ -509,10 +509,10 @@ export default function ToothGrid({
 
       {/* Legend */}
       {allDiagnoses.length > 0 && (
-        <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 mt-2.5 pt-2 border-t border-gray-100 dark:border-gray-800 text-[9px] text-gray-500 dark:text-gray-400 justify-center">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 text-sm text-gray-500 dark:text-gray-400 justify-center">
           {(showAllLegend ? allDiagnoses : allDiagnoses.slice(0, 5)).map(d => (
             <span key={d} className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
+              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
               {d}
             </span>
           ))}
@@ -529,7 +529,7 @@ export default function ToothGrid({
       )}
 
       {/* Tooth type legend */}
-      <div className="flex items-center justify-center gap-3 mt-2 text-[7px] text-gray-400 dark:text-gray-500 flex-wrap">
+      <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-400 dark:text-gray-500 flex-wrap">
         {[
           { path: MOLAR_PATH, label: 'Molar' },
           { path: PREMOLAR_PATH, label: 'Premolar' },
@@ -537,18 +537,18 @@ export default function ToothGrid({
           { path: INCISOR_PATH, label: 'Incisor' },
         ].map(({ path, label }) => (
           <span key={label} className="flex items-center gap-1">
-            <svg viewBox="0 0 24 24" className="w-2 h-2 inline-block">
+            <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 inline-block">
               <path d={path} fill="none" stroke="currentColor" strokeWidth="0.8" />
             </svg>
             {label}
           </span>
         ))}
         <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 opacity-50 inline-block" />
+          <span className="w-2 h-2 rounded-full bg-emerald-500 opacity-50 inline-block" />
           Treated
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 opacity-50 inline-block" />
+          <span className="w-2 h-2 rounded-full bg-blue-500 opacity-50 inline-block" />
           WIP
         </span>
       </div>
@@ -560,7 +560,7 @@ export default function ToothGrid({
           className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl py-1 w-40"
           style={{ top: menuStyle.top, left: menuStyle.left }}
         >
-          <div className="px-3 py-1.5 text-[9px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700">
+          <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-gray-700">
             Tooth #{contextMenu}
           </div>
           {QUICK_DIAG.map(d => (

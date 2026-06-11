@@ -15,7 +15,7 @@ export async function POST(req, { params }) {
 
     const result = await cancelAppointment(id, reason);
     if (!result) {
-      return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Appointment not found or cannot be cancelled' }, { status: 400 });
     }
 
     logger.info('APPOINTMENT_CANCELLED_DASHBOARD', { id, reason });

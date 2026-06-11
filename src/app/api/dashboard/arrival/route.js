@@ -22,6 +22,24 @@ export async function PATCH(req) {
       return NextResponse.json({ error: 'Invalid arrival status' }, { status: 400 });
     }
 
+    // Fetch current state to validate transitions
+    const current = await sql`SELECT status, arrival_status FROM appointments WHERE id = ${appointmentId}`;
+    if (!current || current.length === 0) {
+      return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
+    }
+    
+    const { status, arrival_status: currentArrival } = current[0];
+
+    // Prevent queue updates on terminal appointment states
+    if (['cancelled', 'no_show', 'superseded', 'completed'].includes(status)) {
+      return NextResponse.json({ error: 'Cannot update arrival status of a finalized appointment' }, { status: 400 });
+    }
+
+    // Prevent invalid backwards transitions
+    if (arrivalStatus && currentArrival === 'called' && arrivalStatus !== 'called') {
+      return NextResponse.json({ error: 'Cannot move a called appointment back to waiting or scheduled' }, { status: 400 });
+    }
+
     // Build SET clause manually — @neondatabase/serverless does not support sql.join
     const setClauses = [];
     const params = [];

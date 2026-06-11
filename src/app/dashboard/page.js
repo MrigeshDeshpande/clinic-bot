@@ -3,12 +3,17 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users } from 'lucide-react';
+import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3, ChevronUp, Search, CheckCircle2 } from 'lucide-react';
 import Calendar from '@/components/Calendar';
+import WeekView from '@/components/WeekView';
+import DayTimeline from '@/components/DayTimeline';
+import AppointmentDetailsModal from '@/components/AppointmentDetailsModal';
+import QuickCheckoutModal from '@/components/QuickCheckoutModal';
+import RapidWalkInModal from '@/components/RapidWalkInModal';
 import { DateContext } from './layout';
 import { TREATMENT_NAMES } from '@/lib/treatments';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
-import { fetchCached } from '@/lib/clientFetchCache';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
@@ -18,22 +23,7 @@ function StatusBadge({ status, arrivalStatus }) {
   return <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">Scheduled</span>;
 }
 
-const STAT_CARDS = [
-  { key: 'total', label: 'Total Appointments', color: 'gray', icon: (
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-  )},
-  { key: 'waiting', label: 'Waiting', color: 'amber', icon: (
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-  )},
-  { key: 'in_session', label: 'In Session', color: 'blue', icon: (
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-  )},
-  { key: 'completed', label: 'Completed', color: 'green', icon: (
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  )},
-];
-
-const REVENUE_CARD = { key: 'revenue', label: "Today's Revenue", color: 'emerald', icon: <DollarSign className="w-5 h-5" /> };
+const FINANCIAL_CARDS = ['revenue', 'outstanding'];
 
 const COLOR_MAP = {
   total: { text: 'text-gray-900 dark:text-gray-100', icon: 'text-gray-400 dark:text-gray-500', bg: 'bg-gray-50 dark:bg-gray-800', ring: 'ring-gray-100 dark:ring-gray-700' },
@@ -106,46 +96,84 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   const [treatment, setTreatment] = useState('');
   const [location, setLocation] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const [searchState, setSearchState] = useState('idle');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [familyMembers, setFamilyMembers] = useState([]);
-  const [selectedFamilyMember, setSelectedFamilyMember] = useState(null);
   const nameInputRef = useRef(null);
+  const submitRef = useRef(null);
+  const queryRef = useRef('');
+  const shouldFocusSubmit = useRef(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [bookedAppointment, setBookedAppointment] = useState(null);
 
   useEffect(() => {
     setTimeout(() => nameInputRef.current?.focus(), 100);
   }, []);
 
   useEffect(() => {
+    const abort = new AbortController();
+    queryRef.current = patientName;
     if (patientName.length < 2 || selectedPatient) {
       setSearchResults([]);
+      setSearchState('idle');
       return;
     }
-    setSearching(true);
-    const timer = setTimeout(() => {
-      fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(patientName)}`)
-        .then(r => r.json())
-        .then(d => setSearchResults(d.patients || []))
-        .catch(e => console.error('Quick book search error:', e))
-        .finally(() => setSearching(false));
+    setSearchResults([]);
+    setSearchState('searching');
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(patientName)}`, { signal: abort.signal });
+        const d = await res.json();
+        const results = d.patients || [];
+        if (queryRef.current !== patientName) return; // stale
+        setSearchResults(results);
+        setSearchState(results.length > 0 ? 'success' : 'empty');
+      } catch (e) {
+        if (e.name !== 'AbortError') { console.error('Quick book search error:', e); setSearchState('idle'); }
+      }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); abort.abort(); };
   }, [patientName, selectedPatient]);
+
+  // Auto-highlight first result
+  useEffect(() => {
+    setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
+  }, [searchResults]);
+
+  // Focus submit after patient selection
+  useEffect(() => {
+    if (shouldFocusSubmit.current) {
+      submitRef.current?.focus();
+      shouldFocusSubmit.current = false;
+    }
+  }, [selectedPatient]);
+
+  // Global Escape handler
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        if (searchState === 'success' || searchResults.length > 0) {
+          setSearchResults([]);
+          setSearchState('idle');
+        } else if (!bookedAppointment) {
+          onClose?.();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [searchState, searchResults, bookedAppointment, onClose]);
 
   function selectPatient(p) {
     setSelectedPatient(p);
     setPatientName(p.name);
-    setPatientPhone(stripPhonePrefix(p.phone) || '');
+    setPatientPhone((p.phone || '').replace(/\D/g, ''));
     setPatientAge(p.age ? String(p.age) : '');
     setPatientSex(p.sex || '');
     setSearchResults([]);
-    setSelectedFamilyMember(null);
-    fetch(`/api/dashboard/patients/${p.id}/family`)
-      .then(r => r.json())
-      .then(d => { setFamilyMembers(d.family || []); })
-      .catch(() => setFamilyMembers([]));
+    setSearchState('idle');
+    shouldFocusSubmit.current = true;
   }
 
   async function handleSubmit(e) {
@@ -160,7 +188,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientName: patientName.trim(),
-          patientPhone: withPhonePrefix(patientPhone.trim()) || null,
+          patientPhone: patientPhone ? `+91${patientPhone}` : null,
           patientAge: patientAge.trim() || null,
           patientSex: patientSex || null,
           date,
@@ -174,12 +202,59 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         setError(data.error || 'Failed to book');
         return;
       }
+      setBookedAppointment(data.appointment);
       onBooked?.(data.appointment);
     } catch (err) {
       setError('Network error');
     } finally {
       setSaving(false);
     }
+  }
+
+  if (bookedAppointment) {
+    return (
+      <div className="p-6 space-y-5 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/30 mx-auto">
+          <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+        </div>
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Appointment Booked</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {bookedAppointment.patient_name}{bookedAppointment.time ? ` — ${bookedAppointment.time?.slice(0, 5)}` : ''}
+        </p>
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={() => {
+              const close = onClose;
+              close?.();
+              window.location.href = `/dashboard/visit?appointmentId=${bookedAppointment.id}&name=${encodeURIComponent(bookedAppointment.patient_name)}`;
+            }}
+            className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all"
+          >
+            Open Visit
+          </button>
+          <button
+            onClick={() => {
+              setBookedAppointment(null);
+              setPatientName('');
+              setPatientPhone('');
+              setPatientAge('');
+              setPatientSex('');
+              setTreatment('');
+              setLocation('');
+              setSelectedPatient(null);
+              setSearchResults([]);
+              setSearchState('idle');
+              setError('');
+              setHighlightedIndex(-1);
+              setTimeout(() => nameInputRef.current?.focus(), 50);
+            }}
+            className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+          >
+            Book Another
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -196,23 +271,45 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
             type="text"
             value={patientName}
             onChange={e => { setPatientName(e.target.value); setSelectedPatient(null); }}
+            onKeyDown={e => {
+              if (searchState === 'success' && searchResults.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setHighlightedIndex(prev => (prev + 1) % searchResults.length);
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setHighlightedIndex(prev => (prev - 1 + searchResults.length) % searchResults.length);
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+                    selectPatient(searchResults[highlightedIndex]);
+                  }
+                }
+              }
+            }}
             placeholder="Type patient name..."
             className="w-full pl-9 pr-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />
-          {searching && (
+          {searchState === 'searching' && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
               <div className="w-3.5 h-3.5 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
             </div>
           )}
         </div>
-        {searchResults.length > 0 && !selectedPatient && (
+        {searchState === 'success' && !selectedPatient && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50 z-10 overflow-hidden">
-            {searchResults.map(p => (
+            {searchResults.map((p, i) => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => selectPatient(p)}
-                className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0"
+                onMouseEnter={() => setHighlightedIndex(i)}
+                ref={el => { if (highlightedIndex === i && el) el.scrollIntoView({ block: 'nearest' }); }}
+                className={`w-full text-left px-4 py-3 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0 ${
+                  highlightedIndex === i
+                    ? 'bg-gray-100 dark:bg-gray-700'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                }`}
               >
                 <span className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-semibold text-gray-600 dark:text-gray-300 shrink-0">
                   {(p.name || '?')[0].toUpperCase()}
@@ -225,6 +322,13 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
             ))}
           </div>
         )}
+        {searchState === 'empty' && !selectedPatient && (
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm z-10 p-5 text-center">
+            <Search className="w-6 h-6 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No patients found</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">A new patient record will be created when you book.</p>
+          </div>
+        )}
       </div>
 
       {/* Phone */}
@@ -234,8 +338,8 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
           <span className="inline-flex items-center px-3 py-2.5 bg-gray-100 dark:bg-gray-700 border border-r-0 border-gray-200 dark:border-gray-600 rounded-l-xl text-sm font-medium text-gray-600 dark:text-gray-300 shrink-0">{PHONE_PREFIX}</span>
           <input
             type="tel"
-            value={stripPhonePrefix(patientPhone)}
-            onChange={e => setPatientPhone(stripPhonePrefix(e.target.value))}
+            value={patientPhone}
+            onChange={e => setPatientPhone(e.target.value.replace(/\D/g, ''))}
             placeholder="9876543210"
             className="flex-1 px-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />
@@ -289,29 +393,6 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         </div>
       </div>
 
-      {/* Family Member Selector */}
-      {familyMembers.length > 0 && selectedPatient && (
-        <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5" /> Booking for
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button"
-              onClick={() => { setSelectedFamilyMember(null); setPatientName(selectedPatient.name); setPatientPhone(selectedPatient.phone || ''); }}
-              className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${!selectedFamilyMember ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-              {selectedPatient.name} (self)
-            </button>
-            {familyMembers.map(m => (
-              <button key={m.id} type="button"
-                onClick={() => { setSelectedFamilyMember(m); setPatientName(m.name); setPatientPhone(m.phone || ''); setPatientAge(m.age ? String(m.age) : ''); setPatientSex(m.sex || ''); }}
-                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all ${selectedFamilyMember?.id === m.id ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700 text-violet-800 dark:text-violet-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                {m.name} {m.age ? `(${m.age}y)` : ''}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Treatment Dropdown */}
       <div>
         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Treatment</label>
@@ -343,6 +424,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
       <div className="flex gap-3 pt-1">
         <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">Cancel</button>
         <button
+          ref={submitRef}
           type="submit"
           disabled={saving || !patientName.trim()}
           className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
@@ -419,7 +501,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
             {d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
           </h3>
         </div>
@@ -475,7 +557,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
                         isPast && !isBooked ? 'text-gray-400 dark:text-gray-500'
                         : isBooked ? 'text-blue-700 dark:text-blue-300'
                         : 'text-green-700 dark:text-green-300'
-                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-[10px] font-bold text-red-500 uppercase">Now</span>}</span>
+                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-xs font-bold text-red-500 uppercase">Now</span>}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
@@ -550,7 +632,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
                         isPast && !isBooked ? 'text-gray-400 dark:text-gray-500'
                         : isBooked ? 'text-blue-700 dark:text-blue-300'
                         : 'text-green-700 dark:text-green-300'
-                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-[10px] font-bold text-red-500 uppercase">Now</span>}</span>
+                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-xs font-bold text-red-500 uppercase">Now</span>}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
@@ -592,11 +674,48 @@ export default function DashboardPage() {
   const [slotDefinitions, setSlotDefinitions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [overviewError, setOverviewError] = useState(null);
+  const [viewMode, setViewMode] = useState('month');
   const [bookingModal, setBookingModal] = useState({ open: false, time: null });
   const [refreshKey, setRefreshKey] = useState(0);
   const [toast, setToast] = useState(null);
   const [recentBookings, setRecentBookings] = useState([]);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [showQuickCheckout, setShowQuickCheckout] = useState(null);
+  const [showWalkIn, setShowWalkIn] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
   const bookSlotRef = useRef(null);
+  const tabContainerRef = useRef(null);
+  const [pillStyle, setPillStyle] = useState({});
+
+  function movePill(mode) {
+    const container = tabContainerRef.current;
+    if (!container) return;
+    const btn = container.querySelector(`[data-view="${mode}"]`);
+    if (!btn) return;
+    const cr = container.getBoundingClientRect();
+    const br = btn.getBoundingClientRect();
+    setPillStyle({
+      width: br.width,
+      transform: `translateX(${br.left - cr.left}px)`,
+    });
+  }
+
+  useEffect(() => {
+    movePill(viewMode);
+  }, [viewMode]);
+
+  // Handle ?book=time query param to pop open QuickBook (from WeekView/DayTimeline slot clicks)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const bookTime = params.get('book');
+    if (bookTime) {
+      setBookingModal({ open: true, time: bookTime });
+      // Clean the URL without full page reload
+      const url = new URL(window.location);
+      url.searchParams.delete('book');
+      window.history.replaceState({}, '', url);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -663,6 +782,23 @@ export default function DashboardPage() {
     setToast('Appointment booked successfully');
   }
 
+  function handleAppointmentSelect(appt) {
+    setSelectedAppointment(appt);
+  }
+
+  function handleQuickCheckoutSuccess() {
+    setShowQuickCheckout(null);
+    setSelectedAppointment(null);
+    setToast('Visit completed');
+    setRefreshKey(k => k + 1);
+  }
+
+  function handleWalkInSuccess() {
+    setShowWalkIn(false);
+    setToast('Walk-in completed');
+    setRefreshKey(k => k + 1);
+  }
+
   const totals = data?.totals || {};
   const appointments = data?.appointments || [];
   const confirmed = appointments.filter(a => a.status === 'confirmed');
@@ -703,29 +839,115 @@ export default function DashboardPage() {
 
   return (
     <div className="animate-fade-in">
-      {/* Header — always rendered, even during loading, to optimize LCP */}
-      <div className="sticky top-14 md:top-0 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-md z-10 py-4 mb-6 -mx-6 md:-mx-10 px-6 md:px-10 border-b border-gray-100 dark:border-gray-900 transition-all flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{formatDateLong(selectedDate)}</p>
+      {/* Header */}
+      <div className="py-3 mb-6 border-b border-gray-100 dark:border-gray-800 transition-all">
+        {/* Row 1: Title + Actions */}
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight">Dashboard</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">{formatDateLong(selectedDate)}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setBookingModal({ open: true, time: null })}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-semibold rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New Appointment
+            </button>
+            <div ref={tabContainerRef} className="relative flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+              <div
+                className="absolute top-0.5 bottom-0.5 bg-white dark:bg-gray-700 rounded-md shadow-sm transition-all duration-200 ease-out z-0"
+                style={pillStyle}
+              />
+              {[['month', 'Month', CalendarDays], ['week', 'Week', Columns3], ['day', 'Day', LayoutGrid]].map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  data-view={mode}
+                  onClick={(e) => { setViewMode(mode); movePill(mode); }}
+                  className={`relative z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors duration-150 ${
+                    viewMode === mode
+                      ? 'text-gray-900 dark:text-gray-100'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Icon className="w-3 h-3" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+
+        {/* Row 2: KPI Strip */}
+        {!loading && (
+          <div className="flex items-center gap-4 overflow-x-auto">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{appointments.length}</span>
+            </div>
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Waiting</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.waiting || 0}</span>
+            </div>
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">In Session</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.in_session || 0}</span>
+            </div>
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Completed</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.completed || 0}</span>
+            </div>
+            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Revenue</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(todayRevenue)}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {loading ? (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-pulse">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="shimmer h-80 rounded-xl" />
-            <div className="shimmer h-80 rounded-xl" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => <div key={i} className="shimmer h-28 rounded-xl" />)}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="shimmer h-64 rounded-xl" />
-            <div className="shimmer h-64 rounded-xl" />
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded" />
+                <div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded" />
+              </div>
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {Array.from({length: 7}).map((_, i) => (
+                  <div key={`sh-${i}`} className="h-3 w-full bg-gray-200 dark:bg-gray-700 rounded" />
+                ))}
+              </div>
+              {Array.from({length: 5}).map((_, w) => (
+                <div key={`sw-${w}`} className="grid grid-cols-7 gap-1 mb-1">
+                  {Array.from({length: 7}).map((_, d) => (
+                    <div key={`sd-${d}`} className="h-8 w-full bg-gray-100 dark:bg-gray-800 rounded" />
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4">
+              <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded mb-4" />
+              {Array.from({length: 8}).map((_, i) => (
+                <div key={`ss-${i}`} className="flex items-center gap-3 mb-3">
+                  <div className="h-3 w-12 bg-gray-200 dark:bg-gray-700 rounded shrink-0" />
+                  <div className="h-6 flex-1 bg-gray-100 dark:bg-gray-800 rounded" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      ) : (
+      ) : viewMode === 'month' ? (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Calendar */}
         <Calendar
@@ -752,58 +974,85 @@ export default function DashboardPage() {
           onBookSlotRef={bookSlotRef}
         />
       </div>
+      ) : viewMode === 'week' ? (
+        <div className="mb-8">
+          <WeekView
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
+            onRefresh={() => setRefreshKey(k => k + 1)}
+            onAppointmentSelect={handleAppointmentSelect}
+          />
+        </div>
+      ) : (
+        <div className="mb-8">
+          <DayTimeline
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
+            onRefresh={() => setRefreshKey(k => k + 1)}
+            onAppointmentSelect={handleAppointmentSelect}
+          />
+        </div>
       )
       }
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        {[...STAT_CARDS, REVENUE_CARD].map(card => {
-          const style = CARD_STYLE_MAP[card.key];
-          let value;
-          if (card.key === 'total') value = appointments.length;
-          else if (card.key === 'revenue') value = formatCurrency(todayRevenue);
-          else value = totals[card.key] || 0;
+      {/* FAB — quick actions on week/day views */}
+      {(viewMode === 'week' || viewMode === 'day') && (
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+          {fabOpen && (
+            <div className="animate-scale-in origin-bottom-right space-y-1.5 mb-1">
+              <button
+                onClick={() => { setShowWalkIn(true); setFabOpen(false); }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl shadow-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all w-full active:scale-[0.97]"
+              >
+                <span className="text-lg">⚡</span>
+                Quick Walk-In
+              </button>
+              <button
+                onClick={() => { setBookingModal({ open: true, time: null }); setFabOpen(false); }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl shadow-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all w-full active:scale-[0.97]"
+              >
+                <Plus className="w-4 h-4" />
+                New Appointment
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setFabOpen(o => !o)}
+            className="w-12 h-12 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 rounded-full shadow-xl shadow-gray-900/20 dark:shadow-white/10 flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
+          >
+            {fabOpen ? <ChevronUp className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          </button>
+        </div>
+      )}
+
+      {/* Financial Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        {[
+          { key: 'revenue', label: "Today's Revenue", value: formatCurrency(todayRevenue), link: '/dashboard/stats' },
+          { key: 'outstanding', label: 'Outstanding Amount', value: formatCurrency(todayPending), link: '/dashboard/appointments?status=completed' },
+        ].map(card => {
+          const style = CARD_STYLE_MAP[card.key === 'outstanding' ? (todayPending > 0 ? 'waiting' : 'completed') : 'revenue'];
           return (
             <button
               key={card.key}
-              onClick={() => {
-                const links = {
-                  total: '/dashboard/appointments',
-                  waiting: '/dashboard/appointments?arrival=arrived',
-                  in_session: '/dashboard/appointments?arrival=called',
-                  completed: '/dashboard/appointments?status=completed',
-                  revenue: '/dashboard/stats',
-                };
-                router.push(links[card.key] || '/dashboard/appointments');
-              }}
+              onClick={() => router.push(card.link)}
               className={`relative overflow-hidden w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 hover:-translate-y-0.5 transition-all duration-300 group cursor-pointer active:scale-[0.98] ${style.hoverBg} ${style.hoverBorder} ${style.hoverGlow}`}
             >
-              {/* Watermark Icon */}
               <div className={`absolute -right-3 -bottom-3 w-20 h-20 pointer-events-none transition-all duration-500 ease-out group-hover:scale-125 group-hover:rotate-12 ${style.iconColor}`}>
-                {card.key === 'revenue' ? (
-                  <div className="w-full h-full opacity-[0.12] dark:opacity-[0.06] flex items-center justify-center">
-                    <DollarSign className="w-14 h-14" />
-                  </div>
-                ) : (
-                  <svg className="w-full h-full opacity-[0.12] dark:opacity-[0.06]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    {card.icon}
-                  </svg>
-                )}
+                <div className="w-full h-full opacity-[0.12] dark:opacity-[0.06] flex items-center justify-center">
+                  <DollarSign className="w-14 h-14" />
+                </div>
               </div>
-
-              {/* Card Contents */}
               <div className="relative z-10 flex flex-col h-full justify-between">
                 <div>
-                  <span className={`text-[11px] font-bold tracking-wider uppercase ${style.accentText}`}>
+                  <span className={`text-xs font-bold tracking-wider uppercase ${style.accentText}`}>
                     {card.label}
                   </span>
                   <p className="text-3xl font-extrabold tracking-tight mt-2 text-gray-900 dark:text-gray-100">
-                    {value}
+                    {card.value}
                   </p>
                 </div>
               </div>
-
-              {/* Bottom Accent Bar */}
               <div className={`absolute bottom-0 left-0 right-0 h-1 ${style.accentBar} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
             </button>
           );
@@ -944,12 +1193,8 @@ export default function DashboardPage() {
       {/* Quick Booking Modal — Enhanced */}
       {bookingModal.open && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-          {/* Subtle backdrop */}
           <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={() => setBookingModal({ open: false, time: null })} />
-
-          {/* Modal Card */}
           <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -964,7 +1209,6 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-
             <QuickBookForm
               date={selectedDate}
               time={bookingModal.time}
@@ -973,6 +1217,35 @@ export default function DashboardPage() {
             />
           </div>
         </div>
+      )}
+
+      {/* Appointment Details Modal */}
+      {selectedAppointment && !showQuickCheckout && (
+        <AppointmentDetailsModal
+          appointment={selectedAppointment}
+          onClose={() => setSelectedAppointment(null)}
+          onQuickCheckout={(appt) => { setShowQuickCheckout(appt); }}
+          showToast={(msg) => setToast(msg)}
+        />
+      )}
+
+      {/* Quick Checkout Modal */}
+      {showQuickCheckout && (
+        <QuickCheckoutModal
+          appointment={showQuickCheckout}
+          onClose={() => { setShowQuickCheckout(null); setSelectedAppointment(null); }}
+          onSuccess={handleQuickCheckoutSuccess}
+          showToast={(msg) => setToast(msg)}
+        />
+      )}
+
+      {/* Rapid Walk-In Modal */}
+      {showWalkIn && (
+        <RapidWalkInModal
+          onClose={() => setShowWalkIn(false)}
+          onSuccess={handleWalkInSuccess}
+          showToast={(msg) => setToast(msg)}
+        />
       )}
     </div>
   );

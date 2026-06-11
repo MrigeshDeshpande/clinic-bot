@@ -72,7 +72,7 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
             </h3>
             <button
               onClick={() => setViewDate(todayStr)}
-              className="px-2.5 py-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-700 dark:hover:text-blue-300 transition-all active:scale-95 ring-1 ring-blue-200/50 dark:ring-blue-800/50"
+              className="px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-700 dark:hover:text-blue-300 transition-all active:scale-95 ring-1 ring-blue-200/50 dark:ring-blue-800/50"
             >
               Today
             </button>
@@ -89,7 +89,7 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
       {/* Loading shimmer */}
       {loading && (
         <div className="flex justify-center mb-3">
-          <div className="flex items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
+          <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
             <div className="w-3 h-3 border-2 border-gray-200 dark:border-gray-600 border-t-blue-500 dark:border-t-blue-400 rounded-full animate-spin" />
             Loading...
           </div>
@@ -101,7 +101,7 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
         {dayNames.map((d, i) => (
           <div
             key={d}
-            className={`text-center text-[11px] font-semibold py-1 tracking-wider uppercase ${
+            className={`text-center text-xs font-semibold py-1 tracking-wider uppercase ${
               i === 0 || i === 6
                 ? 'text-red-400 dark:text-red-500/70'
                 : 'text-gray-400 dark:text-gray-500'
@@ -165,7 +165,7 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
                 )}
                 {/* Booking count */}
                 {hasBookings && !isBlocked && (
-                  <span className={`text-[9px] font-bold leading-none ${
+                  <span className={`text-xs font-bold leading-none ${
                     isSelected
                       ? 'text-white/80'
                       : isToday(day)
@@ -192,15 +192,15 @@ export default function Calendar({ onMonthChange, hideHeader, selectedDate, onDa
 
       {/* Legend */}
       <div className="flex items-center justify-center gap-5 mt-auto pt-4 border-t border-gray-100 dark:border-gray-800/80">
-        <span className="flex items-center gap-2 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+        <span className="flex items-center gap-2 text-xs font-medium text-gray-400 dark:text-gray-500">
           <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.4)]" />
           Open
         </span>
-        <span className="flex items-center gap-2 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+        <span className="flex items-center gap-2 text-xs font-medium text-gray-400 dark:text-gray-500">
           <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_4px_rgba(59,130,246,0.4)]" />
           Booked
         </span>
-        <span className="flex items-center gap-2 text-[11px] font-medium text-gray-400 dark:text-gray-500">
+        <span className="flex items-center gap-2 text-xs font-medium text-gray-400 dark:text-gray-500">
           <span className="w-2 h-2 rounded-full bg-red-400 shadow-[0_0_4px_rgba(248,113,113,0.4)]" />
           Closed
         </span>

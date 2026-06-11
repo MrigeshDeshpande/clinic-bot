@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const MAX_QUERY_RETRIES = 4;
-const RETRY_BASE_DELAY_MS = 3000;
+const RETRY_BASE_DELAY_MS = 500;
 
 let rawSql;
 let sql;
@@ -178,7 +178,7 @@ export async function runMigrations() {
         cancellation_reason VARCHAR(255),
         created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        CONSTRAINT valid_appt_status CHECK (status IN ('confirmed','cancelled','completed','no_show'))
+        CONSTRAINT valid_appt_status CHECK (status IN ('confirmed','cancelled','completed','no_show','superseded'))
       );
     `;
 
@@ -218,6 +218,15 @@ export async function runMigrations() {
     await db`
       CREATE INDEX IF NOT EXISTS idx_appointments_logical_id ON appointments(logical_id);
     `;
+    // Migration: Allow 'superseded' status for reschedule versioning
+    await db`
+      ALTER TABLE appointments DROP CONSTRAINT IF EXISTS valid_appt_status;
+    `;
+    await db`
+      ALTER TABLE appointments ADD CONSTRAINT valid_appt_status
+        CHECK (status IN ('confirmed','cancelled','completed','no_show','superseded'));
+    `;
+
     // Unique constraint on (logical_id, version) prevents duplicate versions
     // in concurrent reschedule attempts
     await db`
@@ -305,6 +314,15 @@ export async function runMigrations() {
       ALTER TABLE patients ADD CONSTRAINT unique_patient_phone UNIQUE (phone);
     `;
 
+    // Trigram indexes for fast ILIKE '%search%' on name/phone
+    try {
+      await db`CREATE EXTENSION IF NOT EXISTS pg_trgm;`;
+      await db`CREATE INDEX IF NOT EXISTS idx_patients_name_trgm ON patients USING gin (name gin_trgm_ops);`;
+      await db`CREATE INDEX IF NOT EXISTS idx_patients_phone_trgm ON patients USING gin (phone gin_trgm_ops);`;
+    } catch (_) {
+      logger.warn('pg_trgm not available — ILIKE searches will be slower');
+    }
+
     // Visit logging columns on appointments
     await db`
       ALTER TABLE appointments
@@ -370,6 +388,46 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS paid_amount INTEGER DEFAULT 0;
     `;
 
+    // Payments ledger — independent financial tracking (source of truth for money)
+    await db`
+      CREATE TABLE IF NOT EXISTS payments (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id  UUID REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id      UUID REFERENCES patients(id) ON DELETE CASCADE,
+        amount          INTEGER NOT NULL CHECK (amount > 0),
+        direction       VARCHAR(10) NOT NULL CHECK (direction IN ('credit', 'debit')),
+        kind            VARCHAR(20) NOT NULL DEFAULT 'payment'
+                        CHECK (kind IN ('payment','refund','adjustment','migration','waiver','advance')),
+        method          VARCHAR(20) CHECK (method IN ('cash','upi','card','bank','other')),
+        idempotency_key VARCHAR(100) UNIQUE,
+        notes           TEXT,
+        recorded_by     VARCHAR(20) NOT NULL DEFAULT 'reception',
+        recorded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_payments_appointment ON payments(appointment_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_payments_patient ON payments(patient_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_payments_recorded ON payments(recorded_at);
+    `;
+
+    // Backfill: migrate existing paid_amount > 0 into payments ledger with explicit migration marker
+    // Only runs once — INSERT ON CONFLICT (idempotency_key) ensures no duplicates
+    await db`
+      INSERT INTO payments (appointment_id, patient_id, amount, direction, kind, notes, recorded_by)
+      SELECT a.id, a.patient_id, a.paid_amount, 'credit', 'migration',
+             'Migrated from legacy paid_amount=' || a.paid_amount, 'system'
+      FROM appointments a
+      WHERE a.paid_amount > 0
+        AND a.id NOT IN (
+          SELECT appointment_id FROM payments WHERE kind = 'migration'
+        )
+    `;
+
     // post_visit_sent_at — tracks whether post-visit summary has been sent
     await db`
       ALTER TABLE appointments
@@ -392,6 +450,12 @@ export async function runMigrations() {
     await db`
       ALTER TABLE appointments
         ADD COLUMN IF NOT EXISTS tooth_diagnoses JSONB DEFAULT '[]';
+    `;
+
+    // treatment_fees — per-treatment fee map (JSONB object keyed by treatment id)
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS treatment_fees JSONB DEFAULT '{}';
     `;
 
     // due_reminder_log — history of due reminder triggers (manual + cron)
@@ -527,6 +591,29 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS patient_ratings JSONB DEFAULT '{}';
     `;
 
+    // Dental habit / risk-factor tracking
+    await db`
+      ALTER TABLE patients
+        ADD COLUMN IF NOT EXISTS habits JSONB DEFAULT '{}';
+    `;
+
+    // OPD slip fields on patients
+    await db`
+      ALTER TABLE patients
+        ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS occupation VARCHAR(100) DEFAULT '',
+        ADD COLUMN IF NOT EXISTS dental_history TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS family_history TEXT DEFAULT '';
+    `;
+
+    // OPD slip fields on appointments
+    await db`
+      ALTER TABLE appointments
+        ADD COLUMN IF NOT EXISTS chief_complaint TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS general_examination TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS extra_oral_examination TEXT DEFAULT '';
+    `;
+
     // Settings table — key-value store for admin dashboard customization
     await db`
       CREATE TABLE IF NOT EXISTS settings (
@@ -542,7 +629,8 @@ export async function runMigrations() {
         ('doctor', '{"qualifications":"BDS, MOI","registration":"CGDC/G/24/4198","designation":"Dental Surgeon | Oral Implantologist"}'),
         ('prescription', '{"primary_color":"#0d1b2a","accent_color":"#3a86c8","watermark_text":"Shri Balaji","show_watermark":true,"font_size":10,"show_rx":true,"show_hindi":false,"generic_substitution":true,"border_enabled":true}'),
         ('checklists', '{"diagnosis":["Gingivitis","Halitosis","Caries","Deep caries","Periapical Abscess","Grossly Decayed","Missing","Pocket","Periodontitis","Mobility","Lesion","Pericoronitis","Impacted","Fractured Tooth / Cusp","Abrasion / Attrition / Erosion","Irregular Teeth","Calculus","Stains"],"advice":["Avoid hot/cold foods for 24 hours","Take prescribed medicines on time","Maintain oral hygiene","Use soft-bristled toothbrush","Rinse with warm salt water","Avoid hard/sticky foods"]}'),
-        ('google_maps', '{"review_url":""}')
+        ('google_maps', '{"review_url":""}'),
+        ('medicines', '{"salts":{"Amoxicillin":{"category":"antibiotics","enabled":true},"Amoxicillin + Clavulanic Acid":{"category":"antibiotics","enabled":true},"Azithromycin":{"category":"antibiotics","enabled":true},"Cefixime":{"category":"antibiotics","enabled":true},"Ceftriaxone Injection":{"category":"antibiotics","enabled":true},"Cefuroxime":{"category":"antibiotics","enabled":true},"Cephalexin":{"category":"antibiotics","enabled":true},"Ciprofloxacin":{"category":"antibiotics","enabled":true},"Clindamycin":{"category":"antibiotics","enabled":true},"Doxycycline":{"category":"antibiotics","enabled":true},"Erythromycin":{"category":"antibiotics","enabled":true},"Metronidazole":{"category":"antibiotics","enabled":true},"Penicillin V":{"category":"antibiotics","enabled":true},"Tetracycline":{"category":"antibiotics","enabled":true},"Mouthwash - Chlorhexidine":{"category":"antibiotics","enabled":true},"Mouthwash - Povidone Iodine":{"category":"antibiotics","enabled":true},"Aceclofenac":{"category":"painkillers","enabled":true},"Combiflam (Ibuprofen + Paracetamol)":{"category":"painkillers","enabled":true},"Diclofenac":{"category":"painkillers","enabled":true},"Gabapentin":{"category":"painkillers","enabled":true},"Ibuprofen":{"category":"painkillers","enabled":true},"Ketorolac":{"category":"painkillers","enabled":true},"Ketorolac Injection":{"category":"painkillers","enabled":true},"Lornoxicam":{"category":"painkillers","enabled":true},"Mefenamic Acid":{"category":"painkillers","enabled":true},"Naproxen":{"category":"painkillers","enabled":true},"Paracetamol":{"category":"painkillers","enabled":true},"Paracetamol + Diclofenac Combination":{"category":"painkillers","enabled":true},"Pregabalin":{"category":"painkillers","enabled":true},"Betamethasone":{"category":"corticosteroids","enabled":true},"Dexamethasone":{"category":"corticosteroids","enabled":true},"Prednisolone":{"category":"corticosteroids","enabled":true},"Triamcinolone Acetonide":{"category":"corticosteroids","enabled":true},"Triamcinolone Ointment":{"category":"corticosteroids","enabled":true},"Articaine":{"category":"anaesthetics","enabled":true},"Bupivacaine":{"category":"anaesthetics","enabled":true},"Lignocaine":{"category":"anaesthetics","enabled":true},"Lignocaine Gel":{"category":"anaesthetics","enabled":true},"Lignocaine Spray":{"category":"anaesthetics","enabled":true},"Lignocaine with Adrenaline":{"category":"anaesthetics","enabled":true},"Mepivacaine":{"category":"anaesthetics","enabled":true},"Amphotericin B Oral Suspension":{"category":"antifungals","enabled":true},"Clotrimazole Gel":{"category":"antifungals","enabled":true},"Clotrimazole Mouth Paint":{"category":"antifungals","enabled":true},"Fluconazole":{"category":"antifungals","enabled":true},"Itraconazole":{"category":"antifungals","enabled":true},"Miconazole Gel":{"category":"antifungals","enabled":true},"Nystatin Oral Suspension":{"category":"antifungals","enabled":true},"Acyclovir":{"category":"antivirals","enabled":true},"Acyclovir Cream":{"category":"antivirals","enabled":true},"Valacyclovir":{"category":"antivirals","enabled":true},"Codeine Phosphate":{"category":"analgesics","enabled":true},"Tramadol":{"category":"analgesics","enabled":true},"Domperidone":{"category":"gi","enabled":true},"Metoclopramide":{"category":"gi","enabled":true},"Omeprazole":{"category":"gi","enabled":true},"Ondansetron":{"category":"gi","enabled":true},"Pantoprazole":{"category":"gi","enabled":true},"Ranitidine":{"category":"gi","enabled":true},"Calcium + Vitamin D3":{"category":"vitamins","enabled":true},"Iron + Folic Acid":{"category":"vitamins","enabled":true},"Multivitamin Tablet":{"category":"vitamins","enabled":true},"Vitamin B Complex":{"category":"vitamins","enabled":true},"Vitamin C":{"category":"vitamins","enabled":true},"Vitamin D3":{"category":"vitamins","enabled":true},"Zinc":{"category":"vitamins","enabled":true},"Alprazolam":{"category":"sedatives","enabled":true},"Diazepam":{"category":"sedatives","enabled":true},"Ketamine":{"category":"sedatives","enabled":true},"Lorazepam":{"category":"sedatives","enabled":true},"Midazolam":{"category":"sedatives","enabled":true},"Nitrous Oxide":{"category":"sedatives","enabled":true},"Tranexamic Acid":{"category":"hemostatics","enabled":true},"Tranexamic Acid Injection":{"category":"hemostatics","enabled":true},"Benzocaine Gel":{"category":"mouthwashes_topical","enabled":true},"Chlorhexidine Mouthwash":{"category":"mouthwashes_topical","enabled":true},"Choline Salicylate Gel (Bonjela)":{"category":"mouthwashes_topical","enabled":true},"Hydrogen Peroxide Mouthwash":{"category":"mouthwashes_topical","enabled":true},"Metronidazole Gel":{"category":"mouthwashes_topical","enabled":true},"Saline Mouthwash":{"category":"mouthwashes_topical","enabled":true},"Triamcinolone Oral Paste":{"category":"mouthwashes_topical","enabled":true},"Calcium Hydroxide Paste":{"category":"other_dental","enabled":true},"Desensitizing Paste":{"category":"other_dental","enabled":true},"Fluoride Varnish":{"category":"other_dental","enabled":true},"Formocresol":{"category":"other_dental","enabled":true},"MTA (Mineral Trioxide Aggregate)":{"category":"other_dental","enabled":true},"Potassium Nitrate Gel":{"category":"other_dental","enabled":true},"Sensodyne Toothpaste":{"category":"other_dental","enabled":true},"Sodium Fluoride Gel":{"category":"other_dental","enabled":true},"Tetracycline Ointment":{"category":"other_dental","enabled":true},"Zinc Oxide Eugenol Paste":{"category":"other_dental","enabled":true}},"custom":[],"usage":{},"templates":[]}')
       ON CONFLICT (key) DO NOTHING;
     `;
 

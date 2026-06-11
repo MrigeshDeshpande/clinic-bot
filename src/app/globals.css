@@ -142,10 +142,19 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   
-  /* Scale up small text sizes for readability */
-  --text-xs: 0.8rem;
-  --text-sm: 0.925rem;
-  --text-base: 1.05rem;
+  /* Project typography scale: readable clinical UI defaults */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.35rem;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.55rem;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.7rem;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.85rem;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 2rem;
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 2.35rem;
 
   /* Map standard colors dynamically to the active variables */
   --color-gray-50: var(--gray-50);
@@ -216,12 +225,26 @@
   --color-red-900: var(--red-900);
 }
 
+/* 16-column grid — separate @theme so Tailwind generates utility classes */
+@theme {
+  --grid-template-columns-16: repeat(16, minmax(0, 1fr));
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 /* ─── Custom Scrollbar ─── */

@@ -1,12 +1,13 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import PrescriptionHeader from './PrescriptionHeader';
+import { getTreatmentName } from '@/lib/treatments';
 
 const A4_W = 794;
 const A4_H = 1123;
-const LABEL_CLS = 'text-[9px] font-semibold text-gray-400 uppercase tracking-wider';
+const LABEL_CLS = 'text-xs font-semibold text-gray-400 uppercase tracking-wider';
 const VALUE_CLS = 'text-xs text-gray-900';
-const SECTION_TITLE = 'text-[10px] font-bold text-[#1e3a5f] uppercase tracking-wider mb-1.5';
+const SECTION_TITLE = 'text-xs font-bold text-[#1e3a5f] uppercase tracking-wider mb-1.5';
 
 function ToothTypeLabel({ diagnoses }) {
   if (!diagnoses || diagnoses.length === 0) return null;
@@ -45,8 +46,9 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
   const pSex = patientProfile?.sex || form.patientSex || '';
   const ageSex = [pAge, pSex].filter(Boolean).join(' / ') || '__________';
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const getFeeAmount = (v) => typeof v === 'number' ? v : (v?.amount ?? 0);
   const selectedTreatments = Object.keys(treatmentFees || {});
-  const totalFees = (consultationFee || 0) + Object.values(treatmentFees || {}).reduce((s, v) => s + v, 0) + (Number(form.medicineCharges) || 0);
+  const totalFees = (consultationFee || 0) + Object.values(treatmentFees || {}).reduce((s, v) => s + getFeeAmount(v), 0) + (Number(form.medicineCharges) || 0);
   const scaledW = A4_W * scale;
   const scaledH = A4_H * scale;
 
@@ -56,7 +58,7 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription Preview</span>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">{Math.round(scale * 100)}%</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{Math.round(scale * 100)}%</span>
           <button
             type="button"
             onClick={onClose}
@@ -72,7 +74,7 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
       {/* Scaled A4 page */}
       <div ref={containerRef} className="flex-1 overflow-y-auto flex items-start justify-center bg-white dark:bg-gray-900">
         <div style={{ width: scaledW, height: scaledH, overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.12)', borderRadius: 2, flexShrink: 0 }}>
-          <div style={{ width: A4_W, height: A4_H, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff' }}>
+          <div style={{ width: A4_W, height: A4_H, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff', color: '#111827' }}>
             <PrescriptionHeader />
 
             {/* === PATIENT INFO === */}
@@ -138,7 +140,7 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
                       <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f3f4f6' }}>
                         <td style={{ ...styleTD, fontWeight: 700 }}>#{td.tooth}</td>
                         <td style={styleTD}>{td.surface || '—'}</td>
-                        <td style={styleTD}>{td.treatment || '—'}</td>
+                        <td style={styleTD}>{getTreatmentName(td.treatment) || '—'}</td>
                         <td style={{ ...styleTD, borderRight: 'none' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span>{td.diagnoses?.join(', ') || '—'}</span>
@@ -211,12 +213,16 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
                       <span style={{ fontWeight: 500 }}>Rs. {consultationFee.toLocaleString('en-IN')}</span>
                     </div>
                   )}
-                  {selectedTreatments.map(t => (
-                    <div key={t} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                      <span style={{ color: '#4b5563' }}>{t}</span>
-                      <span style={{ fontWeight: 500 }}>Rs. {(treatmentFees[t] || 0).toLocaleString('en-IN')}</span>
-                    </div>
-                  ))}
+                  {selectedTreatments.map(t => {
+                    const fee = treatmentFees[t];
+                    const amount = getFeeAmount(fee);
+                    return (
+                      <div key={t} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                        <span style={{ color: '#4b5563' }}>{t}</span>
+                        <span style={{ fontWeight: 500 }}>Rs. {amount.toLocaleString('en-IN')}</span>
+                      </div>
+                    );
+                  })}
                   {Number(form.medicineCharges) > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
                       <span style={{ color: '#4b5563' }}>Medicine Charges</span>
