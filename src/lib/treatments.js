@@ -98,7 +98,7 @@ export function getDefaultFee(id) {
  * Normalize a treatment value to its canonical ID.
  * Accepts an ID string, a name string, or an object.
  */
-export const resolveTreatmentId = (value) => {
+export function resolveTreatmentId(value) {
   if (!value) return null;
   if (typeof value === 'object' && value?.treatmentId) return value.treatmentId;
   if (typeof value === 'object' && value?.id) return value.id;

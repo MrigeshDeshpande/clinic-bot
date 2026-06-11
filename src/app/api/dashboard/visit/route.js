@@ -13,9 +13,17 @@ async function updateMedicineUsage(sql, medicines) {
     const current = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value;
     if (!current) return;
     const usage = current.usage || {};
+    const now = new Date().toISOString();
     for (const med of medicines) {
       if (med.name) {
-        usage[med.name] = (usage[med.name] || 0) + 1;
+        const prev = usage[med.name];
+        if (typeof prev === 'number') {
+          usage[med.name] = { count: prev + 1, last_used_at: now };
+        } else if (prev && typeof prev === 'object') {
+          usage[med.name] = { count: (prev.count || 0) + 1, last_used_at: now };
+        } else {
+          usage[med.name] = { count: 1, last_used_at: now };
+        }
       }
     }
     current.usage = usage;

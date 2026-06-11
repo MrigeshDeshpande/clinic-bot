@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext, SidebarContext } from '../layout';
 import { Stethoscope, ClipboardCheck, ArrowLeft, Search, X, CheckCircle2, Clock, ChevronDown, ChevronRight } from 'lucide-react';
-import { TREATMENTS, TREATMENT_NAMES, getTreatmentName, getDefaultFee, normalizeTreatmentFee, resolveTreatmentId, suggestTreatment } from '@/lib/treatments';
+import { TREATMENTS, TREATMENT_NAMES, getTreatmentName, getDefaultFee, normalizeTreatmentFee, suggestTreatment } from '@/lib/treatments';
+import { COMMON_MEDICINES } from '@/lib/medicines';
 
 import { apiFetch } from '@/lib/clientApi';
 import { fetchCached } from '@/lib/clientFetchCache';
@@ -56,6 +57,19 @@ const TIMING_OPTIONS = [
   { value: 'after', label: 'After meal' },
   { value: 'before', label: 'Before meal' },
 ];
+
+function resolveTreatmentId(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value.treatmentId || value.id || null;
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  const treatment = TREATMENTS.find(t =>
+    t.id === value ||
+    t.name.toLowerCase() === normalized ||
+    t.aliases?.some(alias => alias.toLowerCase() === normalized)
+  );
+  return treatment?.id || value;
+}
 
 const RATING_CATEGORIES = [
   { key: 'payment_time', label: 'Payment on Time' },
@@ -170,7 +184,7 @@ function VisitPageInner() {
         if (data.settings?.treatments?.feeOverrides) setFeeOverrides(data.settings.treatments.feeOverrides);
         if (data.settings?.treatments?.custom) setCustomTreatments(data.settings.treatments.custom);
         const ms = data.settings?.medicines;
-        if (ms?.salts) {
+        if (ms?.salts && Object.keys(ms.salts).length > 0) {
           const customNames = (ms.custom || []).map(s => typeof s === 'string' ? s : s.name);
           const names = Object.entries(ms.salts)
             .filter(([_, v]) => v.enabled !== false)
@@ -178,6 +192,8 @@ function VisitPageInner() {
             .concat(customNames)
             .sort();
           setMedicineList(names);
+        } else {
+          setMedicineList(COMMON_MEDICINES);
         }
         if (ms?.usage) setMedicineUsage(ms.usage);
         if (ms?.templates) setMedicineTemplates(ms.templates);
@@ -1666,10 +1682,10 @@ function VisitPageInner() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-16 gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-16 gap-6 items-start">
 
-            {/* ── Clinical Pane (Left) — xl:col-span-13 ── */}
-            <div className="xl:col-span-13 space-y-6">
+            {/* ── Clinical Pane (Left) — lg:col-span-12 ── */}
+            <div className="lg:col-span-12 space-y-6">
               {/* ═══ 1. Chief Complaint ═══ */}
               {patientProfile && (
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
@@ -1883,8 +1899,8 @@ function VisitPageInner() {
               />
             </div>
 
-            {/* ── Context Sidebar (Right) — xl:col-span-3, sticky ── */}
-            <div className="xl:col-span-3 sticky top-20 self-start">
+            {/* ── Context Sidebar (Right) — lg:col-span-4, sticky ── */}
+            <div className="lg:col-span-4 sticky top-20 self-start">
               <ContextSidebar
                 patientProfile={patientProfile}
                 patientVisits={patientVisits}
