@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pill, X, Plus, Search, Trash2 } from 'lucide-react';
+import { Pill, X, Plus, Search, Trash2, Zap, Clock } from 'lucide-react';
 
 const PRESET_COLORS = [
   { bg: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800', icon: '🟢' },
@@ -31,10 +31,31 @@ export default function PrescriptionCard({ prescriptionProps }) {
     updateMedicine,
     FREQUENCY_OPTIONS,
     DURATION_OPTIONS,
-    TIMING_OPTIONS
+    TIMING_OPTIONS,
+    medicineUsage,
+    medicineTemplates,
+    loadMedicineTemplate,
   } = prescriptionProps;
 
   const freqShort = { 'Daily one time': 'Once', 'Twice a day': 'BD', 'Thrice a day': 'TDS' };
+
+  const hasSearch = saltSearch.trim().length > 0;
+
+  const mostUsed = !hasSearch && medicineUsage ? Object.entries(medicineUsage)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 12)
+    .filter(([name]) => !form.medicines.some(m => m.name === name))
+  : [];
+
+  const allSelected = form.medicines.map(m => m.name);
+
+  function chipClass(salt, isSelected) {
+    return `px-2 py-0.5 rounded text-[10px] font-medium border transition-all active:scale-95 cursor-pointer ${
+      isSelected
+        ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-600 text-violet-800 dark:text-violet-200'
+        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-violet-200 dark:hover:border-violet-600'
+    }`;
+  }
 
   return (
     <div className="space-y-3">
@@ -95,18 +116,58 @@ export default function PrescriptionCard({ prescriptionProps }) {
         )}
       </div>
 
-      {/* Salt chips */}
-      {saltSearch && (
+      {/* Most Used */}
+      {!hasSearch && mostUsed.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Zap className="w-3 h-3 text-amber-500" />
+            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Most Used</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {mostUsed.map(([salt, count]) => {
+              const isSelected = allSelected.includes(salt);
+              return (
+                <button key={salt} type="button" onClick={() => toggleSalt(salt)}
+                  className={`${chipClass(salt, isSelected)} flex items-center gap-1`}>
+                  {salt}
+                  <span className="text-[9px] text-gray-400 font-normal">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="border-t border-gray-100 dark:border-gray-800/50 my-2" />
+        </div>
+      )}
+
+      {/* Quick Templates */}
+      {medicineTemplates && medicineTemplates.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Clock className="w-3 h-3 text-violet-500" />
+            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Quick Templates</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {medicineTemplates.map(tpl => (
+              <button key={tpl.id} type="button" onClick={() => loadMedicineTemplate(tpl)}
+                className="group relative px-3 py-1.5 text-xs font-medium rounded-lg border border-violet-200 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-all active:scale-95">
+                <Zap className="w-2.5 h-2.5 inline mr-1 text-violet-400" />
+                {tpl.name}
+                <span className="ml-1 text-[9px] text-violet-400">({tpl.medicines.length})</span>
+              </button>
+            ))}
+          </div>
+          <div className="border-t border-gray-100 dark:border-gray-800/50 my-2" />
+        </div>
+      )}
+
+      {/* Filtered salts (visible when searching) */}
+      {hasSearch && (
         <div className="flex flex-wrap gap-1 max-h-[140px] overflow-y-auto">
           {filteredSalts.map(salt => {
-            const isSelected = form.medicines.some(m => m.name === salt);
+            const isSelected = allSelected.includes(salt);
             return (
               <button key={salt} type="button" onClick={() => toggleSalt(salt)}
-                className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-all active:scale-95 ${
-                  isSelected
-                    ? 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-600 text-violet-800 dark:text-violet-200'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-violet-200 dark:hover:border-violet-600'
-                }`}>
+                className={chipClass(salt, isSelected)}>
                 {salt}
                 {isSelected && <span className="ml-0.5">✓</span>}
               </button>
@@ -124,7 +185,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
         <Plus className="w-2.5 h-2.5" /> Add custom
       </button>
 
-      {/* Medicine table — compact */}
+      {/* Medicine table */}
       {form.medicines.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">

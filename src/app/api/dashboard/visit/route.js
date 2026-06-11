@@ -5,6 +5,26 @@ import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse
 import { completeVisit } from '@/services/completeVisit';
 import { createWalkIn } from '@/services/createWalkIn';
 
+async function updateMedicineUsage(sql, medicines) {
+  if (!medicines || !Array.isArray(medicines) || medicines.length === 0) return;
+  try {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'medicines'`;
+    if (rows.length === 0) return;
+    const current = typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value;
+    if (!current) return;
+    const usage = current.usage || {};
+    for (const med of medicines) {
+      if (med.name) {
+        usage[med.name] = (usage[med.name] || 0) + 1;
+      }
+    }
+    current.usage = usage;
+    await sql`UPDATE settings SET value = ${JSON.stringify(current)}, updated_at = NOW() WHERE key = 'medicines'`;
+  } catch (e) {
+    logger.warn('MEDICINE_USAGE_UPDATE_FAILED', { error: e.message });
+  }
+}
+
 export async function POST(req) {
   const csrfErr = requireCsrf(req);
   if (csrfErr) return csrfErr;
@@ -19,10 +39,12 @@ export async function POST(req) {
 
     if (body.appointmentId) {
       const appointment = await completeVisit(sql, body);
+      updateMedicineUsage(sql, body.medicines);
       return NextResponse.json({ appointment: sanitizeResponse(appointment) });
     }
 
     const result = await createWalkIn(sql, body);
+    updateMedicineUsage(sql, body.medicines);
     return NextResponse.json({
       appointment: sanitizeResponse(result.appointment),
       patient_name: result.patient_name,

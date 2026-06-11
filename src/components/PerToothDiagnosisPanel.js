@@ -79,7 +79,7 @@ function TreatmentsSelector({ favorites = [], customTreatments = [], selected, o
       >
         {isSelected && <Star className="w-3 h-3 shrink-0 text-emerald-500" />}
         <span className="flex-1">{t.name}</span>
-        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">₹{t.defaultFee}</span>
+        <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">₹{t.defaultFee}</span>
       </button>
     );
   };
@@ -139,7 +139,7 @@ function TreatmentsSelector({ favorites = [], customTreatments = [], selected, o
           <div className="mb-2">
             <div className="flex items-center gap-1.5 mb-1 px-1">
               <Star className="w-3 h-3 text-amber-500" />
-              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Favorites</span>
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Favorites</span>
             </div>
             <div className="space-y-1">
               {favTreatments.map(t => renderTreatment(t))}
@@ -159,8 +159,8 @@ function TreatmentsSelector({ favorites = [], customTreatments = [], selected, o
               <button type="button" onClick={() => toggleCategory(cat.id)}
                 className="flex items-center gap-1.5 w-full px-1 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                 {isCollapsed ? <ChevronRight className="w-3 h-3 text-gray-400" /> : <ChevronDown className="w-3 h-3 text-gray-400" />}
-                <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{cat.label}</span>
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto">{nonFav.length}</span>
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{cat.label}</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">{nonFav.length}</span>
               </button>
               {!isCollapsed && (
                 <div className="space-y-1 ml-1 mt-1">
@@ -246,7 +246,7 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
 
   return (
     <div className="flex flex-col items-center">
-      <svg viewBox="0 0 40 40" className="w-20 h-20">
+      <svg viewBox="0 0 40 40" className="w-28 h-28">
         <g transform="translate(8, 8) scale(1)">
           <path d={shape} fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2"
             className="dark:fill-gray-800 dark:stroke-gray-600" />
@@ -259,7 +259,7 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
                 fill={isSel ? '#3b82f6' : 'transparent'}
                 fillOpacity={isSel ? 0.25 : 0}
                 className="group-hover:fill-blue-500/10 dark:group-hover:fill-blue-400/15 transition-colors" />
-              <text x={z.x} y={z.y + 4} textAnchor="middle" fontSize="10" fontWeight="700"
+              <text x={z.x} y={z.y + 4} textAnchor="middle" fontSize="12" fontWeight="700"
                 fill={isSel ? '#1e40af' : '#94a3b8'}
                 className="select-none pointer-events-none transition-colors">
                 {z.id}
@@ -269,7 +269,7 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
         })}
       </svg>
       {selected && (
-        <div className="text-[10px] font-medium text-blue-600 dark:text-blue-400 mt-1">
+        <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mt-1.5">
           {selectedSurfaces.map(s => surfaceLabel(s, toothNumber)).join(', ')}
         </div>
       )}
@@ -405,12 +405,12 @@ export default function PerToothDiagnosisPanel({
         {/* ── History (prominent, second only to header) ── */}
         {timeline.length > 0 && (
           <div className="bg-gray-50 dark:bg-gray-800/40 rounded-xl px-3 py-2.5">
-            <h4 className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">History</h4>
+            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">History</h4>
             <div className="space-y-1">
               {timeline.map(([year, entries]) => (
                 entries.map((text, i) => (
                   <div key={`${year}-${i}`} className={`flex items-center gap-2 text-xs ${i === entries.length - 1 && year === timeline[0]?.[0] ? 'font-semibold text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400'}`}>
-                    <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 w-10 shrink-0">{year}</span>
+                    <span className="text-xs font-mono text-gray-400 dark:text-gray-500 w-10 shrink-0">{year}</span>
                     <span>{text}</span>
                   </div>
                 ))
@@ -430,10 +430,10 @@ export default function PerToothDiagnosisPanel({
           <div className="relative">
             <div className="flex flex-wrap gap-1 mb-1.5">
               {selectedDiagnoses.map(d => (
-                <span key={d} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 rounded-lg text-[11px] font-medium">
+                <span key={d} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 rounded-lg text-sm font-medium">
                   {d}
                   <button type="button" onClick={() => removeDiagnosis(d)} className="hover:text-blue-600 dark:hover:text-blue-300 transition-colors">
-                    <X className="w-2.5 h-2.5" />
+                    <X className="w-3 h-3" />
                   </button>
                 </span>
               ))}
@@ -492,11 +492,11 @@ export default function PerToothDiagnosisPanel({
             <div className="mt-3 space-y-3">
               {/* Severity */}
               <div>
-                <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1 block">Severity</label>
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Severity</label>
                 <div className="flex gap-1.5">
                   {SEVERITY_LEVELS.map(s => (
                     <button key={s.id} type="button" onClick={() => setSeverity(s.id)}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-medium border transition-all active:scale-95 ${
+                      className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
                         selectedSeverity === s.id
                           ? s.color + ' ring-1 ring-inset'
                           : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'
@@ -508,11 +508,11 @@ export default function PerToothDiagnosisPanel({
               </div>
               {/* Status */}
               <div>
-                <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1 block">Status</label>
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Status</label>
                 <div className="flex gap-1.5">
                   {STATUS_OPTIONS.map(s => (
                     <button key={s.id} type="button" onClick={() => setStatus(s.id)}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-medium border transition-all active:scale-95 ${
+                      className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
                         selectedStatus === s.id
                           ? s.color + ' ring-1 ring-inset'
                           : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'
@@ -524,11 +524,11 @@ export default function PerToothDiagnosisPanel({
               </div>
               {/* Outcome */}
               <div>
-                <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1 block">Outcome</label>
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Outcome</label>
                 <div className="flex gap-1.5">
                   {OUTCOME_OPTIONS.map(o => (
                     <button key={o.id} type="button" onClick={() => setOutcome(o.id)}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-medium border transition-all active:scale-95 ${
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all active:scale-95 ${
                         selectedOutcome === o.id
                           ? o.color + ' ring-1 ring-inset'
                           : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'

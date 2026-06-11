@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext, SidebarContext } from '../layout';
 import { Stethoscope, ClipboardCheck, ArrowLeft, Search, X, CheckCircle2, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { TREATMENTS, TREATMENT_NAMES, getTreatmentName, getDefaultFee, normalizeTreatmentFee, resolveTreatmentId, suggestTreatment } from '@/lib/treatments';
-import { MEDICINE_SALTS } from '@/lib/medicines';
+
 import { apiFetch } from '@/lib/clientApi';
 import { fetchCached } from '@/lib/clientFetchCache';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
@@ -140,6 +140,9 @@ function VisitPageInner() {
   const [treatmentFavorites, setTreatmentFavorites] = useState([]);
   const [feeOverrides, setFeeOverrides] = useState({});
   const [customTreatments, setCustomTreatments] = useState([]);
+  const [medicineList, setMedicineList] = useState([]);
+  const [medicineTemplates, setMedicineTemplates] = useState([]);
+  const [medicineUsage, setMedicineUsage] = useState({});
 
   // Merge catalog defaults with settings overrides
   const getFee = useCallback((id) => {
@@ -166,6 +169,18 @@ function VisitPageInner() {
         if (data.settings?.treatments?.favorites) setTreatmentFavorites(data.settings.treatments.favorites);
         if (data.settings?.treatments?.feeOverrides) setFeeOverrides(data.settings.treatments.feeOverrides);
         if (data.settings?.treatments?.custom) setCustomTreatments(data.settings.treatments.custom);
+        const ms = data.settings?.medicines;
+        if (ms?.salts) {
+          const customNames = (ms.custom || []).map(s => typeof s === 'string' ? s : s.name);
+          const names = Object.entries(ms.salts)
+            .filter(([_, v]) => v.enabled !== false)
+            .map(([k]) => k)
+            .concat(customNames)
+            .sort();
+          setMedicineList(names);
+        }
+        if (ms?.usage) setMedicineUsage(ms.usage);
+        if (ms?.templates) setMedicineTemplates(ms.templates);
       })
       .catch(() => {});
   }, []);
@@ -992,6 +1007,18 @@ function VisitPageInner() {
     }
   }
 
+  function loadMedicineTemplate(tpl) {
+    setForm(f => {
+      const existingNames = new Set(f.medicines.map(m => m.name));
+      const newMeds = tpl.medicines
+        .filter(m => m.name && !existingNames.has(m.name))
+        .map(m => ({ name: m.name, dosage: m.dosage || '\u2014', frequency: m.frequency || '', duration: m.duration || '', timing: m.timing || 'after' }));
+      if (newMeds.length === 0) { showToast('All medicines already added', 'info'); return f; }
+      showToast(`Loaded "${tpl.name}" (${newMeds.length} medicines)`, 'success');
+      return { ...f, medicines: [...f.medicines, ...newMeds] };
+    });
+  }
+
   async function saveRatings() {
     const patientId = patientProfile?.id || appointmentMeta?.patient_id;
     if (!patientId) { showToast('No patient selected — cannot save ratings', 'error'); return; }
@@ -1040,8 +1067,8 @@ function VisitPageInner() {
   }
 
   const filteredSalts = saltSearch.trim().length >= 1
-    ? MEDICINE_SALTS.filter(s => s.toLowerCase().includes(saltSearch.toLowerCase()))
-    : MEDICINE_SALTS;
+    ? medicineList.filter(s => s.toLowerCase().includes(saltSearch.toLowerCase()))
+    : medicineList;
 
   async function handleMediaUpload(e) {
     const files = Array.from(e.target.files || []);
@@ -1537,7 +1564,7 @@ function VisitPageInner() {
   }
   const toothChartProps = { diagnosisOptions, form, stableSetSelectedTooth, selectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta };
   const mediaProps = { fileInputRef, handleMediaUpload, uploadingMedia, setShowCamera, galleryInputRef, mediaFiles, getFilePreview, getFileIcon, removeMediaFile };
-  const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS };
+  const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS, medicineUsage, medicineTemplates, loadMedicineTemplate };
   const adviceProps = { adviceOptions, form, setForm };
 
   return (
@@ -1639,10 +1666,10 @@ function VisitPageInner() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          <div className="grid grid-cols-1 xl:grid-cols-16 gap-6 items-start">
 
-            {/* ── Clinical Pane (Left) — xl:col-span-8 ── */}
-            <div className="xl:col-span-8 space-y-6">
+            {/* ── Clinical Pane (Left) — xl:col-span-13 ── */}
+            <div className="xl:col-span-13 space-y-6">
               {/* ═══ 1. Chief Complaint ═══ */}
               {patientProfile && (
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
@@ -1856,8 +1883,8 @@ function VisitPageInner() {
               />
             </div>
 
-            {/* ── Context Sidebar (Right) — xl:col-span-4, sticky ── */}
-            <div className="xl:col-span-4 sticky top-20 self-start">
+            {/* ── Context Sidebar (Right) — xl:col-span-3, sticky ── */}
+            <div className="xl:col-span-3 sticky top-20 self-start">
               <ContextSidebar
                 patientProfile={patientProfile}
                 patientVisits={patientVisits}
