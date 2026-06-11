@@ -230,9 +230,10 @@ export default function ContextSidebar({
   const mh = medicalHistory || {};
 
   // Last visit date
-  const lastVisit = (patientVisits || []).length > 0
+  const lastVisitRaw = (patientVisits || []).length > 0
     ? patientVisits.reduce((latest, v) => v.date > latest ? v.date : latest, '')
     : null;
+  const lastVisit = lastVisitRaw ? new Date(lastVisitRaw).toLocaleDateString() : null;
   const visitCount = (patientVisits || []).length;
 
   const alerts = [];
