@@ -15,7 +15,7 @@ import CameraViewfinder from '@/components/CameraViewfinder';
 
 import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
 import ToothChartCard from '@/components/visit/ToothChartCard';
-import MediaCard from '@/components/visit/MediaCard';
+import AttachmentsPanel from '@/components/visit/AttachmentsPanel';
 import PrescriptionCard from '@/components/visit/PrescriptionCard';
 import AdviceCard from '@/components/visit/AdviceCard';
 import Findings from '@/components/visit/IntraOralFindings';
@@ -1640,6 +1640,15 @@ function VisitPageInner() {
   }
   const toothChartProps = { diagnosisOptions, form, stableSetSelectedTooth, selectedTooth, handleQuickDiagnosis, handleToothEntryUpdate, appointmentId, appointmentMeta };
   const mediaProps = { fileInputRef, handleMediaUpload, uploadingMedia, setShowCamera, galleryInputRef, mediaFiles, getFilePreview, getFileIcon, removeMediaFile };
+  const currentAppointmentMedia = Array.isArray(appointmentMeta?.chit_media) ? appointmentMeta.chit_media : [];
+  const previousVisitMediaGroups = (patientVisits || [])
+    .filter(visit => visit.id !== appointmentId && Array.isArray(visit.chit_media) && visit.chit_media.length > 0)
+    .map(visit => ({
+      id: visit.id,
+      title: visit.status === 'completed' ? 'Previous Visit' : 'Scheduled Visit',
+      date: visit.date,
+      media: visit.chit_media,
+    }));
   const prescriptionProps = { rxTemplates, loadRxTemplate, deleteRxTemplate, showRxTemplateInput, setShowRxTemplateInput, form, setForm, rxTemplateName, setRxTemplateName, saveRxTemplate, saltSearch, setSaltSearch, filteredSalts, toggleSalt, addMedicine, removeMedicine, updateMedicine, FREQUENCY_OPTIONS, DURATION_OPTIONS, TIMING_OPTIONS, medicineUsage, medicineTemplates, loadMedicineTemplate, showMedicineTemplateInput, setShowMedicineTemplateInput, medicineTemplateName, setMedicineTemplateName, saveMedicineTemplate, savingMedicineTemplate };
   const adviceProps = { adviceOptions, form, setForm };
 
@@ -1943,12 +1952,7 @@ function VisitPageInner() {
                 <AdviceCard adviceProps={adviceProps} />
               </div>
 
-              {/* ═══ 11. Attachments ═══ */}
-              <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6">
-                <MediaCard mediaProps={mediaProps} />
-              </div>
-
-              {/* ═══ 12. Visit Summary (collapsible) ═══ */}
+              {/* ═══ 11. Visit Summary (collapsible) ═══ */}
               <VisitSummary
                 form={form}
                 toothDiagnoses={form.toothDiagnoses}
@@ -1960,7 +1964,13 @@ function VisitPageInner() {
             </div>
 
             {/* ── Context Sidebar (Right) — lg:col-span-4, sticky ── */}
-            <div className="lg:col-span-4 sticky top-20 self-start">
+            <div className="lg:col-span-4 sticky top-20 self-start space-y-4">
+              <AttachmentsPanel
+                mediaProps={mediaProps}
+                currentMedia={currentAppointmentMedia}
+                visitMediaGroups={previousVisitMediaGroups}
+                getSignedUrl={getSignedUrl}
+              />
               <ContextSidebar
                 patientProfile={patientProfile}
                 patientVisits={patientVisits}
