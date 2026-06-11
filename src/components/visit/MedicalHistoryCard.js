@@ -60,7 +60,7 @@ export default function MedicalHistoryCard({ medicalHistoryProps }) {
       <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
         <div className="flex items-center gap-2 mb-3">
           <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /></div>
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Habits &amp; Risk Factors</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Habits &amp; Risk Factors</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div>

@@ -405,7 +405,7 @@ export default function PerToothDiagnosisPanel({
         {/* ── History (prominent, second only to header) ── */}
         {timeline.length > 0 && (
           <div className="bg-gray-50 dark:bg-gray-800/40 rounded-xl px-3 py-2.5">
-            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">History</h4>
+            <h4 className="text-lg font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">History</h4>
             <div className="space-y-1">
               {timeline.map(([year, entries]) => (
                 entries.map((text, i) => (

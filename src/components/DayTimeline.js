@@ -69,11 +69,11 @@ function formatCurrency(amount) {
 }
 
 function StatusBadge({ status, arrivalStatus }) {
-  if (status === 'completed') return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-slate-100 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300">Done</span>;
-  if (status === 'no_show') return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">No Show</span>;
-  if (arrivalStatus === 'called') return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1 animate-pulse" />In Session</span>;
-  if (arrivalStatus === 'arrived') return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block mr-1" />Waiting</span>;
-  return <span className="px-1.5 py-[1px] rounded-full text-[9px] font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Scheduled</span>;
+  if (status === 'completed') return <span className="px-1.5 py-[1px] rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300">Done</span>;
+  if (status === 'no_show') return <span className="px-1.5 py-[1px] rounded-full text-xs font-medium bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">No Show</span>;
+  if (arrivalStatus === 'called') return <span className="px-1.5 py-[1px] rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1 animate-pulse" />In Session</span>;
+  if (arrivalStatus === 'arrived') return <span className="px-1.5 py-[1px] rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block mr-1" />Waiting</span>;
+  return <span className="px-1.5 py-[1px] rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Scheduled</span>;
 }
 
 function LoadingSkeleton() {
@@ -273,7 +273,7 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh, onA
             <ChevronRight className="w-4 h-4" />
           </button>
           <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1">{formatDateShort(dateStr)}</span>
-          {isToday && <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full">Today</span>}
+          {isToday && <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full">Today</span>}
         </div>
         <button onClick={fetchDay} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors" title="Refresh">
           <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -303,19 +303,19 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh, onA
               const isPastHour = isToday && (h + 1) * 60 <= nowMin;
               return (
                 <div key={h} style={{ height: SLOT_HEIGHT * 2 }} className={`relative border-b border-gray-100 dark:border-gray-800 transition-colors ${hi % 2 === 0 ? 'bg-white dark:bg-transparent' : 'bg-gray-50/30 dark:bg-gray-900/10'} ${isPastHour ? '' : 'hover:bg-blue-50/30 dark:hover:bg-blue-900/10'}`}>
-                  <span className={`absolute -top-2.5 left-3 text-[11px] font-semibold bg-white dark:bg-gray-900 px-1 z-10 ${isPastHour ? 'text-gray-300 dark:text-gray-600' : 'text-gray-400 dark:text-gray-500'}`}>
+                  <span className={`absolute -top-2.5 left-3 text-xs font-semibold bg-white dark:bg-gray-900 px-1 z-10 ${isPastHour ? 'text-gray-300 dark:text-gray-600' : 'text-gray-400 dark:text-gray-500'}`}>
                     {hourLabel}
                   </span>
                   {/* Quick-book buttons for each 30-min slot in this hour */}
                   {!isPastHour && (
                     <div className="absolute inset-0 flex">
                       <button onClick={() => handleSlotClick(`${String(h).padStart(2, '0')}:00`)} className="flex-1 opacity-0 hover:opacity-100 transition-opacity duration-150 flex items-center justify-center group cursor-pointer border-r border-dashed border-gray-200 dark:border-gray-700 last:border-r-0" style={{ height: '50%', alignSelf: 'flex-start' }}>
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-all">
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-all">
                           <Plus className="w-2.5 h-2.5" /> Book
                         </span>
                       </button>
                       <button onClick={() => handleSlotClick(`${String(h).padStart(2, '0')}:30`)} className="flex-1 opacity-0 hover:opacity-100 transition-opacity duration-150 flex items-center justify-center group cursor-pointer">
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-all">
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-all">
                           <Plus className="w-2.5 h-2.5" /> Book
                         </span>
                       </button>
@@ -329,7 +329,7 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh, onA
             {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
               <div className="absolute left-0 right-0 z-30 pointer-events-none" style={{ top: nowOffset }}>
                 <div className="flex items-center">
-                  <span className="text-[10px] font-bold text-red-500 bg-white dark:bg-gray-900 px-1 rounded shadow-sm mr-1">
+                  <span className="text-xs font-bold text-red-500 bg-white dark:bg-gray-900 px-1 rounded shadow-sm mr-1">
                     {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
                   </span>
                   <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1" />
@@ -396,11 +396,11 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh, onA
                         </span>
                         {/* Time + Payment meta row */}
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500 font-medium">
+                          <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 font-medium">
                             <Clock className="w-3 h-3" /> {appt.time?.slice(0, 5)} — {getEndTime(appt.time)}
                           </span>
                           {paymentTotal > 0 && appt.payment_status && (
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
+                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
                               appt.payment_status === 'paid' ? 'bg-slate-100 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400' :
                               appt.payment_status === 'partial' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' :
                               'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300'
@@ -413,12 +413,12 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh, onA
                         {(appt.location || appt.patient_phone) && (
                           <div className="flex items-center gap-3 mt-0.5">
                             {appt.location && (
-                              <span className="flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
+                              <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
                                 <MapPin className="w-2.5 h-2.5" /> {appt.location}
                               </span>
                             )}
                             {appt.patient_phone && (
-                              <span className="flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
+                              <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
                                 <Phone className="w-2.5 h-2.5" /> {appt.patient_phone}
                               </span>
                             )}

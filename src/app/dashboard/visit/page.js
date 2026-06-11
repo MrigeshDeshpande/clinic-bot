@@ -1394,7 +1394,7 @@ function VisitPageInner() {
           {/* Doctor's Patient Rating */}
           {(patientProfile?.id || appointmentMeta?.patient_id) && (
             <div className="mb-6 text-left bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3 text-center">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 text-center">
                 Rate this Patient
               </h3>
               <div className="space-y-2.5">
@@ -1418,7 +1418,7 @@ function VisitPageInner() {
                           </svg>
                         </button>
                       ))}
-                      <span className="ml-1.5 text-[10px] font-medium text-gray-400 dark:text-gray-500 min-w-[20px]">
+                      <span className="ml-1.5 text-xs font-medium text-gray-400 dark:text-gray-500 min-w-[20px]">
                         {patientRatings[cat.key] || 0}/5
                       </span>
                     </div>
@@ -1426,11 +1426,11 @@ function VisitPageInner() {
                 ))}
               </div>
               <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <p className="text-[10px] text-gray-400 dark:text-gray-500">Rate the patient across these categories</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">Rate the patient across these categories</p>
                 <button
                   onClick={saveRatings}
                   disabled={savingRatings}
-                  className="px-3 py-1.5 text-[11px] font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-all active:scale-95"
+                  className="px-3 py-1.5 text-xs font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-all active:scale-95"
                 >
                   {savingRatings ? 'Saving...' : 'Save Ratings'}
                 </button>
@@ -1599,8 +1599,8 @@ function VisitPageInner() {
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">
               Clinical Cockpit
-              {formDirty && !visitSaved && <span className="text-[10px] font-medium text-amber-500 dark:text-amber-400">● Unsaved Changes</span>}
-              {!formDirty && visitSaved && <span className="text-[10px] font-medium text-emerald-500 dark:text-emerald-400">✓ Saved</span>}
+              {formDirty && !visitSaved && <span className="text-xs font-medium text-amber-500 dark:text-amber-400">● Unsaved Changes</span>}
+              {!formDirty && visitSaved && <span className="text-xs font-medium text-emerald-500 dark:text-emerald-400">✓ Saved</span>}
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
               {/* Persistent patient search */}
@@ -1616,7 +1616,7 @@ function VisitPageInner() {
                       <button key={p.id} type="button"
                         className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2`}
                         onClick={() => selectPatient(p)}>
-                        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
+                        <span className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-xs font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
                           {(p.name || '?')[0].toUpperCase()}
                         </span>
                         <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</span>
@@ -1627,11 +1627,11 @@ function VisitPageInner() {
                 )}
               </div>
               <button type="button" onClick={() => setShowEditDrawer(true)}
-                className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+                className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
                 Edit demographics
               </button>
               <button type="button" onClick={() => setShowWalkInDrawer(true)}
-                className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
+                className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors">
                 + Walk-in
               </button>
             </div>

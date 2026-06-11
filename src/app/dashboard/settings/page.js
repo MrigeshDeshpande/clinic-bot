@@ -377,7 +377,7 @@ export default function SettingsPage() {
           <div className="space-y-6">
             <div className={cardClass()}>
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-blue-50/80 dark:from-gray-800/50 dark:to-blue-900/20">
-                <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Clinic Details</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Clinic Details</h2>
               </div>
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="md:col-span-2">
@@ -401,7 +401,7 @@ export default function SettingsPage() {
                   <input className={inputClass()} value={settings.google_maps?.review_url || ''}
                     onChange={e => setSettings(prev => ({ ...prev, google_maps: { ...prev.google_maps, review_url: e.target.value } }))}
                     placeholder="https://g.page/r/your-clinic-review-link" />
-                  <p className="text-[10px] text-gray-400 mt-1">Paste your Google Maps review short link. This will be sent via WhatsApp so patients can leave a review.</p>
+                  <p className="text-xs text-gray-400 mt-1">Paste your Google Maps review short link. This will be sent via WhatsApp so patients can leave a review.</p>
                 </div>
                 <div>
                   <label className={labelClass()}>Timing — Mon–Sat</label>
@@ -430,7 +430,7 @@ export default function SettingsPage() {
           <div className="space-y-6">
             <div className={cardClass()}>
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-blue-50/80 dark:from-gray-800/50 dark:to-blue-900/20">
-                <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Doctor Information</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Doctor Information</h2>
               </div>
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
@@ -481,7 +481,7 @@ export default function SettingsPage() {
           <div className="space-y-6">
             <div className={cardClass()}>
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-blue-50/80 dark:from-gray-800/50 dark:to-blue-900/20">
-                <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Design & Layout</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Design & Layout</h2>
               </div>
               <div className="p-6 space-y-5">
                 <div className="flex items-center justify-between">
@@ -561,7 +561,7 @@ export default function SettingsPage() {
             <div className={cardClass()}>
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-amber-50/80 dark:from-gray-800/50 dark:to-amber-900/20 flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">&#9733; Treatments</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">&#9733; Treatments</h2>
                   <p className="text-xs text-gray-400 mt-0.5">Select favorites and adjust default rates. Custom rates are stored per-clinic.</p>
                 </div>
                 <button onClick={() => saveSettings('treatments')} disabled={saving}
@@ -571,7 +571,7 @@ export default function SettingsPage() {
                 </button>
               </div>
               <div className="p-6">
-                <div className="grid grid-cols-[auto_1fr_auto] gap-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">
+                <div className="grid grid-cols-[auto_1fr_auto] gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">
                   <span>Fav</span>
                   <span>Treatment</span>
                   <span>Fee (&#x20B9;)</span>
@@ -583,7 +583,7 @@ export default function SettingsPage() {
                   const overrides = settings.treatments?.feeOverrides || {};
                   return (
                     <div key={cat.id} className="mb-4 last:mb-0">
-                      <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 ml-1">{cat.label}</h3>
+                      <h3 className="text-base font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 ml-1">{cat.label}</h3>
                       <div className="space-y-1">
                         {catTreatments.map(t => {
                           const isFav = favs.includes(t.id);
@@ -608,7 +608,7 @@ export default function SettingsPage() {
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{t.name}</span>
                                 {orderNum && (
-                                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded-full shrink-0">
+                                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded-full shrink-0">
                                     #{orderNum}
                                   </span>
                                 )}
@@ -642,7 +642,7 @@ export default function SettingsPage() {
             <div className={cardClass()}>
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-amber-50/80 dark:from-gray-800/50 dark:to-amber-900/20 flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Custom Treatments</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Custom Treatments</h2>
                   <p className="text-xs text-gray-400 mt-0.5">Clinic-specific procedures not in the standard catalog.</p>
                 </div>
                 <button onClick={addCustomTreatment}
@@ -655,7 +655,7 @@ export default function SettingsPage() {
                   <p className="text-sm text-gray-400 text-center py-4">No custom treatments yet. Click &quot;Add Custom&quot; to create one.</p>
                 ) : (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-[1fr_100px_120px_36px] gap-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1">
+                    <div className="grid grid-cols-[1fr_100px_120px_36px] gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">
                       <span>Name</span>
                       <span>Fee (&#x20B9;)</span>
                       <span>Category</span>
@@ -699,7 +699,7 @@ export default function SettingsPage() {
                 )}
               </div>
               <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
-                <p className="text-[10px] text-gray-400">Custom treatments appear in the treatment selector alongside catalog treatments.</p>
+                <p className="text-xs text-gray-400">Custom treatments appear in the treatment selector alongside catalog treatments.</p>
                 <button onClick={() => saveSettings('treatments')} disabled={saving}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50">
                   <Save className="w-4 h-4" />
@@ -720,7 +720,7 @@ export default function SettingsPage() {
               <div key={section.key} className={cardClass()}>
                 <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-blue-50/80 dark:from-gray-800/50 dark:to-blue-900/20 flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">{section.label}</h2>
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{section.label}</h2>
                     <p className="text-xs text-gray-400 mt-0.5">{section.desc}</p>
                   </div>
                   <button onClick={() => addListItem('checklists', section.key)}
@@ -762,7 +762,7 @@ export default function SettingsPage() {
             <div className={cardClass()}>
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-emerald-50/80 dark:from-gray-800/50 dark:to-emerald-900/20 flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Medicine Salts</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Medicine Salts</h2>
                   <p className="text-xs text-gray-400 mt-0.5">Enable/disable medicine salts available in the prescription search.</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -805,10 +805,10 @@ export default function SettingsPage() {
                         <div className="flex items-center gap-3">
                           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-0' : '-rotate-90'}`} />
                           <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{cat.label}</span>
-                          <span className="text-[10px] text-gray-400">({anyEnabled ? catSalts.filter(s => settings.medicines?.salts?.[s]?.enabled !== false).length : 0}/{catSalts.length})</span>
+                          <span className="text-xs text-gray-400">({anyEnabled ? catSalts.filter(s => settings.medicines?.salts?.[s]?.enabled !== false).length : 0}/{catSalts.length})</span>
                         </div>
                         <label className="flex items-center gap-1.5 cursor-pointer" onClick={e => e.stopPropagation()}>
-                          <span className="text-[10px] text-gray-400">{allEnabled ? 'On' : anyEnabled ? 'Partial' : 'Off'}</span>
+                          <span className="text-xs text-gray-400">{allEnabled ? 'On' : anyEnabled ? 'Partial' : 'Off'}</span>
                           <input type="checkbox" checked={allEnabled} onChange={() => setCategoryEnabled(catId, !allEnabled)}
                             className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" />
                         </label>
@@ -822,7 +822,7 @@ export default function SettingsPage() {
                               <div key={s} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm text-gray-800 dark:text-gray-200">{s}</span>
-                                  {isCustom && <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">custom</span>}
+                                  {isCustom && <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">custom</span>}
                                 </div>
                                 <input type="checkbox" checked={entry.enabled !== false} onChange={() => toggleMedicine(s)}
                                   className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" />
@@ -841,7 +841,7 @@ export default function SettingsPage() {
             <div className={cardClass()}>
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-emerald-50/80 dark:from-gray-800/50 dark:to-emerald-900/20 flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Custom Medicines</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Custom Medicines</h2>
                   <p className="text-xs text-gray-400 mt-0.5">Add custom salts not in the default catalog.</p>
                 </div>
                 <button onClick={() => setShowCustomInput(true)} disabled={showCustomInput}
@@ -880,7 +880,7 @@ export default function SettingsPage() {
                         <div key={name} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all">
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-gray-800 dark:text-gray-200">{name}</span>
-                            <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">{catLabel}</span>
+                            <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">{catLabel}</span>
                           </div>
                           <button onClick={() => removeCustomMedicine(name)}
                             className="p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all">
@@ -905,7 +905,7 @@ export default function SettingsPage() {
             <div className={cardClass()}>
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-violet-50/80 dark:from-gray-800/50 dark:to-violet-900/20 flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Quick Templates</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Quick Templates</h2>
                   <p className="text-xs text-gray-400 mt-0.5">One-click prescription templates for common procedures.</p>
                 </div>
                 <button onClick={() => {
@@ -935,7 +935,7 @@ export default function SettingsPage() {
                               className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
                               <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isEditing ? 'rotate-0' : '-rotate-90'}`} />
                               {tpl.name || <span className="text-gray-400 italic">Unnamed template</span>}
-                              <span className="text-[10px] text-gray-400 font-normal">({tpl.medicines.length} meds)</span>
+                              <span className="text-xs text-gray-400 font-normal">({tpl.medicines.length} meds)</span>
                             </button>
                           )}
                           <div className="flex items-center gap-1">
@@ -986,7 +986,7 @@ export default function SettingsPage() {
                               </div>
                             ))}
                             <button onClick={() => addTemplateMedicine(tpl.id)}
-                              className="flex items-center gap-1 text-[10px] font-medium text-violet-500 dark:text-violet-400 hover:text-violet-600 transition-colors">
+                              className="flex items-center gap-1 text-xs font-medium text-violet-500 dark:text-violet-400 hover:text-violet-600 transition-colors">
                               <Plus className="w-2.5 h-2.5" /> Add medicine
                             </button>
                           </div>
@@ -1009,7 +1009,7 @@ export default function SettingsPage() {
             {(Object.keys(settings.medicines?.usage || {}).length > 0) && (
               <div className={cardClass()}>
                 <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-gray-50/80 to-amber-50/80 dark:from-gray-800/50 dark:to-amber-900/20">
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Usage Stats</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Usage Stats</h2>
                   <p className="text-xs text-gray-400 mt-0.5">Most prescribed medicine salts. Updates automatically when visits are saved.</p>
                 </div>
                 <div className="p-6">
@@ -1023,13 +1023,13 @@ export default function SettingsPage() {
                         return (
                           <div key={name} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50">
                             <span className="text-xs font-medium text-gray-800 dark:text-gray-200">{name}</span>
-                            {catLabel && <span className="text-[9px] text-gray-400 bg-white dark:bg-gray-800 px-1 rounded-full">{catLabel}</span>}
-                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 ml-0.5">{count}</span>
+                            {catLabel && <span className="text-xs text-gray-400 bg-white dark:bg-gray-800 px-1 rounded-full">{catLabel}</span>}
+                            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 ml-0.5">{count}</span>
                           </div>
                         );
                       })}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-3 text-center">Top 20 most prescribed medicines</p>
+                  <p className="text-xs text-gray-400 mt-3 text-center">Top 20 most prescribed medicines</p>
                 </div>
               </div>
             )}

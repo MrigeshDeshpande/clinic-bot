@@ -5,9 +5,9 @@ import { getTreatmentName } from '@/lib/treatments';
 
 const A4_W = 794;
 const A4_H = 1123;
-const LABEL_CLS = 'text-[9px] font-semibold text-gray-400 uppercase tracking-wider';
+const LABEL_CLS = 'text-xs font-semibold text-gray-400 uppercase tracking-wider';
 const VALUE_CLS = 'text-xs text-gray-900';
-const SECTION_TITLE = 'text-[10px] font-bold text-[#1e3a5f] uppercase tracking-wider mb-1.5';
+const SECTION_TITLE = 'text-xs font-bold text-[#1e3a5f] uppercase tracking-wider mb-1.5';
 
 function ToothTypeLabel({ diagnoses }) {
   if (!diagnoses || diagnoses.length === 0) return null;
@@ -58,7 +58,7 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Prescription Preview</span>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">{Math.round(scale * 100)}%</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{Math.round(scale * 100)}%</span>
           <button
             type="button"
             onClick={onClose}

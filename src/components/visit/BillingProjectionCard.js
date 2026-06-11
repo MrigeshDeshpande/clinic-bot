@@ -243,7 +243,7 @@ export default function BillingProjectionCard({ billingProjectionProps }) {
                   <div className="flex items-center gap-1.5 truncate max-w-[140px]">
                     <span className="text-xs text-gray-700 dark:text-gray-300 truncate" title={displayName}>{displayName}</span>
                     {item.source === 'auto' && (
-                      <span className="text-[9px] font-medium px-1 py-0.5 bg-blue-50 text-blue-500 rounded border border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50" title="Auto-added from chart">Auto</span>
+                      <span className="text-xs font-medium px-1 py-0.5 bg-blue-50 text-blue-500 rounded border border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50" title="Auto-added from chart">Auto</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -359,7 +359,7 @@ export default function BillingProjectionCard({ billingProjectionProps }) {
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                       UPI Link
                     </a>
-                    <span className="text-[9px] text-gray-400 dark:text-gray-500">Opens UPI app</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">Opens UPI app</span>
                   </div>
                 )}
               </div>

@@ -181,7 +181,7 @@ const ToothButton = memo(function ToothButton({
           {diagnoses.slice(0, 3).map((d, i) => (
             <span key={i} className="w-[4.5px] h-[4.5px] rounded-full" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
           ))}
-          {diagnoses.length > 3 && <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 leading-none ml-[2px]">+{diagnoses.length - 3}</span>}
+          {diagnoses.length > 3 && <span className="text-xs font-medium text-gray-400 dark:text-gray-500 leading-none ml-[2px]">+{diagnoses.length - 3}</span>}
         </div>
       )}
       {treatment && !isMissing && (

@@ -680,7 +680,7 @@ export default function PatientDetailPage() {
                             </>
                           )}
                           {visit.status !== 'completed' && (
-                            <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                            <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-medium ${
                               visit.status === 'cancelled' ? 'text-red-500 bg-red-50 dark:bg-red-900/30' :
                               'text-amber-500 bg-amber-50 dark:bg-amber-900/30'
                             }`}>
@@ -696,21 +696,21 @@ export default function PatientDetailPage() {
                         {Array.isArray(visit.tooth_diagnoses) && visit.tooth_diagnoses.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {visit.tooth_diagnoses.map((td, ti) => (
-                              <span key={ti} className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-[11px] font-medium text-gray-700 dark:text-gray-300">
+                              <span key={ti} className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300">
                                 #{td.tooth}
                                 {td.surface && <span className="opacity-50">{td.surface}</span>}
                                 <span className="text-gray-300 dark:text-gray-600">—</span>
                                 {td.diagnoses.join(', ')}
                                 {td.treatment && <><span className="text-gray-300 dark:text-gray-600">|</span><span className="text-emerald-600 dark:text-emerald-400">{getTreatmentName(td.treatment)}</span></>}
                                 {td.severity && (
-                                  <span className={`text-[9px] px-1 py-0.5 rounded ${
+                                  <span className={`text-xs px-1 py-0.5 rounded ${
                                     td.severity === 'severe' ? 'text-red-600 bg-red-50 dark:bg-red-900/30' :
                                     td.severity === 'moderate' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30' :
                                     'text-amber-600 bg-amber-50 dark:bg-amber-900/30'
                                   }`}>{td.severity}</span>
                                 )}
-                                {td.status === 'treated' && <span className="text-[9px] text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-1 py-0.5 rounded">✓ Treated</span>}
-                                {td.status === 'wip' && <span className="text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded">In Progress</span>}
+                                {td.status === 'treated' && <span className="text-xs text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-1 py-0.5 rounded">✓ Treated</span>}
+                                {td.status === 'wip' && <span className="text-xs text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-1 py-0.5 rounded">In Progress</span>}
                               </span>
                             ))}
                           </div>
@@ -719,7 +719,7 @@ export default function PatientDetailPage() {
                         {Array.isArray(visit.medicines) && visit.medicines.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {visit.medicines.map((med, mi) => (
-                              <span key={mi} className="inline-flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/30 dark:to-purple-900/30 text-purple-700 dark:text-purple-400 text-[11px] font-medium rounded-lg border border-purple-200 dark:border-purple-800">
+                              <span key={mi} className="inline-flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/30 dark:to-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-medium rounded-lg border border-purple-200 dark:border-purple-800">
                                 {med.name}
                                 {med.dosage && <><span className="text-purple-400">|</span><span>{med.dosage}</span></>}
                                 {med.frequency && <><span className="text-purple-400">•</span><span>{med.frequency}</span></>}
@@ -741,7 +741,7 @@ export default function PatientDetailPage() {
                                 loading="lazy" />
                             ))}
                             {visit.chit_media.filter(k => !k.includes('_photo.')).length > 0 && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
+                              <span className="inline-flex items-center px-1.5 py-0.5 text-xs text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
                                 +{visit.chit_media.filter(k => !k.includes('_photo.')).length} files
                               </span>
                             )}
@@ -759,7 +759,7 @@ export default function PatientDetailPage() {
                                 else showToast(data.error || 'Failed to generate prescription', 'error');
                               } catch { showToast('Network error', 'error'); }
                             }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
                               <Printer className="w-3 h-3" /> Rx
                             </button>
                             <button onClick={async (e) => {
@@ -771,7 +771,7 @@ export default function PatientDetailPage() {
                                 else showToast(data.error || 'Failed to generate chart', 'error');
                               } catch { showToast('Network error', 'error'); }
                             }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> Chart
                             </button>
                             <button onClick={async (e) => {
@@ -792,11 +792,11 @@ export default function PatientDetailPage() {
                               } catch { showToast('Network error', 'error'); }
                               setSendingMessage(false);
                             }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
                               <Download className="w-3 h-3" /> Compile
                             </button>
                             <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`); }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
                               <Edit3 className="w-3 h-3" /> Edit
                             </button>
                           </div>
@@ -1013,7 +1013,7 @@ export default function PatientDetailPage() {
                       <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                       </svg>
-                      <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Per-Tooth History</h3>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Per-Tooth History</h3>
                       <span className="text-xs text-gray-400 dark:text-gray-500">· {toothKeys.length} teeth</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1032,7 +1032,7 @@ export default function PatientDetailPage() {
                           >
                             <span className={`w-2 h-2 rounded-full ${latest.outcome ? outcomeColor(latest.outcome) : 'bg-gray-300'}`} />
                             #{tooth}
-                            {latest.outcome && <span className="text-[9px] opacity-60">{outcomeIcon(latest.outcome)}</span>}
+                            {latest.outcome && <span className="text-xs opacity-60">{outcomeIcon(latest.outcome)}</span>}
                           </button>
                         );
                       })}
@@ -1066,7 +1066,7 @@ export default function PatientDetailPage() {
                                   <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(e.date).slice(0, 6)}</span>
                                   {e.surface && <span className="text-gray-400">({e.surface})</span>}
                                   {e.severity && (
-                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                                       e.severity === 'severe' ? 'text-red-600 bg-red-50 dark:bg-red-900/30' :
                                       e.severity === 'moderate' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30' :
                                       'text-amber-600 bg-amber-50 dark:bg-amber-900/30'
@@ -1101,7 +1101,7 @@ export default function PatientDetailPage() {
               <div className="px-4 md:px-6 pb-4 md:pb-6 space-y-4">
                 {/* Doctor's Patient Ratings */}
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
                     <Star className="w-4 h-4 text-blue-500" />
                     Doctor's Patient Rating
                   </h3>
@@ -1235,7 +1235,7 @@ export default function PatientDetailPage() {
                     {messages.map((msg, i) => (
                       <div key={msg.id || i} className={`flex gap-2 ${msg.role === 'bot' ? 'justify-start' : 'justify-end'}`}>
                         {msg.role === 'bot' && (
-                          <div className="w-6 h-6 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">B</div>
+                          <div className="w-6 h-6 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">B</div>
                         )}
                         <div className={`max-w-[80%]`}>
                           <div className={`rounded-2xl px-3 py-2 text-sm leading-relaxed ${
@@ -1245,13 +1245,13 @@ export default function PatientDetailPage() {
                           }`}>
                             <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                           </div>
-                          <div className={`flex items-center gap-1.5 mt-0.5 text-[10px] text-gray-400 dark:text-gray-500 ${msg.role === 'user' ? 'text-right' : ''}`}>
+                          <div className={`flex items-center gap-1.5 mt-0.5 text-xs text-gray-400 dark:text-gray-500 ${msg.role === 'user' ? 'text-right' : ''}`}>
                             <span>{new Date(msg.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                             {msg.intent && <span className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">{msg.intent}</span>}
                           </div>
                         </div>
                         {msg.role === 'user' && (
-                          <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">P</div>
+                          <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">P</div>
                         )}
                       </div>
                     ))}
@@ -1271,7 +1271,7 @@ export default function PatientDetailPage() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
                 <div className="flex items-center justify-between px-4 sm:px-5 pt-4 pb-3 border-b border-gray-100 dark:border-gray-800">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Link Family Member</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Link Family Member</h3>
                   <button
                     onClick={() => { setShowLinkFamily(false); setLinkSearch(''); setLinkSearchResults([]); }}
                     className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all"
@@ -1365,7 +1365,7 @@ export default function PatientDetailPage() {
                       {getInitials(patient.name)}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">Send Message to {patient.name === '?' ? 'Patient' : patient.name}</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg truncate">Send Message to {patient.name === '?' ? 'Patient' : patient.name}</h3>
                       <p className="text-xs text-gray-400 dark:text-gray-500">Via WhatsApp</p>
                     </div>
                   </div>

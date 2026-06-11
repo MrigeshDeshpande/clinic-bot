@@ -74,7 +74,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
       <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 animate-scale-in overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Quick Walk-In</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Quick Walk-In</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Complete a visit in seconds</p>
           </div>
           <button onClick={onClose} className="p-1 -mr-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors">
@@ -244,7 +244,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
                 </button>
               ))}
             </div>
-            {paid === 0 && <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Set paid amount to select payment method</p>}
+            {paid === 0 && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Set paid amount to select payment method</p>}
           </div>
 
           <div>

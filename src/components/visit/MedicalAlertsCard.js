@@ -82,7 +82,7 @@ export default function MedicalAlertsCard({ medicalAlertsProps }) {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30"><AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /></div>
-              <h2 className="font-bold text-gray-900 dark:text-gray-100 text-sm">Habits &amp; Risk Factors</h2>
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Habits &amp; Risk Factors</h2>
               <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">Editable below</span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -119,7 +119,7 @@ export default function MedicalAlertsCard({ medicalAlertsProps }) {
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-900/30"><Heart className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /></div>
-              <h2 className="font-bold text-gray-900 dark:text-gray-100 text-sm">Medical & Dental History</h2>
+              <h2 className="font-bold text-gray-900 dark:text-gray-100 text-lg">Medical & Dental History</h2>
               <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">Reference — editable below</span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -183,7 +183,7 @@ export default function MedicalAlertsCard({ medicalAlertsProps }) {
                         : 'bg-emerald-50 dark:bg-emerald-900/30 text-gray-700 dark:text-gray-300 rounded-br-sm'
                     }`}>
                       <p className="leading-relaxed">{m.content || '(no content)'}</p>
-                      <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                         {m.role === 'user' ? 'Patient' : 'Clinic'} · {m.created_at ? new Date(m.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
                         {m.intent && <span className="ml-1 px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-[8px]">{m.intent}</span>}
                       </p>

@@ -354,7 +354,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
               <div className="h-10 border-b border-gray-100 dark:border-gray-800" />
               {HOURS.map(h => (
                   <div key={h} style={{ height: SLOT_HEIGHT * 2 }} className="relative border-b border-gray-100 dark:border-gray-800">
-                  <span className="absolute top-0.5 right-2 text-[10px] font-semibold text-gray-400 dark:text-gray-500">
+                  <span className="absolute top-0.5 right-2 text-xs font-semibold text-gray-400 dark:text-gray-500">
                     {h === 12 ? '12PM' : h < 12 ? `${h}AM` : `${h - 12}PM`}
                   </span>
                 </div>
@@ -362,7 +362,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
               {/* Current time label in gutter */}
               {isThisWeek && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
                 <div className="absolute right-0 z-20 pointer-events-none" style={{ top: nowOffset - 7 }}>
-                  <span className="text-[9px] font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 whitespace-nowrap shadow-sm">
+                  <span className="text-xs font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 whitespace-nowrap shadow-sm">
                     {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
                   </span>
                 </div>
@@ -385,13 +385,13 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
                 <div key={dayStr} className={`flex-1 min-w-0 border-r border-gray-100 dark:border-gray-800 last:border-r-0 transition-colors duration-200 group/day ${isWeekend ? 'bg-gray-50/40 dark:bg-gray-800/20' : ''} ${isDragOver ? 'bg-blue-50/60 dark:bg-blue-900/20' : ''}`}>
                   {/* Day header */}
                   <div className={`h-10 flex flex-col items-center justify-center border-b border-gray-100 dark:border-gray-800 sticky top-0 z-10 transition-colors ${isToday ? 'bg-blue-50 dark:bg-blue-900/30' : isWeekend ? 'bg-gray-50/80 dark:bg-gray-800/40' : 'bg-white dark:bg-gray-900'}`}>
-                    <span className={`text-[10px] font-bold uppercase leading-tight tracking-wider ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                    <span className={`text-xs font-bold uppercase leading-tight tracking-wider ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
                       {DAY_NAMES[dayOfWeek]}
                     </span>
                     <span className={`flex items-center gap-1 text-xs font-bold leading-tight -mt-0.5 ${isToday ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>
                       {day.getDate()}
                       {dayAppts.length > 0 && (
-                        <span className={`text-[9px] font-semibold px-1 rounded-full ${isToday ? 'bg-blue-200 dark:bg-blue-800 text-blue-700 dark:text-blue-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                        <span className={`text-xs font-semibold px-1 rounded-full ${isToday ? 'bg-blue-200 dark:bg-blue-800 text-blue-700 dark:text-blue-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                           {dayAppts.length}
                         </span>
                       )}
@@ -419,7 +419,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
               {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
                       <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: nowOffset }}>
                         <div className="flex items-center">
-                          <span className="text-[9px] font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 rounded shadow-sm mr-1">
+                          <span className="text-xs font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 rounded shadow-sm mr-1">
                             {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
                           </span>
                           <div className="w-2 h-2 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1" />
@@ -460,7 +460,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
                                 {appt.treatment}
                               </span>
                             ) : (
-                              <span className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 truncate">
+                              <span className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500 truncate">
                                 No Treatment
                               </span>
                             )}
@@ -468,7 +468,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
                               <span className={`text-xs font-semibold leading-tight ${past ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
                                 {appt.patient_name || 'Patient'}
                               </span>
-                              <span className="ml-1 text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                              <span className="ml-1 text-xs text-gray-500 dark:text-gray-400 leading-tight">
                                 · {appt.time?.slice(0, 5)}–{getEndTime(appt.time)}
                               </span>
                             </span>
@@ -485,7 +485,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
                         className="absolute left-1 right-1 z-20 border-2 border-dashed border-blue-400 dark:border-blue-500 rounded-md bg-blue-50/70 dark:bg-blue-900/30 pointer-events-none"
                         style={{ top: timeToOffset(dropTime), height: SLOT_HEIGHT }}
                       >
-                        <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 px-1">Drop here</span>
+                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 px-1">Drop here</span>
                       </div>
                     )}
 

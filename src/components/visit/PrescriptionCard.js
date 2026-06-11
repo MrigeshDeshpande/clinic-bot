@@ -185,7 +185,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
                   <button key={salt} type="button" onClick={() => toggleSalt(salt)}
                     className={`${chipClass(salt, isSelected)} flex items-center gap-1`}>
                     {salt}
-                    <span className="text-[9px] text-gray-400 font-normal">{data.count}</span>
+                    <span className="text-xs text-gray-400 font-normal">{data.count}</span>
                   </button>
                 );
               })}
@@ -212,7 +212,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
                 className="group relative px-3 py-1.5 text-sm font-semibold leading-6 rounded-lg border border-violet-200 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-all active:scale-95">
                 <Zap className="w-2.5 h-2.5 inline mr-1 text-violet-400" />
                 {tpl.name}
-                <span className="ml-1 text-[10px] text-violet-500 dark:text-violet-400">({tpl.medicines.length})</span>
+                <span className="ml-1 text-xs text-violet-500 dark:text-violet-400">({tpl.medicines.length})</span>
               </button>
             ))}
           </div>
@@ -244,7 +244,7 @@ export default function PrescriptionCard({ prescriptionProps }) {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <div className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-900/40">
-              <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300">{form.medicines.length}</span>
+              <span className="text-xs font-bold text-violet-700 dark:text-violet-300">{form.medicines.length}</span>
             </div>
             <span className="text-base font-bold leading-6 text-gray-800 dark:text-gray-200">Selected Medicines</span>
           </div>

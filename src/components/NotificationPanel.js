@@ -90,7 +90,7 @@ export default function NotificationPanel({ compact }) {
         <Bell className="w-4 h-4" />
         {!compact && <span className="hidden sm:inline text-xs">Notifications</span>}
         {totalAlerts > 0 && (
-          <span className="absolute top-1.5 left-[22px] -translate-x-1/2 -translate-y-1/2 min-w-[16px] h-4 flex items-center justify-center px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none shadow-sm">
+          <span className="absolute top-1.5 left-[22px] -translate-x-1/2 -translate-y-1/2 min-w-[16px] h-4 flex items-center justify-center px-1 rounded-full bg-red-500 text-white text-xs font-bold leading-none shadow-sm">
             {totalAlerts > 9 ? '9+' : totalAlerts}
           </span>
         )}
@@ -103,7 +103,7 @@ export default function NotificationPanel({ compact }) {
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2.5">
                 <Bell className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
               </div>
               <button
                 onClick={() => setOpen(false)}
@@ -117,7 +117,7 @@ export default function NotificationPanel({ compact }) {
               {/* Incoming manual messages */}
               {manualMessages.length > 0 && (
                 <div className="px-5 py-3 border-b border-gray-50 dark:border-gray-800">
-                  <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Bell className="w-3 h-3 text-blue-500" /> Incoming Messages ({manualMessages.length})
                   </p>
                   <div className="space-y-1.5">
@@ -155,7 +155,7 @@ export default function NotificationPanel({ compact }) {
                   {/* Upcoming appointments */}
                   {notifications.upcomingAppointments?.length > 0 && (
                     <div className="px-5 py-3">
-                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                         <Clock className="w-3 h-3" /> Upcoming (next hour)
                       </p>
                       <div className="space-y-1.5">
@@ -163,7 +163,7 @@ export default function NotificationPanel({ compact }) {
                           <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800">
                             <span className="text-xs font-bold text-amber-700 dark:text-amber-400 w-10 shrink-0">{a.time?.slice(0, 5)}</span>
                             <span className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{a.patient_name}</span>
-                            {a.treatment && <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{a.treatment}</span>}
+                            {a.treatment && <span className="text-xs text-gray-400 dark:text-gray-500 truncate">{a.treatment}</span>}
                           </div>
                         ))}
                       </div>
@@ -173,7 +173,7 @@ export default function NotificationPanel({ compact }) {
                   {/* Pending callbacks */}
                   {notifications.pendingCallbacks?.length > 0 && (
                     <div className="px-5 py-3">
-                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                         <Phone className="w-3 h-3 text-red-500" /> Pending Callbacks ({notifications.pendingCallbacks.length})
                       </p>
                       <div className="space-y-1.5">
@@ -181,7 +181,7 @@ export default function NotificationPanel({ compact }) {
                           <div key={cb.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800">
                             <Users className="w-3 h-3 text-red-400 shrink-0" />
                             <span className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{cb.patient_name || 'Anonymous'}</span>
-                            {cb.comment && <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">&quot;{cb.comment.slice(0, 30)}&quot;</span>}
+                            {cb.comment && <span className="text-xs text-gray-400 dark:text-gray-500 truncate">&quot;{cb.comment.slice(0, 30)}&quot;</span>}
                           </div>
                         ))}
                       </div>
@@ -191,7 +191,7 @@ export default function NotificationPanel({ compact }) {
                   {/* Recent cancellations */}
                   {notifications.recentCancellations?.length > 0 && (
                     <div className="px-5 py-3">
-                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                         <AlertTriangle className="w-3 h-3 text-red-500" /> Recent Cancellations
                       </p>
                       <div className="space-y-1.5">

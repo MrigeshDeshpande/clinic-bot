@@ -23,7 +23,7 @@ export default function PatientSummaryCard({ patientSummaryProps }) {
           {((patientProfile?.name || appointmentMeta?.patient_name || 'P'))[0].toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">{patientProfile?.name || appointmentMeta?.patient_name || 'Patient'}</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-lg truncate">{patientProfile?.name || appointmentMeta?.patient_name || 'Patient'}</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {appointmentMeta?.date?.slice(0, 10)}{appointmentMeta?.time ? ` at ${appointmentMeta.time?.slice(0, 5)}` : ''}
             {appointmentMeta?.location ? ` · ${appointmentMeta.location}` : ''}

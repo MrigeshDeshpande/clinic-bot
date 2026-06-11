@@ -120,7 +120,7 @@ function GlobalSearch() {
           placeholder="Search patients..."
           className="w-full pl-9 pr-10 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 focus:bg-white dark:focus:bg-gray-800 focus:border-gray-300 dark:focus:border-gray-600 focus:ring-2 focus:ring-gray-100 dark:focus:ring-gray-700 outline-none text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"
         />
-        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded leading-none">
+        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-xs font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded leading-none">
           ⌘K
         </kbd>
         {loading && (
@@ -191,7 +191,7 @@ function SidebarContent({ pathname, onNavClick }) {
           <div key={group.label}>
             {!collapsed && gi > 0 && <div className="mt-4" />}
             {!collapsed && (
-              <p className="px-3.5 pb-1 text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-semibold select-none">
+              <p className="px-3.5 pb-1 text-xs uppercase tracking-widest text-gray-400 dark:text-gray-500 font-semibold select-none">
                 {group.label}
               </p>
             )}
@@ -403,14 +403,14 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {/* Desktop Sidebar */}
-          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-16 overflow-hidden' : 'w-56'}`}>
+          <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm z-10 flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-16 overflow-hidden' : 'w-64'}`}>
             <div className="flex-1 flex flex-col">
               <SidebarContent pathname={pathname} />
             </div>
           </aside>
 
           {/* Main Content */}
-          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-56'}`}>
+          <main className={`pt-14 md:pt-0 p-4 md:p-8 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
             <div className="animate-fade-in mx-auto">
               {children}
             </div>

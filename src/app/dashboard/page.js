@@ -501,7 +501,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
             {d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
           </h3>
         </div>
@@ -557,7 +557,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
                         isPast && !isBooked ? 'text-gray-400 dark:text-gray-500'
                         : isBooked ? 'text-blue-700 dark:text-blue-300'
                         : 'text-green-700 dark:text-green-300'
-                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-[10px] font-bold text-red-500 uppercase">Now</span>}</span>
+                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-xs font-bold text-red-500 uppercase">Now</span>}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
@@ -632,7 +632,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
                         isPast && !isBooked ? 'text-gray-400 dark:text-gray-500'
                         : isBooked ? 'text-blue-700 dark:text-blue-300'
                         : 'text-green-700 dark:text-green-300'
-                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-[10px] font-bold text-red-500 uppercase">Now</span>}</span>
+                      }`}>{slotTime}{isCurrent && <span className="ml-1 text-xs font-bold text-red-500 uppercase">Now</span>}</span>
                     </div>
                     {isBooked ? (
                       <div className="flex items-center justify-center gap-1 mt-1">
@@ -884,31 +884,31 @@ export default function DashboardPage() {
           <div className="flex items-center gap-4 overflow-x-auto">
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total</span>
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{appointments.length}</span>
             </div>
             <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Waiting</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Waiting</span>
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.waiting || 0}</span>
             </div>
             <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">In Session</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">In Session</span>
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.in_session || 0}</span>
             </div>
             <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Completed</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Completed</span>
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.completed || 0}</span>
             </div>
             <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Revenue</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Revenue</span>
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(todayRevenue)}</span>
             </div>
           </div>
@@ -1045,7 +1045,7 @@ export default function DashboardPage() {
               </div>
               <div className="relative z-10 flex flex-col h-full justify-between">
                 <div>
-                  <span className={`text-[11px] font-bold tracking-wider uppercase ${style.accentText}`}>
+                  <span className={`text-xs font-bold tracking-wider uppercase ${style.accentText}`}>
                     {card.label}
                   </span>
                   <p className="text-3xl font-extrabold tracking-tight mt-2 text-gray-900 dark:text-gray-100">
