@@ -371,17 +371,21 @@ export async function generatePrescription({ patient, visit, appointment }) {
     doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
     doc.text('Prescribed Medicines:', LM, y);
     y += 16;
-    const col1 = 180;
-    const col2 = 90;
-    const col3 = 100;
-    const col4 = 80;
+    const col1 = 145;
+    const col2 = 75;
+    const col3 = 85;
+    const col4 = 55;
+    const col5 = 45;
+    const col6 = 45;
     const rowH = 18;
-    const medTotalW = col1 + col2 + col3 + col4;
+    const medTotalW = col1 + col2 + col3 + col4 + col5 + col6;
     doc.fontSize(Math.max(7.5, fontSize - 1)).font('Bold');
     doc.text('Medicine', LM, y, { width: col1 });
     doc.text('Dosage', LM + col1, y, { width: col2 });
     doc.text('Frequency', LM + col1 + col2, y, { width: col3 });
     doc.text('Duration', LM + col1 + col2 + col3, y, { width: col4 });
+    doc.text('Timing', LM + col1 + col2 + col3 + col4, y, { width: col5 });
+    doc.text('Rate', LM + col1 + col2 + col3 + col4 + col5, y, { width: col6 });
     y += rowH;
     doc.moveTo(LM, y).lineTo(LM + medTotalW, y).stroke('#cccccc');
     y += 4;
@@ -392,6 +396,8 @@ export async function generatePrescription({ patient, visit, appointment }) {
       doc.text(med.dosage || '', LM + col1, y, { width: col2 });
       doc.text(med.frequency || '', LM + col1 + col2, y, { width: col3 });
       doc.text(med.duration || '', LM + col1 + col2 + col3, y, { width: col4 });
+      doc.text(med.timing === 'before' ? 'Before meal' : 'After meal', LM + col1 + col2 + col3 + col4, y, { width: col5 });
+      doc.text(`Rs. ${med.rate || 0}`, LM + col1 + col2 + col3 + col4 + col5, y, { width: col6 });
       y += rowH;
       if (y > 700) {
         doc.addPage();

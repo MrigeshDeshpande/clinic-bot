@@ -164,10 +164,12 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
                   <thead>
                     <tr>
-                      <th style={{ ...styleTH, width: '40%' }}>Medicine</th>
-                      <th style={{ ...styleTH, width: '20%' }}>Dosage</th>
-                      <th style={{ ...styleTH, width: '22%' }}>Frequency</th>
-                      <th style={{ ...styleTH, width: '18%' }}>Duration</th>
+                      <th style={{ ...styleTH, width: '30%' }}>Medicine</th>
+                      <th style={{ ...styleTH, width: '16%' }}>Dosage</th>
+                      <th style={{ ...styleTH, width: '18%' }}>Frequency</th>
+                      <th style={{ ...styleTH, width: '14%' }}>Duration</th>
+                      <th style={{ ...styleTH, width: '12%' }}>Timing</th>
+                      <th style={{ ...styleTH, width: '10%', borderRight: 'none' }}>Rate</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -176,7 +178,9 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
                         <td style={{ ...styleTD, fontWeight: 600 }}>{med.name || '—'}</td>
                         <td style={styleTD}>{med.dosage || '—'}</td>
                         <td style={styleTD}>{med.frequency || '—'}</td>
-                        <td style={{ ...styleTD, borderRight: 'none' }}>{med.duration || '—'}</td>
+                        <td style={styleTD}>{med.duration || '—'}</td>
+                        <td style={styleTD}>{med.timing === 'before' ? 'Before meal' : 'After meal'}</td>
+                        <td style={{ ...styleTD, borderRight: 'none' }}>₹{med.rate || 0}</td>
                       </tr>
                     ))}
                   </tbody>

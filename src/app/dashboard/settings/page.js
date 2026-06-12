@@ -220,6 +220,17 @@ export default function SettingsPage() {
     });
   }
 
+  function updateMedicinePrice(name, value) {
+    const price = Math.max(0, Number(value) || 0);
+    setSettings(prev => {
+      const salts = { ...(prev.medicines?.salts || {}) };
+      if (salts[name]) {
+        salts[name] = { ...salts[name], price };
+      }
+      return { ...prev, medicines: { ...prev.medicines, salts } };
+    });
+  }
+
   function setCategoryEnabled(category, enabled) {
     setSettings(prev => {
       const salts = { ...(prev.medicines?.salts || {}) };
@@ -980,8 +991,14 @@ export default function SettingsPage() {
                                   <span className="text-sm text-gray-800 dark:text-gray-200">{s}</span>
                                   {isCustom && <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">custom</span>}
                                 </div>
-                                <input type="checkbox" checked={entry.enabled !== false} onChange={() => toggleMedicine(s)}
-                                  className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" />
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400">₹</span>
+                                  <input type="number" min="0" value={entry.price ?? ''} onChange={e => updateMedicinePrice(s, e.target.value)}
+                                    placeholder="0"
+                                    className="w-16 px-1.5 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-500/40 placeholder-gray-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                  <input type="checkbox" checked={entry.enabled !== false} onChange={() => toggleMedicine(s)}
+                                    className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" />
+                                </div>
                               </div>
                             );
                           })}

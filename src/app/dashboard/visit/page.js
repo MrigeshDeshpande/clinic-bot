@@ -1047,7 +1047,7 @@ function VisitPageInner() {
     if (existing >= 0) {
       setForm(f => ({ ...f, medicines: f.medicines.filter((_, i) => i !== existing) }));
     } else {
-      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '', timing: 'after' }] }));
+      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '', timing: 'after', rate: medicineSettings?.salts?.[salt]?.price || 0 }] }));
     }
   }
 
@@ -1056,7 +1056,7 @@ function VisitPageInner() {
       const existingNames = new Set(f.medicines.map(m => m.name));
       const newMeds = tpl.medicines
         .filter(m => m.name && !existingNames.has(m.name))
-        .map(m => ({ name: m.name, dosage: m.dosage || '\u2014', frequency: m.frequency || '', duration: m.duration || '', timing: m.timing || 'after' }));
+        .map(m => ({ name: m.name, dosage: m.dosage || '\u2014', frequency: m.frequency || '', duration: m.duration || '', timing: m.timing || 'after', rate: m.rate || 0 }));
       if (newMeds.length === 0) { showToast('All medicines already added', 'info'); return f; }
       showToast(`Loaded "${tpl.name}" (${newMeds.length} medicines)`, 'success');
       return { ...f, medicines: [...f.medicines, ...newMeds] };
@@ -1083,6 +1083,7 @@ function VisitPageInner() {
           frequency: m.frequency || '',
           duration: m.duration || '',
           timing: m.timing || 'after',
+          rate: m.rate || 0,
         }))
         .filter(m => m.name),
     };
@@ -1196,7 +1197,7 @@ function VisitPageInner() {
   }
 
   function addMedicine() {
-    setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '', timing: 'after' }] }));
+    setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '', timing: 'after', rate: 0 }] }));
   }
   function updateMedicine(idx, field, value) {
     setForm(f => { const meds = [...f.medicines]; meds[idx] = { ...meds[idx], [field]: value }; return { ...f, medicines: meds }; });
