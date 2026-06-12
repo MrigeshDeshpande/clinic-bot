@@ -1042,7 +1042,7 @@ export default function PatientDetailPage() {
                   {/* Right drawer */}
                   {expandedTooth && selectedEntries && (
                     <>
-                      <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={() => setExpandedTooth(null)} />
+                      <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm cursor-pointer" onClick={() => setExpandedTooth(null)} />
                       <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto">
                         <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-5 py-4 flex items-center justify-between z-10">
                           <div className="flex items-center gap-2.5">
@@ -1267,7 +1267,7 @@ export default function PatientDetailPage() {
         {/* Link Family Member Modal */}
         {showLinkFamily && (
           <>
-            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm" onClick={() => { setShowLinkFamily(false); setLinkSearch(''); setLinkSearchResults([]); }} />
+            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm cursor-pointer" onClick={() => { setShowLinkFamily(false); setLinkSearch(''); setLinkSearchResults([]); }} />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
                 <div className="flex items-center justify-between px-4 sm:px-5 pt-4 pb-3 border-b border-gray-100 dark:border-gray-800">
@@ -1356,7 +1356,7 @@ export default function PatientDetailPage() {
         {/* Send Message Modal */}
         {showMessageModal && (
           <>
-            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm" onClick={() => setShowMessageModal(false)} />
+            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm cursor-pointer" onClick={() => setShowMessageModal(false)} />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
               <div className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in mx-auto">
                 <div className="flex items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
@@ -1452,7 +1452,7 @@ export default function PatientDetailPage() {
         {/* Expanded Image Lightbox */}
         {expandedImage && (
           <>
-            <div className="fixed inset-0 bg-black/70 dark:bg-black/80 z-50 backdrop-blur-md" onClick={() => setExpandedImage(null)} />
+            <div className="fixed inset-0 bg-black/70 dark:bg-black/80 z-50 backdrop-blur-md cursor-pointer" onClick={() => setExpandedImage(null)} />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
               <div className="relative max-w-3xl w-full max-h-[90vh] flex items-center justify-center animate-scale-in">
                 <button

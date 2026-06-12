@@ -140,7 +140,7 @@ function VisitPageInner() {
     treatment: prefillTreatment,
     consultationFee: '',
     treatmentCharges: '',
-    medicineCharges: '',
+    medicineCharges: 0,
     diagnosis: '',
     medicines: [],
     followUpDate: '',
@@ -338,6 +338,14 @@ function VisitPageInner() {
     });
   }, [form.toothDiagnoses, feeOverrides]);
 
+  // Auto-calculate medicine charges from individual rates
+  useEffect(() => {
+    const total = form.medicines.reduce((sum, m) => sum + (Number(m.rate) || 0), 0);
+    if (Number(form.medicineCharges) !== total) {
+      setForm(f => ({ ...f, medicineCharges: total }));
+    }
+  }, [form.medicines]);
+
   function toggleTreatment(name) {
     setTreatmentFees(prev => {
       const key = TREATMENTS.find(t => t.id === name || t.name === name)?.id || name;
@@ -499,7 +507,7 @@ function VisitPageInner() {
             treatment: a.treatment || '',
             consultationFee: '',
             treatmentCharges: '',
-            medicineCharges: a.medicine_charges?.toString() || '',
+            medicineCharges: a.medicine_charges?.toString() || 0,
             diagnosis: a.diagnosis || '',
             medicines: Array.isArray(a.medicines) ? a.medicines : [],
             followUpDate: a.follow_up_date?.slice(0, 10) || '',
@@ -1359,7 +1367,7 @@ function VisitPageInner() {
   }
 
   function resetForm() {
-    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '', adviceSelected: [], diagnosisSelected: [], toothDiagnoses: [], chiefComplaint: '', generalExamination: '', extraOralExamination: '' });
+    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: 0, diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '', adviceSelected: [], diagnosisSelected: [], toothDiagnoses: [], chiefComplaint: '', generalExamination: '', extraOralExamination: '' });
     setTreatmentFees({});
     setConsultationFee(CONSULTATION_DEFAULT);
     setPatientProfile(null);
@@ -1906,6 +1914,7 @@ function VisitPageInner() {
         totalFees={totalFees}
         consultationFee={consultationFee}
         medicines={form.medicines}
+        medicineCharges={form.medicineCharges}
         onEditPatient={() => setShowEditDrawer(true)}
         onToggleTreatment={toggleTreatment}
         onAdjustQuantity={handleAdjustQuantity}

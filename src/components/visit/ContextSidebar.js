@@ -221,6 +221,7 @@ export default function ContextSidebar({
   selectedTreatments, treatmentFees, totalFees,
   consultationFee,
   medicines = [],
+  medicineCharges = 0,
   onEditPatient,
   onMedicalHistorySave,
   onToggleTreatment,
@@ -330,7 +331,7 @@ export default function ContextSidebar({
           {medicinesCount > 0 && (
             <div className="flex items-center gap-2 text-sm leading-5">
               <span className="flex-1 text-gray-500 dark:text-gray-400">Medicines ({medicinesCount})</span>
-              <span className="text-gray-500 dark:text-gray-400">—</span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100">₹{Number(medicineCharges).toLocaleString('en-IN')}</span>
             </div>
           )}
         </div>

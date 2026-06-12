@@ -202,7 +202,7 @@ export default function AttachmentsPanel({ mediaProps, currentMedia = [], visitM
       </div>
 
       {openImage && (
-        <div className="fixed inset-0 z-[100] bg-black/80 p-3 md:p-6 flex items-center justify-center"
+        <div className="fixed inset-0 z-[100] bg-black/80 p-3 md:p-6 flex items-center justify-center cursor-pointer"
           onClick={() => setOpenImage(null)}>
           <div className="relative max-w-[96vw] max-h-[94vh]" onClick={e => e.stopPropagation()}>
             <div className="absolute left-0 right-12 -top-10 md:-top-11 min-w-0">

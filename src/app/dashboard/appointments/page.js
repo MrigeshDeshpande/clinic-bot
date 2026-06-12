@@ -343,7 +343,7 @@ function AppointmentsContentInner() {
             </button>
             {showCalendar && scope !== 'future' && (
               <>
-                <div className="fixed inset-0 bg-black/20 dark:bg-black/50 z-40" onClick={() => setShowCalendar(false)} />
+                <div className="fixed inset-0 bg-black/20 dark:bg-black/50 z-40 cursor-pointer" onClick={() => setShowCalendar(false)} />
                 <div className="fixed md:absolute left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 md:right-0 top-1/4 md:top-full mt-2 z-50 w-72 animate-slide-down shadow-xl">
                   <Calendar selectedDate={selectedDate} onDateSelect={handleDateSelect} dotDates={dotDates} onMonthChange={(y, m) => fetchCalendarDots(`${y}-${String(m).padStart(2,'0')}-01`)} />
                 </div>

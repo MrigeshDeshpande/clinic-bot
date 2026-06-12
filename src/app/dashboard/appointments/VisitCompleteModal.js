@@ -180,7 +180,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-2xl mx-4 animate-scale-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         
         {/* ── Header ── */}

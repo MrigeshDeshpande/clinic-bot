@@ -381,7 +381,7 @@ export default function DashboardLayout({ children }) {
           <div className={`md:hidden fixed inset-0 z-30 transition-opacity duration-300 ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
             {/* Backdrop */}
             <div
-              className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
               onClick={() => setSidebarOpen(false)}
             />
             {/* Drawer */}

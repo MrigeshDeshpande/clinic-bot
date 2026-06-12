@@ -1193,7 +1193,7 @@ export default function DashboardPage() {
       {/* Quick Booking Modal — Enhanced */}
       {bookingModal.open && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-          <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={() => setBookingModal({ open: false, time: null })} />
+          <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={() => setBookingModal({ open: false, time: null })} />
           <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">

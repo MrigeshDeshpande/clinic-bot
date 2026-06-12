@@ -268,7 +268,7 @@ export default function BillingProjectionCard({ billingProjectionProps }) {
 
           {/* Medicine Charges */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-600 dark:text-gray-300">Medicine</span>
+            <span className="text-xs text-gray-600 dark:text-gray-300">Medicines ({form.medicines?.filter(m => m.name).length || 0})</span>
             <div className="relative">
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">₹</span>
               <input type="number" min="0" value={form.medicineCharges} onChange={e => setForm(f => ({ ...f, medicineCharges: e.target.value }))}

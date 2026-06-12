@@ -94,7 +94,7 @@ export default function MediaViewer({ mediaKeys, getSignedUrl }) {
             <img
               src={getSignedUrl(mediaKeys[openIndex])}
               alt={getMediaLabel(mediaKeys[openIndex])}
-              className="max-w-full max-h-[80vh] object-contain rounded-xl border border-gray-200 shadow-lg"
+              className="max-w-full max-h-[80vh] object-contain rounded-xl border border-gray-200 shadow-lg cursor-pointer"
               onClick={() => setOpenIndex(null)}
             />
             <button type="button"
