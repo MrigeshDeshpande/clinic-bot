@@ -2,7 +2,14 @@ import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
 function normalizePhone(phone) {
-  return phone ? phone.replace(/\D/g, '') : phone;
+  if (!phone) return phone;
+  let cleaned = phone.replace(/\D/g, '');
+  // Strip duplicate country codes: if phone starts with 91 and is > 12 digits,
+  // keep stripping leading '91' until it's 12 digits or no longer starts with 91
+  while (cleaned.startsWith('91') && cleaned.length > 12) {
+    cleaned = cleaned.slice(2);
+  }
+  return cleaned;
 }
 
 export async function createPatient({ name, age, sex, phone, waId, location }) {

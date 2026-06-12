@@ -63,7 +63,8 @@ export function checkBodySize(req) {
 }
 
 export function jsonError(error, status = 500) {
-  return NextResponse.json({ error: error.message || error }, { status });
+  const message = typeof error === 'string' ? error : (error?.message || String(error) || 'Internal server error');
+  return NextResponse.json({ error: message }, { status });
 }
 
 const SENSITIVE_FIELDS = [

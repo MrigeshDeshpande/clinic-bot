@@ -1,88 +1,45 @@
-import { neon } from '@neondatabase/serverless';
+import postgres from 'postgres';
 import { logger } from '@/lib/logger';
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const MAX_QUERY_RETRIES = 4;
-const RETRY_BASE_DELAY_MS = 500;
 
 let rawSql;
 let sql;
 let migrationsPromise;
 
-const circuitBreaker = {
-  failures: 0,
-  lastFailureTime: 0,
-  threshold: 3,
-  cooldownMs: 60_000,
-  open: false,
-};
+let connectionAttempts = 0;
+const MAX_CONNECTION_ATTEMPTS = 3;
 
-function isCircuitOpen() {
-  if (!circuitBreaker.open) return false;
-  const elapsed = Date.now() - circuitBreaker.lastFailureTime;
-  if (elapsed >= circuitBreaker.cooldownMs) {
-    circuitBreaker.open = false;
-    circuitBreaker.failures = 0;
-    return false;
+function getClient() {
+  if (!DATABASE_URL) return null;
+  try {
+    return postgres(DATABASE_URL, {
+      max: 5,
+      idle_timeout: 30,
+      connect_timeout: 15,
+    });
+  } catch (e) {
+    logger.error('DB_CLIENT_INIT_FAILED', { error: e.message });
+    return null;
   }
-  return true;
-}
-
-function recordFailure() {
-  circuitBreaker.failures++;
-  circuitBreaker.lastFailureTime = Date.now();
-  if (circuitBreaker.failures >= circuitBreaker.threshold) {
-    circuitBreaker.open = true;
-  }
-}
-
-function recordSuccess() {
-  circuitBreaker.failures = 0;
-  circuitBreaker.open = false;
-}
-
-function isNetworkError(error) {
-  return error?.sourceError || error?.message?.includes('fetch failed') || error?.message?.includes('Error connecting to database');
-}
-
-function wrapWithRetry(fn) {
-  const retryWrapper = async (...args) => {
-    if (isCircuitOpen()) {
-      throw new Error('Database circuit breaker open — connection unavailable');
-    }
-    for (let attempt = 1; attempt <= MAX_QUERY_RETRIES; attempt++) {
-      try {
-        const result = await fn(...args);
-        recordSuccess();
-        return result;
-      } catch (error) {
-        if (attempt === MAX_QUERY_RETRIES || !isNetworkError(error)) {
-          recordFailure();
-          throw error;
-        }
-        logger.warn('DB_QUERY_RETRY', { attempt, maxRetries: MAX_QUERY_RETRIES, error: error.message });
-        await sleep(RETRY_BASE_DELAY_MS * attempt);
-      }
-    }
-  };
-  return retryWrapper;
 }
 
 export function getSql() {
   if (sql) return sql;
 
   if (!DATABASE_URL) {
-    logger.warn('DATABASE_URL not set \u2014 running without persistence');
+    logger.warn('DATABASE_URL not set — running without persistence');
     sql = null;
     return sql;
   }
 
-  rawSql = neon(DATABASE_URL);
-  const retried = wrapWithRetry(rawSql);
-  retried.query = wrapWithRetry(rawSql.query.bind(rawSql));
-  retried.unsafe = wrapWithRetry(rawSql.unsafe.bind(rawSql));
-  retried.transaction = (...args) => wrapWithRetry(rawSql.transaction.bind(rawSql))(...args);
-  sql = retried;
+  rawSql = getClient();
+  if (!rawSql) {
+    sql = null;
+    return sql;
+  }
+
+  sql = rawSql;
   return sql;
 }
 

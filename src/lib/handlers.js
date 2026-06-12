@@ -10,7 +10,7 @@ import { createAppointment, findAppointmentsByWaId, findUpcomingByWaId, supersed
          findAppointmentById, bulkCompleteAppointmentsForDate, bulkCancelAppointmentsForDate,
          fetchTodayScheduledAppointments } from '@/db/repositories/appointmentRepository';
 import { isDateBlocked, fetchBlockedDates, blockDate, unblockDate } from '@/db/repositories/blockedDateRepository';
-import { createPatient, searchPatients, findPatientById, createAppointmentForPatient, getVisitsByPatientPhone,
+import { createPatient, searchPatients, findPatientById, findPatientByPhone, createAppointmentForPatient, getVisitsByPatientPhone,
          updateVisitLog, findPatientsByWaId, updatePatient } from '@/db/repositories/patientRepository';
 import { insertFeedback } from '@/db/repositories/feedbackRepository';
 import { processAndStoreMedia, downloadMediaFromMeta } from '@/lib/media';
@@ -3994,14 +3994,19 @@ async function handleRegisterAppointment(session, intent, entities, normalized) 
     }
   }
 
-  // Create patient record
-  const patient = await createPatient({
-    name: reg.name,
-    age: reg.age,
-    sex: reg.sex,
-    phone: reg.phone,
-    waId: normalized?.waId || null,
-  });
+  // Create patient record — check for existing first to avoid dupes
+  let patient = reg.phone ? await findPatientByPhone(reg.phone) : null;
+  if (patient) {
+    await updatePatient(patient.id, { name: reg.name, age: reg.age, sex: reg.sex, waId: normalized?.waId || null });
+  } else {
+    patient = await createPatient({
+      name: reg.name,
+      age: reg.age,
+      sex: reg.sex,
+      phone: reg.phone,
+      waId: normalized?.waId || null,
+    });
+  }
 
   // Create appointment for today
   const appt = await createAppointmentForPatient({
@@ -5327,13 +5332,19 @@ async function handleReceptionistCreateWalkIn(session, normalized) {
     return { session, reply: 'Missing phone number. Please start registration again.', replyType: 'text' };
   }
 
-  const patient = await createPatient({
-    name: reg.name,
-    age: reg.age,
-    sex: reg.sex,
-    phone: phone,
-    waId: null,
-  });
+  // Check for existing patient first to avoid dupes
+  let patient = await findPatientByPhone(phone);
+  if (patient) {
+    await updatePatient(patient.id, { name: reg.name, age: reg.age, sex: reg.sex, waId: null });
+  } else {
+    patient = await createPatient({
+      name: reg.name,
+      age: reg.age,
+      sex: reg.sex,
+      phone: phone,
+      waId: null,
+    });
+  }
 
   const today = new Date().toISOString().slice(0, 10);
 

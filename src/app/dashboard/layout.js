@@ -164,7 +164,7 @@ function SidebarContent({ pathname, onNavClick }) {
   return (
     <>
       {/* Logo */}
-      <div className={`border-b border-gray-100 dark:border-gray-800 ${collapsed ? 'flex justify-center py-3' : 'p-4 md:p-6'}`}>
+      <div className={`${collapsed ? 'flex justify-center py-3 border-b border-gray-100 dark:border-gray-800' : 'p-4 md:p-6 border-b border-gray-100 dark:border-gray-800'}`}>
         <Link href="/dashboard" onClick={onNavClick} className={`flex items-center ${collapsed ? '' : 'gap-3'}`}>
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
             <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-7 h-7 rounded-lg object-contain" />

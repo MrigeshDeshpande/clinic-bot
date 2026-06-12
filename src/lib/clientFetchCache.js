@@ -38,7 +38,7 @@ export function fetchCached(url, options, ttl = DEFAULT_TTL) {
   const promise = fetch(url, options)
     .then(async r => {
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'Request failed');
+      if (!r.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Request failed');
       cache.set(key, { data, expiry: Date.now() + ttl });
       return data;
     })

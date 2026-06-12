@@ -32,6 +32,7 @@ self.addEventListener('activate', (event) => {
 
 function shouldCache(url) {
   const u = new URL(url);
+  if (u.pathname.startsWith('/api/dashboard/notifications/stream')) return false;
   if (u.pathname.startsWith('/api/dashboard/media/signed')) return false;
   if (u.pathname.startsWith('/api/dashboard/logout')) return false;
   if (u.pathname.startsWith('/api/')) return true;
