@@ -512,7 +512,7 @@ export default function PatientDetailPage() {
                           <input
                             type="text"
                             value={stripPhonePrefix(editForm.phone)}
-                            onChange={e => setEditForm(f => ({ ...f, phone: stripPhonePrefix(e.target.value) }))}
+                            onChange={e => setEditForm(f => ({ ...f, phone: stripPhonePrefix(e.target.value).slice(0, 10) }))}
                             className="bg-transparent border-b border-t border-r border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none w-28 sm:w-32 text-gray-900 dark:text-gray-100 text-sm px-1"
                           />
                         </div>

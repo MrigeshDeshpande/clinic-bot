@@ -339,7 +339,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
           <input
             type="tel"
             value={patientPhone}
-            onChange={e => setPatientPhone(e.target.value.replace(/\D/g, ''))}
+            onChange={e => setPatientPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
             placeholder="9876543210"
             className="flex-1 px-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />

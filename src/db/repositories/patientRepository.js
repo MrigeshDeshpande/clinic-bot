@@ -6,7 +6,7 @@ function normalizePhone(phone) {
   let cleaned = phone.replace(/\D/g, '');
   // Strip duplicate country codes: if phone starts with 91 and is > 12 digits,
   // keep stripping leading '91' until it's 12 digits or no longer starts with 91
-  while (cleaned.startsWith('91') && cleaned.length > 12) {
+  while (cleaned.startsWith('91') && cleaned.length > 10) {
     cleaned = cleaned.slice(2);
   }
   return cleaned;

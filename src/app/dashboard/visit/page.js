@@ -877,7 +877,7 @@ function VisitPageInner() {
     setForm(f => ({
       ...f,
       patientName: p.name || '',
-      patientPhone: (p.phone || '').replace(/\D/g, '') || f.patientPhone,
+      patientPhone: (p.phone || '').replace(/\D/g, '').slice(0, 10) || f.patientPhone,
       patientAge: p.age?.toString() || '',
       patientSex: normalizeSex(p.sex),
       patientLocation: p.location || '',

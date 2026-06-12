@@ -87,7 +87,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
   function selectPatient(p) {
     setSelectedPatient(p);
     setName(p.name);
-    setPhone((p.phone || '').replace(/\D/g, ''));
+    setPhone((p.phone || '').replace(/\D/g, '').slice(0, 10));
     setSearchResults([]);
     setSearchState('idle');
   }
@@ -229,7 +229,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
               <input
                 type="tel"
                 value={phone}
-                onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 placeholder="9876543210"
                 className="flex-1 px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-r-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
               />
