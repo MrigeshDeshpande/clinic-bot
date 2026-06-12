@@ -2002,83 +2002,6 @@ function VisitPageInner() {
           </div>
         </div>
 
-        {/* ── Patient Context Card ── */}
-        {patientProfile && (
-          <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-900 p-4 mb-6 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-lg font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
-                {(patientProfile.name || form.patientName || '?')[0].toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                    {patientProfile.name || form.patientName}
-                  </span>
-                  {(form.patientAge || patientProfile.age) && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                      {form.patientAge || patientProfile.age}{form.patientSex || patientProfile.sex ? '/': ''}{form.patientSex || patientProfile.sex || ''}
-                    </span>
-                  )}
-                  {patientProfile.phone && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">{patientProfile.phone}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-gray-400 dark:text-gray-500">
-                  {patientProfile.location && <span>📍 {patientProfile.location}</span>}
-                  {patientProfile.occupation && <span>💼 {patientProfile.occupation}</span>}
-                  {patientProfile.blood_group && <span>🩸 {patientProfile.blood_group}</span>}
-                  {patientProfile.address && <span>🏠 {patientProfile.address}</span>}
-                  {patientProfile.created_at && (
-                    <span>Patient since {patientProfile.created_at?.slice(0, 10)}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-              <button type="button" onClick={() => setShowEditDrawer(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                <Pencil className="w-3 h-3" /> Edit
-              </button>
-              <button type="button" onClick={() => setShowWalkInDrawer(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
-                <Plus className="w-3 h-3" /> Walk-in
-              </button>
-              <button type="button" onClick={() => {
-                setShowPatientSearch(s => !s);
-                if (!showPatientSearch) setForm(f => ({ ...f, patientName: '' }));
-              }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                <Search className="w-3 h-3" /> {showPatientSearch ? 'Cancel' : 'Change patient'}
-              </button>
-            </div>
-            {showPatientSearch && (
-              <div className="mt-3 relative">
-                <input type="text" value={form.patientName}
-                  onChange={e => setForm(f => ({ ...f, patientName: e.target.value }))}
-                  placeholder="Search patient by name or phone..."
-                  className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400"
-                  autoFocus />
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                {searchResults.length > 0 && form.patientName.trim().length >= 2 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 max-h-[200px] overflow-y-auto">
-                    {searchResults.slice(0, 5).map((p) => (
-                      <button key={p.id} type="button"
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
-                        onClick={() => { selectPatient(p); setShowPatientSearch(false); }}>
-                        <span className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-xs font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
-                          {(p.name || '?')[0].toUpperCase()}
-                        </span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</span>
-                        <span className="text-gray-400 shrink-0 text-xs">{p.phone || ''}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         <form onSubmit={handleSubmit}>
           {/* ── Draft restore banner ── */}
           {draftAvailable && (
@@ -2114,6 +2037,84 @@ function VisitPageInner() {
 
             {/* ── Clinical Pane (Left) — lg:col-span-12 ── */}
             <div className="lg:col-span-12 space-y-6">
+
+              {/* ── Patient Context Card ── */}
+              {patientProfile && (
+                <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-900 p-4 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-lg font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
+                      {(patientProfile.name || form.patientName || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          {patientProfile.name || form.patientName}
+                        </span>
+                        {(form.patientAge || patientProfile.age) && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                            {form.patientAge || patientProfile.age}{form.patientSex || patientProfile.sex ? '/': ''}{form.patientSex || patientProfile.sex || ''}
+                          </span>
+                        )}
+                        {patientProfile.phone && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">{patientProfile.phone}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-gray-400 dark:text-gray-500">
+                        {patientProfile.location && <span>📍 {patientProfile.location}</span>}
+                        {patientProfile.occupation && <span>💼 {patientProfile.occupation}</span>}
+                        {patientProfile.blood_group && <span>🩸 {patientProfile.blood_group}</span>}
+                        {patientProfile.address && <span>🏠 {patientProfile.address}</span>}
+                        {patientProfile.created_at && (
+                          <span>Patient since {patientProfile.created_at?.slice(0, 10)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                    <button type="button" onClick={() => setShowEditDrawer(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                      <Pencil className="w-3 h-3" /> Edit
+                    </button>
+                    <button type="button" onClick={() => setShowWalkInDrawer(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
+                      <Plus className="w-3 h-3" /> Walk-in
+                    </button>
+                    <button type="button" onClick={() => {
+                      setShowPatientSearch(s => !s);
+                      if (!showPatientSearch) setForm(f => ({ ...f, patientName: '' }));
+                    }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                      <Search className="w-3 h-3" /> {showPatientSearch ? 'Cancel' : 'Change patient'}
+                    </button>
+                  </div>
+                  {showPatientSearch && (
+                    <div className="mt-3 relative">
+                      <input type="text" value={form.patientName}
+                        onChange={e => setForm(f => ({ ...f, patientName: e.target.value }))}
+                        placeholder="Search patient by name or phone..."
+                        className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400"
+                        autoFocus />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      {searchResults.length > 0 && form.patientName.trim().length >= 2 && (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 max-h-[200px] overflow-y-auto">
+                          {searchResults.slice(0, 5).map((p) => (
+                            <button key={p.id} type="button"
+                              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
+                              onClick={() => { selectPatient(p); setShowPatientSearch(false); }}>
+                              <span className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-xs font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
+                                {(p.name || '?')[0].toUpperCase()}
+                              </span>
+                              <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</span>
+                              <span className="text-gray-400 shrink-0 text-xs">{p.phone || ''}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {layout.leftColumn.filter(s => s.enabled).map(section => (
                 <Fragment key={section.id}>
                   {SECTIONS[section.id]?.()}
