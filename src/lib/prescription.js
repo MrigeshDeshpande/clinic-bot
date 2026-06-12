@@ -244,6 +244,81 @@ export async function generatePrescription({ patient, visit, appointment }) {
   doc.opacity(1);
   y += 16;
 
+  // ─── TOOTH DIAGNOSIS TABLE ───
+  const toothDiagnoses = visit?.tooth_diagnoses || [];
+  if (toothDiagnoses.length > 0) {
+    doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
+    doc.text('Tooth-wise Diagnosis:', LM, y);
+    y += 14;
+
+    const colX = [LM, LM + 36, LM + 66, LM + RW - 40];
+    const colW = [30, 28, RW - 108, 40];
+    const tableW = RW;
+    const rh = 16;
+    const headerBg = '#1e3a5f';
+    const altBg = '#f3f4f6';
+
+    // Table header
+    doc.roundedRect(LM, y, tableW, rh, 3).fill(headerBg);
+    doc.fillColor('#ffffff').fontSize(Math.max(7.5, fontSize - 1)).font('Bold');
+    doc.text('Tooth', colX[0] + 4, y + 4, { width: colW[0] - 4 });
+    doc.text('Surf.', colX[1] + 4, y + 4, { width: colW[1] - 4 });
+    doc.text('Diagnosis', colX[2] + 4, y + 4, { width: colW[2] - 4 });
+    doc.text('Plan', colX[3] + 4, y + 4, { width: colW[3] - 4 });
+    y += rh;
+    doc.fillColor('#000000').fontSize(fontSize).font('Regular');
+
+    // Data rows
+    for (let i = 0; i < toothDiagnoses.length; i++) {
+      const td = toothDiagnoses[i];
+      const surface = td.surface || '\u2014';
+      const treatment = getTreatmentName(td.treatment) || '\u2014';
+      const diagText = td.diagnoses.join(', ');
+      const rowH = Math.max(rh, doc.heightOfString(diagText, { width: colW[2] - 4 }) + 6);
+
+      // Row background
+      if (i % 2 === 1) {
+        doc.rect(LM, y, tableW, rowH).fill(altBg);
+      }
+
+      // Row separator
+      doc.moveTo(LM, y).lineTo(LM + tableW, y).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
+
+      // Vertical separators
+      for (let c = 1; c < 4; c++) {
+        doc.moveTo(colX[c], y).lineTo(colX[c], y + rowH).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
+      }
+
+      // Cell text
+      doc.fillColor('#000000');
+      doc.font('Bold').fontSize(Math.max(8, fontSize - 0.5));
+      doc.text(`#${td.tooth}`, colX[0] + 4, y + 4, { width: colW[0] - 4 });
+      doc.font('Regular').fontSize(Math.max(8, fontSize - 0.5));
+      doc.text(surface, colX[1] + 4, y + 4, { width: colW[1] - 4 });
+      doc.text(diagText, colX[2] + 4, y + 4, { width: colW[2] - 4 });
+      doc.font('Regular').fontSize(fontSize);
+      doc.text(treatment, colX[3] + 4, y + 4, { width: colW[3] - 4 });
+
+      y += rowH;
+    }
+    y += 10;
+  } else {
+    // Fallback: plain diagnosis_selected list
+    const selectedDiagnoses = visit?.diagnosis_selected || [];
+    if (selectedDiagnoses.length > 0) {
+      doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
+      doc.text('Diagnosis:', LM, y);
+      y += 16;
+      doc.fontSize(fontSize).font('Regular');
+      for (const item of selectedDiagnoses) {
+        const line = `\u2713  ${item}`;
+        doc.text(line, LM, y);
+        y += doc.heightOfString(line, { width: RW }) + 4;
+      }
+      y += 8;
+    }
+  }
+
   // ─── TREATMENT ───
   // Normalize treatments: support both JSONB arrays and comma-separated strings
   const rawTreatments = visit?.treatments?.length
@@ -271,81 +346,6 @@ export async function generatePrescription({ patient, visit, appointment }) {
     doc.fontSize(fontSize).font('Regular');
     doc.text(visit.diagnosis, LM, y, { width: RW });
     y += doc.heightOfString(visit.diagnosis, { width: RW }) + 16;
-  }
-
-  // ─── TOOTH DIAGNOSIS TABLE ───
-  const toothDiagnoses = visit?.tooth_diagnoses || [];
-  if (toothDiagnoses.length > 0) {
-    doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
-    doc.text('Tooth-wise Diagnosis:', LM, y);
-    y += 14;
-
-    const colX = [LM, LM + 36, LM + 66, LM + 108];
-    const colW = [30, 28, 40, RW - 108];
-    const tableW = RW;
-    const rh = 16;
-    const headerBg = '#1e3a5f';
-    const altBg = '#f3f4f6';
-
-    // Table header
-    doc.roundedRect(LM, y, tableW, rh, 3).fill(headerBg);
-    doc.fillColor('#ffffff').fontSize(Math.max(7.5, fontSize - 1)).font('Bold');
-    doc.text('Tooth', colX[0] + 4, y + 4, { width: colW[0] - 4 });
-    doc.text('Surf.', colX[1] + 4, y + 4, { width: colW[1] - 4 });
-    doc.text('Plan', colX[2] + 4, y + 4, { width: colW[2] - 4 });
-    doc.text('Diagnosis', colX[3] + 4, y + 4, { width: colW[3] - 4 });
-    y += rh;
-    doc.fillColor('#000000').fontSize(fontSize).font('Regular');
-
-    // Data rows
-    for (let i = 0; i < toothDiagnoses.length; i++) {
-      const td = toothDiagnoses[i];
-      const surface = td.surface || '\u2014';
-      const treatment = getTreatmentName(td.treatment) || '\u2014';
-      const diagText = td.diagnoses.join(', ');
-      const rowH = Math.max(rh, doc.heightOfString(diagText, { width: colW[3] - 4 }) + 6);
-
-      // Row background
-      if (i % 2 === 1) {
-        doc.rect(LM, y, tableW, rowH).fill(altBg);
-      }
-
-      // Row separator
-      doc.moveTo(LM, y).lineTo(LM + tableW, y).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
-
-      // Vertical separators
-      for (let c = 1; c < 4; c++) {
-        doc.moveTo(colX[c], y).lineTo(colX[c], y + rowH).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
-      }
-
-      // Cell text
-      doc.fillColor('#000000');
-      doc.font('Bold').fontSize(Math.max(8, fontSize - 0.5));
-      doc.text(`#${td.tooth}`, colX[0] + 4, y + 4, { width: colW[0] - 4 });
-      doc.font('Regular').fontSize(Math.max(8, fontSize - 0.5));
-      doc.text(surface, colX[1] + 4, y + 4, { width: colW[1] - 4 });
-      doc.text(treatment, colX[2] + 4, y + 4, { width: colW[2] - 4 });
-      doc.font('Regular').fontSize(fontSize);
-      doc.text(diagText, colX[3] + 4, y + 4, { width: colW[3] - 4 });
-
-      y += rowH;
-    }
-    y += 10;
-  } else {
-    // Fallback: plain diagnosis_selected list
-    const selectedDiagnoses = visit?.diagnosis_selected || [];
-    if (selectedDiagnoses.length > 0) {
-      doc.fontSize(Math.max(9, fontSize + 1)).font('Bold');
-      doc.text('Diagnosis:', LM, y);
-      y += 16;
-      doc.fontSize(fontSize).font('Regular');
-      for (const item of selectedDiagnoses) {
-        const line = `\u2713  ${item}`;
-        doc.text(line, LM, y);
-        y += doc.heightOfString(line, { width: RW }) + 4;
-      }
-      y += 8;
-    }
   }
 
   // ─── Rx + Generic Substitution ───

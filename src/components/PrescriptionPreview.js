@@ -104,9 +104,41 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
             </div>
             <hr style={{ margin: '0 28px', border: 'none', borderTop: '1px solid #ccc', opacity: 0.5 }} />
 
+            {/* === TOOTH DIAGNOSIS TABLE === */}
+            {form.toothDiagnoses?.length > 0 && (
+              <div style={{ padding: '8px 28px' }}>
+                <div className={SECTION_TITLE}>Tooth Diagnosis</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...styleTH, width: '15%' }}>Tooth</th>
+                      <th style={{ ...styleTH, width: '12%' }}>Surf.</th>
+                      <th style={{ ...styleTH, width: '53%' }}>Diagnosis</th>
+                      <th style={{ ...styleTH, width: '20%', borderRight: 'none' }}>Plan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.toothDiagnoses.map((td, i) => (
+                      <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f3f4f6' }}>
+                        <td style={{ ...styleTD, fontWeight: 700 }}>#{td.tooth}</td>
+                        <td style={styleTD}>{td.surface || '—'}</td>
+                        <td style={styleTD}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>{td.diagnoses?.join(', ') || '—'}</span>
+                            {td.diagnoses?.length > 1 && <ToothTypeLabel diagnoses={td.diagnoses} />}
+                          </div>
+                        </td>
+                        <td style={{ ...styleTD, borderRight: 'none' }}>{getTreatmentName(td.treatment) || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             {/* === TREATMENT === */}
             {selectedTreatments.length > 0 && (
-              <div style={{ padding: '10px 28px 4px' }}>
+              <div style={{ padding: '4px 28px' }}>
                 <div className={SECTION_TITLE}>Treatment</div>
                 {selectedTreatments.map((t, i) => (
                   <div key={i} style={{ fontSize: 10, lineHeight: 1.8, marginLeft: 8 }}>{i + 1}. {t}</div>
@@ -119,38 +151,6 @@ export default function PrescriptionPreview({ form, patientProfile, treatmentFee
               <div style={{ padding: '4px 28px' }}>
                 <div className={SECTION_TITLE}>Notes</div>
                 <div style={{ fontSize: 10, lineHeight: 1.5, color: '#374151' }}>{form.diagnosis}</div>
-              </div>
-            )}
-
-            {/* === TOOTH DIAGNOSIS TABLE === */}
-            {form.toothDiagnoses?.length > 0 && (
-              <div style={{ padding: '8px 28px' }}>
-                <div className={SECTION_TITLE}>Tooth Diagnosis</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...styleTH, width: '15%' }}>Tooth</th>
-                      <th style={{ ...styleTH, width: '12%' }}>Surf.</th>
-                      <th style={{ ...styleTH, width: '20%' }}>Plan</th>
-                      <th style={{ ...styleTH, width: '53%' }}>Diagnosis</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {form.toothDiagnoses.map((td, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f3f4f6' }}>
-                        <td style={{ ...styleTD, fontWeight: 700 }}>#{td.tooth}</td>
-                        <td style={styleTD}>{td.surface || '—'}</td>
-                        <td style={styleTD}>{getTreatmentName(td.treatment) || '—'}</td>
-                        <td style={{ ...styleTD, borderRight: 'none' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span>{td.diagnoses?.join(', ') || '—'}</span>
-                            {td.diagnoses?.length > 1 && <ToothTypeLabel diagnoses={td.diagnoses} />}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             )}
 
