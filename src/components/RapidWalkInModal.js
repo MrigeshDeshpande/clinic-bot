@@ -55,7 +55,17 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
         const results = d.patients || [];
         if (queryRef.current !== name) return; // stale
         setSearchResults(results);
-        setSearchState(results.length > 0 ? 'success' : 'empty');
+        if (results.length > 0) {
+          setSearchState('success');
+        } else {
+          setSearchState('empty');
+          setTimeout(() => {
+            if (queryRef.current === name) {
+              setSearchResults([]);
+              setSearchState('idle');
+            }
+          }, 2000);
+        }
       } catch (e) {
         if (e.name !== 'AbortError') { console.error('Walk-in search error:', e); setSearchState('idle'); }
       }

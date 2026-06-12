@@ -128,7 +128,17 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         const results = d.patients || [];
         if (queryRef.current !== patientName) return; // stale
         setSearchResults(results);
-        setSearchState(results.length > 0 ? 'success' : 'empty');
+        if (results.length > 0) {
+          setSearchState('success');
+        } else {
+          setSearchState('empty');
+          setTimeout(() => {
+            if (queryRef.current === patientName) {
+              setSearchResults([]);
+              setSearchState('idle');
+            }
+          }, 2000);
+        }
       } catch (e) {
         if (e.name !== 'AbortError') { console.error('Quick book search error:', e); setSearchState('idle'); }
       }
