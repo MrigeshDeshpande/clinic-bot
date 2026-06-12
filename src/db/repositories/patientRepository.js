@@ -231,7 +231,7 @@ export async function updatePatient(id, fields) {
     setClauses.push(`updated_at = NOW()`);
     values.push(id);
 
-    const rows = await sql.query(
+    const rows = await sql.unsafe(
       `UPDATE patients SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
       values
     );

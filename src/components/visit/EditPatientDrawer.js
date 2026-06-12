@@ -11,33 +11,45 @@ export default function EditPatientDrawer({ patientProfile, onClose, onSaved, sh
   const [sex, setSex] = useState(patientProfile?.sex || '');
   const [location, setLocation] = useState(patientProfile?.location || '');
   const [showCustomLocation, setShowCustomLocation] = useState(!LOCATIONS.includes(patientProfile?.location || ''));
+  const [occupation, setOccupation] = useState(patientProfile?.occupation || '');
+  const [address, setAddress] = useState(patientProfile?.address || '');
   const [saving, setSaving] = useState(false);
 
   async function handleSave(e) {
     e.preventDefault();
-    if (!patientProfile?.id) return;
+    console.log('[EditPatient] handleSave called', { hasId: !!patientProfile?.id, id: patientProfile?.id });
+    if (!patientProfile?.id) { console.warn('[EditPatient] no patient id, returning'); return; }
     setSaving(true);
     try {
+      const payload = {
+        name: name.trim(),
+        phone: phone ? `+91${phone}` : undefined,
+        age: age ? parseInt(age, 10) : undefined,
+        sex: sex || undefined,
+        location: location || undefined,
+        occupation: occupation.trim() || undefined,
+        address: address.trim() || undefined,
+      };
+      console.log('[EditPatient] sending PATCH', payload);
       const res = await apiFetch(`/api/dashboard/patients/${patientProfile.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: phone ? `+91${phone}` : undefined,
-          age: age ? parseInt(age, 10) : undefined,
-          sex: sex || undefined,
-          location: location || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
+      console.log('[EditPatient] response status', res.status, res.ok);
       if (res.ok) {
+        const updated = await res.json();
+        console.log('[EditPatient] PATCH success, response keys:', Object.keys(updated));
         showToast?.('Patient details updated', 'success');
-        onSaved?.();
+        onSaved?.(updated);
         onClose();
       } else {
         const data = await res.json();
+        console.warn('[EditPatient] PATCH error', data);
         showToast?.(data.error || 'Failed to update', 'error');
       }
-    } catch {
+    } catch (err) {
+      console.error('[EditPatient] fetch/parse error', err);
       showToast?.('Network error', 'error');
     } finally {
       setSaving(false);
@@ -103,6 +115,18 @@ export default function EditPatientDrawer({ patientProfile, onClose, onSaved, sh
                 placeholder="Enter location"
                 className="mt-1 w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all" />
             )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Occupation</label>
+            <input type="text" value={occupation} onChange={e => setOccupation(e.target.value)}
+              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+              placeholder="e.g. Engineer, Business, Student" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Address</label>
+            <input type="text" value={address} onChange={e => setAddress(e.target.value)}
+              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+              placeholder="e.g. 123 Main St, City" />
           </div>
 
           <div className="pt-2">

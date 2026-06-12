@@ -625,7 +625,7 @@ function VisitPageInner() {
   // Patient search for walk-in
   useEffect(() => {
     const abort = new AbortController();
-    const query = form.patientName.trim();
+    const query = (form.patientName || '').trim();
     queryRef.current = query;
     if (appointmentId || query.length < 2) {
       setSearchResults([]);
@@ -873,9 +873,10 @@ function VisitPageInner() {
   }, []);
 
   async function selectPatient(p) {
+    if (!p) return;
     setForm(f => ({
       ...f,
-      patientName: p.name,
+      patientName: p.name || '',
       patientPhone: (p.phone || '').replace(/\D/g, '') || f.patientPhone,
       patientAge: p.age?.toString() || '',
       patientSex: normalizeSex(p.sex),
@@ -2024,6 +2025,9 @@ function VisitPageInner() {
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-gray-400 dark:text-gray-500">
                   {patientProfile.location && <span>📍 {patientProfile.location}</span>}
+                  {patientProfile.occupation && <span>💼 {patientProfile.occupation}</span>}
+                  {patientProfile.blood_group && <span>🩸 {patientProfile.blood_group}</span>}
+                  {patientProfile.address && <span>🏠 {patientProfile.address}</span>}
                   {patientProfile.created_at && (
                     <span>Patient since {patientProfile.created_at?.slice(0, 10)}</span>
                   )}
