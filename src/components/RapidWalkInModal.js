@@ -21,6 +21,76 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
   const [medicineFee, setMedicineFee] = useState(0);
   const total = treatmentFee + medicineFee;
   const [paid, setPaid] = useState(500);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchState, setSearchState] = useState('idle');
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [method, setMethod] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notes, setNotes] = useState('');
+  const nameInputRef = useRef(null);
+  const queryRef = useRef('');
+
+  // Focus name input on mount
+  useEffect(() => {
+    setTimeout(() => nameInputRef.current?.focus(), 100);
+  }, []);
+
+  // Debounced patient search
+  useEffect(() => {
+    const abort = new AbortController();
+    queryRef.current = name;
+    if (name.length < 2 || selectedPatient) {
+      setSearchResults([]);
+      setSearchState('idle');
+      return;
+    }
+    setSearchResults([]);
+    setSearchState('searching');
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(name)}`, { signal: abort.signal });
+        const d = await res.json();
+        const results = d.patients || [];
+        if (queryRef.current !== name) return; // stale
+        setSearchResults(results);
+        setSearchState(results.length > 0 ? 'success' : 'empty');
+      } catch (e) {
+        if (e.name !== 'AbortError') { console.error('Walk-in search error:', e); setSearchState('idle'); }
+      }
+    }, 250);
+    return () => { clearTimeout(timer); abort.abort(); };
+  }, [name, selectedPatient]);
+
+  // Auto-highlight first result
+  useEffect(() => {
+    setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
+  }, [searchResults]);
+
+  // Global Escape handler
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        if (searchState === 'success' || searchResults.length > 0) {
+          setSearchResults([]);
+          setSearchState('idle');
+        } else {
+          onClose?.();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [searchState, searchResults, onClose]);
+
+  function selectPatient(p) {
+    setSelectedPatient(p);
+    setName(p.name);
+    setPhone((p.phone || '').replace(/\D/g, ''));
+    setSearchResults([]);
+    setSearchState('idle');
+  }
 
   const outstanding = Math.max(0, total - paid);
 
