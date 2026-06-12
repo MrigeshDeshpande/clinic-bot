@@ -222,6 +222,8 @@ export default function ContextSidebar({
   consultationFee,
   medicines = [],
   medicineCharges = 0,
+  onUpdateTreatmentFee,
+  onUpdateConsultationFee,
   onEditPatient,
   onMedicalHistorySave,
   onToggleTreatment,
@@ -316,7 +318,12 @@ export default function ContextSidebar({
                     <Plus className="w-2.5 h-2.5" />
                   </button>
                 </div>
-                <span className="font-semibold text-gray-900 dark:text-gray-100 w-20 text-right shrink-0">₹{(item.amount || 0).toLocaleString('en-IN')}</span>
+                <div className="relative shrink-0">
+                  <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 dark:text-gray-500 pointer-events-none">₹</span>
+                  <input type="text" inputMode="numeric" value={item.amount || 0}
+                    onChange={e => onUpdateTreatmentFee(key, e.target.value)}
+                    className="w-20 pl-4 pr-1 py-0.5 text-sm text-right font-semibold text-gray-900 dark:text-gray-100 bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-gray-700 focus:border-blue-300 dark:focus:border-blue-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-200 transition-colors" />
+                </div>
                 <button type="button" onClick={() => onToggleTreatment(key)}
                   className="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-300 hover:text-red-500 transition-colors shrink-0">
                   <X className="w-3 h-3" />
@@ -326,12 +333,22 @@ export default function ContextSidebar({
           })}
           <div className="flex items-center gap-2 text-sm leading-5">
             <span className="flex-1 text-gray-500 dark:text-gray-400">Consultation</span>
-            <span className="font-semibold text-gray-900 dark:text-gray-100">₹{consultationFee.toLocaleString('en-IN')}</span>
+            <div className="relative">
+              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 dark:text-gray-500 pointer-events-none">₹</span>
+              <input type="text" inputMode="numeric" value={consultationFee}
+                onChange={e => onUpdateConsultationFee(e.target.value)}
+                className="w-20 pl-4 pr-1 py-0.5 text-sm text-right font-semibold text-gray-900 dark:text-gray-100 bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-gray-700 focus:border-blue-300 dark:focus:border-blue-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-200 transition-colors" />
+            </div>
           </div>
           {medicinesCount > 0 && (
             <div className="flex items-center gap-2 text-sm leading-5">
               <span className="flex-1 text-gray-500 dark:text-gray-400">Medicines ({medicinesCount})</span>
-              <span className="font-semibold text-gray-900 dark:text-gray-100">₹{Number(medicineCharges).toLocaleString('en-IN')}</span>
+              <div className="relative">
+                <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 dark:text-gray-500 pointer-events-none">₹</span>
+                <input type="text" inputMode="numeric" value={medicineCharges}
+                  onChange={e => setForm(f => ({ ...f, medicineCharges: e.target.value }))}
+                  className="w-20 pl-4 pr-1 py-0.5 text-sm text-right font-semibold text-gray-900 dark:text-gray-100 bg-transparent border border-transparent hover:border-gray-200 dark:hover:border-gray-700 focus:border-blue-300 dark:focus:border-blue-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-200 transition-colors" />
+              </div>
             </div>
           )}
         </div>

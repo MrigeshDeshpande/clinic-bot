@@ -387,6 +387,17 @@ function VisitPageInner() {
     });
   }
 
+  function handleUpdateTreatmentFee(key, value) {
+    setTreatmentFees(prev => ({
+      ...prev,
+      [key]: { ...prev[key], amount: Number(value) || 0, source: 'manual' }
+    }));
+  }
+
+  function handleUpdateConsultationFee(value) {
+    setConsultationFee(Number(value) || 0);
+  }
+
   function handleAdjustQuantity(key, delta) {
     setTreatmentFees(prev => {
       const item = prev[key];
@@ -1915,6 +1926,8 @@ function VisitPageInner() {
         consultationFee={consultationFee}
         medicines={form.medicines}
         medicineCharges={form.medicineCharges}
+        onUpdateTreatmentFee={handleUpdateTreatmentFee}
+        onUpdateConsultationFee={handleUpdateConsultationFee}
         onEditPatient={() => setShowEditDrawer(true)}
         onToggleTreatment={toggleTreatment}
         onAdjustQuantity={handleAdjustQuantity}
