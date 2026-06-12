@@ -72,7 +72,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
   useEffect(() => {
     function handleKey(e) {
       if (e.key === 'Escape') {
-        if (searchState === 'success' || searchResults.length > 0) {
+        if (searchState !== 'idle') {
           setSearchResults([]);
           setSearchState('idle');
         } else {
