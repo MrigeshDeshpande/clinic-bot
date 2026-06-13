@@ -93,6 +93,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   const [patientPhone, setPatientPhone] = useState('');
   const [patientAge, setPatientAge] = useState('');
   const [patientSex, setPatientSex] = useState('');
+  const [selectedTime, setSelectedTime] = useState(time || '');
   const [treatment, setTreatment] = useState('');
   const [location, setLocation] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -189,6 +190,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!patientName.trim()) { setError('Patient name is required'); return; }
+    if (!time && !selectedTime) { setError('Please select a time slot'); return; }
     setSaving(true);
     setError('');
 
@@ -202,7 +204,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
           patientAge: patientAge.trim() || null,
           patientSex: patientSex || null,
           date,
-          time,
+          time: time || selectedTime || null,
           treatment: treatment || null,
           location: location.trim() || null,
         }),
@@ -249,6 +251,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
               setPatientPhone('');
               setPatientAge('');
               setPatientSex('');
+              setSelectedTime(time || '');
               setTreatment('');
               setLocation('');
               setSelectedPatient(null);
@@ -402,6 +405,31 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
           />
         </div>
       </div>
+
+      {/* Time selector — only when opened without a pre-selected slot */}
+      {!time && (
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Time *</label>
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <select
+              value={selectedTime}
+              onChange={e => setSelectedTime(e.target.value)}
+              className="w-full pl-9 pr-8 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 appearance-none cursor-pointer transition-colors"
+            >
+              <option value="">Select time...</option>
+              {(new Date(date + 'T12:00:00').getDay() === 0 ? DEFAULT_SLOTS.sunday : DEFAULT_SLOTS.weekday).map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 5-7-5" />
+            </svg>
+          </div>
+        </div>
+      )}
 
       {/* Treatment Dropdown */}
       <div>

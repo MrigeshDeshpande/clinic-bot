@@ -17,39 +17,60 @@ export default function EditPatientDrawer({ patientProfile, onClose, onSaved, sh
 
   async function handleSave(e) {
     e.preventDefault();
-    console.log('[EditPatient] handleSave called', { hasId: !!patientProfile?.id, id: patientProfile?.id });
-    if (!patientProfile?.id) { console.warn('[EditPatient] no patient id, returning'); return; }
+    const payload = {
+      name: name.trim(),
+      phone: phone || '',
+      age: age ? parseInt(age, 10) : undefined,
+      sex: sex || '',
+      location: location || '',
+      occupation: occupation.trim() || '',
+      address: address.trim() || '',
+    };
+
+    if (!patientProfile?.id) {
+      setSaving(true);
+      try {
+        const apiPayload = { ...payload, phone: phone ? `+91${phone}` : undefined };
+        const res = await apiFetch('/api/dashboard/patients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(apiPayload),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          showToast?.('Patient created & details saved', 'success');
+          onSaved?.(created);
+          onClose();
+        } else {
+          const data = await res.json();
+          showToast?.(data.error || 'Failed to create patient', 'error');
+        }
+      } catch {
+        showToast?.('Network error', 'error');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setSaving(true);
     try {
-      const payload = {
-        name: name.trim(),
-        phone: phone ? `+91${phone}` : undefined,
-        age: age ? parseInt(age, 10) : undefined,
-        sex: sex || undefined,
-        location: location || undefined,
-        occupation: occupation.trim() || undefined,
-        address: address.trim() || undefined,
-      };
-      console.log('[EditPatient] sending PATCH', payload);
+      const apiPayload = { ...payload, phone: phone ? `+91${phone}` : undefined };
       const res = await apiFetch(`/api/dashboard/patients/${patientProfile.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(apiPayload),
       });
-      console.log('[EditPatient] response status', res.status, res.ok);
       if (res.ok) {
         const updated = await res.json();
-        console.log('[EditPatient] PATCH success, response keys:', Object.keys(updated));
         showToast?.('Patient details updated', 'success');
         onSaved?.(updated);
         onClose();
       } else {
         const data = await res.json();
-        console.warn('[EditPatient] PATCH error', data);
         showToast?.(data.error || 'Failed to update', 'error');
       }
     } catch (err) {
-      console.error('[EditPatient] fetch/parse error', err);
       showToast?.('Network error', 'error');
     } finally {
       setSaving(false);

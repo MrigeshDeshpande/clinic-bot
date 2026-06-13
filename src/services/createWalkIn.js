@@ -3,6 +3,7 @@ import { recordPayment } from './recordPayment';
 
 export async function createWalkIn(sql, body) {
   const {
+    patient_id,
     patient_name, patient_phone, patient_age, patient_sex, patient_location,
     treatment, treatments, treatmentFees, diagnosis, medicines,
     consultationFee, treatmentCharges, medicineCharges, notes,
@@ -30,7 +31,9 @@ export async function createWalkIn(sql, body) {
   })();
 
   let patientId = null;
-  if (patient_phone) {
+  if (patient_id) {
+    patientId = patient_id;
+  } else if (patient_phone) {
     const existing = await findPatientByPhone(patient_phone);
     if (existing) {
       patientId = existing.id;

@@ -43,13 +43,12 @@ export async function POST(req) {
         // Update age/sex if provided
         const ageVal = patientAge ? parseInt(patientAge, 10) : null;
         if (ageVal || patientSex) {
-          const setParts = [];
-          const params = [];
-          let idx = 1;
-          if (ageVal) { setParts.push(`age = $${idx++}`); params.push(ageVal); }
-          if (patientSex) { setParts.push(`sex = $${idx++}`); params.push(patientSex); }
-          params.push(patientId);
-          await sql.query(`UPDATE patients SET ${setParts.join(', ')} WHERE id = $${idx}`, params);
+          const updates = [];
+          if (ageVal) updates.push(sql`age = ${ageVal}`);
+          if (patientSex) updates.push(sql`sex = ${patientSex}`);
+          if (updates.length > 0) {
+            await sql`UPDATE patients SET ${sql(updates)} WHERE id = ${patientId}`;
+          }
           // Invalidate cached prescriptions for this patient
           await sql`UPDATE appointments SET prescription_key = NULL, compiled_document_key = NULL, updated_at = NOW() WHERE patient_id = ${patientId} AND prescription_key IS NOT NULL`;
         }
@@ -61,7 +60,7 @@ export async function POST(req) {
         let idx = 4;
         if (ageVal) { cols.push('age'); vals.push(ageVal); placeholders.push(`$${idx++}`); }
         if (patientSex) { cols.push('sex'); vals.push(patientSex); placeholders.push(`$${idx++}`); }
-        const created = await sql.query(
+        const created = await sql.unsafe(
           `INSERT INTO patients (${cols.join(', ')})
            VALUES (${placeholders.join(', ')})
            ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name

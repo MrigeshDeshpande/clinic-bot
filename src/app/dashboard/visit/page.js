@@ -125,7 +125,7 @@ function VisitPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const appointmentId = searchParams.get('appointmentId');
+  const [appointmentId, setAppointmentId] = useState(searchParams.get('appointmentId'));
   const prefillName = searchParams.get('name') || '';
   const prefillTreatment = searchParams.get('treatment') || '';
   const isEdit = searchParams.get('edit') === 'true';
@@ -958,38 +958,64 @@ function VisitPageInner() {
   async function handleWalkInComplete(patientData) {
     // If patient has an id, they already exist
     if (patientData.id) {
+      setAppointmentId(null);
+      setAppointmentMeta(null);
       await selectPatient(patientData);
       setShowWalkInDrawer(false);
-      return;
+      return true;
     }
-    // Otherwise create new patient inline
+
     setForm(f => ({
       ...f,
       patientName: patientData.name,
-      patientPhone: (patientData.phone || '').replace(/\D/g, ''),
+      patientPhone: stripPhonePrefix(patientData.phone || ''),
       patientAge: patientData.age?.toString() || '',
       patientSex: patientData.sex || '',
       patientLocation: patientData.location || '',
     }));
     if (patientData.location && !LOCATIONS.includes(patientData.location)) setShowCustomLocation(true);
-    // If phone exists, try to find existing patient after creation
-    if (patientData.phone) {
-      try {
-        const searchRes = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(patientData.phone.replace(/\D/g, ''))}`);
-        const searchData = await searchRes.json();
-        const match = (searchData.patients || []).find(p =>
-          p.phone?.replace(/\D/g, '') === patientData.phone.replace(/\D/g, '')
-        );
-        if (match) {
-          await selectPatient(match);
-          setShowWalkInDrawer(false);
-          return;
-        }
-      } catch {}
+
+    // No existing patient: create a real patient record before consultation starts.
+    try {
+      const res = await apiFetch('/api/dashboard/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: patientData.name,
+          phone: patientData.phone || null,
+          age: patientData.age || null,
+          sex: patientData.sex || '',
+          location: patientData.location || '',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.patient) {
+        setPatientProfile(data.patient);
+        setForm(f => ({
+          ...f,
+          patientName: data.patient.name || patientData.name,
+          patientPhone: stripPhonePrefix(data.patient.phone || patientData.phone || ''),
+          patientAge: data.patient.age?.toString() || patientData.age?.toString() || '',
+          patientSex: normalizeSex(data.patient.sex || patientData.sex),
+          patientLocation: data.patient.location || patientData.location || '',
+        }));
+        setAppointmentId(null);
+        setAppointmentMeta(null);
+        setShowWalkInDrawer(false);
+        return true;
+      }
+
+      if (res.status === 409) {
+        showToast(data.error || 'Phone already belongs to another patient', 'error');
+        return false;
+      }
+
+      showToast(data.error || 'Could not register patient yet', 'error');
+      return false;
+    } catch {
+      showToast('Network error — could not register patient', 'error');
+      return false;
     }
-    // No existing patient, setting up for creation on submit
-    setPatientProfile(prev => prev || { name: patientData.name });
-    setShowWalkInDrawer(false);
   }
 
   // ── Treatment Templates ──
@@ -1275,6 +1301,7 @@ function VisitPageInner() {
             ...paymentPayload,
           }
         : {
+            patient_id: patientProfile?.id || undefined,
             patient_name: form.patientName.trim(),
             patient_phone: form.patientPhone ? `+91${form.patientPhone}` : undefined,
             patient_age: walkInAge,
@@ -1370,6 +1397,25 @@ function VisitPageInner() {
       setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
       setVisitSaved(true);
       setFormDirty(false);
+
+      // Refresh patient profile from server so age/sex/phone display correctly
+      if (!patientProfile?.id && data.appointment?.patient_id) {
+        fetch(`/api/dashboard/patients/${data.appointment.patient_id}`)
+          .then(r => r.json())
+          .then(pData => {
+            if (pData.patient) {
+              setPatientProfile(pData.patient);
+              setForm(f => ({
+                ...f,
+                patientPhone: (pData.patient.phone || '').replace(/\D/g, ''),
+                patientAge: pData.patient.age?.toString() || '',
+                patientSex: pData.patient.sex || '',
+                patientLocation: pData.patient.location || '',
+              }));
+            }
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('[VISIT] Submit error:', err);
       showToast('Network error — could not save visit', 'error');
@@ -2055,9 +2101,9 @@ function VisitPageInner() {
                             {form.patientAge || patientProfile.age}{form.patientSex || patientProfile.sex ? '/': ''}{form.patientSex || patientProfile.sex || ''}
                           </span>
                         )}
-                        {patientProfile.phone && (
-                          <span className="text-sm text-gray-500 dark:text-gray-400">{patientProfile.phone}</span>
-                        )}
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {patientProfile.phone || form.patientPhone || <span className="text-gray-300 dark:text-gray-600 italic">No phone</span>}
+                        </span>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-gray-400 dark:text-gray-500">
                         {patientProfile.location && <span>📍 {patientProfile.location}</span>}
@@ -2100,7 +2146,7 @@ function VisitPageInner() {
                           {searchResults.slice(0, 5).map((p) => (
                             <button key={p.id} type="button"
                               className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
-                              onClick={() => { selectPatient(p); setShowPatientSearch(false); }}>
+                              onClick={() => { setAppointmentId(null); setAppointmentMeta(null); selectPatient(p); setShowPatientSearch(false); }}>
                               <span className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-xs font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
                                 {(p.name || '?')[0].toUpperCase()}
                               </span>
@@ -2155,7 +2201,30 @@ function VisitPageInner() {
           <WalkInDrawer onComplete={handleWalkInComplete} onClose={() => setShowWalkInDrawer(false)} />
         )}
         {showEditDrawer && (
-          <EditPatientDrawer patientProfile={patientProfile} onClose={() => setShowEditDrawer(false)} onSaved={(updated) => selectPatient(updated)} />
+          <EditPatientDrawer patientProfile={patientProfile} onClose={() => setShowEditDrawer(false)} showToast={showToast} onSaved={(updated) => {
+            const p = updated?.patient || updated;
+            if (p?.id) {
+              setPatientProfile(p);
+              setForm(f => ({
+                ...f,
+                patientName: p.name || '',
+                patientPhone: stripPhonePrefix(p.phone || ''),
+                patientAge: p.age?.toString() || '',
+                patientSex: normalizeSex(p.sex),
+                patientLocation: p.location || '',
+              }));
+              return;
+            }
+            setPatientProfile(p);
+            setForm(f => ({
+              ...f,
+              patientName: p?.name || '',
+              patientPhone: stripPhonePrefix(p?.phone || ''),
+              patientAge: p?.age?.toString() || '',
+              patientSex: normalizeSex(p?.sex),
+              patientLocation: p?.location || '',
+            }));
+          }} />
         )}
       </div>
     </div>

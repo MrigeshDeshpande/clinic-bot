@@ -170,15 +170,15 @@ export async function completeVisit(sql, body) {
       SELECT (SELECT row_to_json(inserted.*) FROM inserted) AS payment, (SELECT row_to_json(upd.*) FROM upd) AS upd
     `;
     
-    const result = await sql.query(combinedQuery, params);
+    const result = await sql.unsafe(combinedQuery, params);
     updateResult = result;
   } else {
     // Standard update without payment logic
     const query = `UPDATE appointments SET ${setClauses.join(', ')} ${whereClause} RETURNING id, patient_id`;
-    updateResult = await sql.query(query, params);
+    updateResult = await sql.unsafe(query, params);
   }
 
-  if (updateResult.rowCount === 0) {
+  if (updateResult.count === 0) {
     const errorMsg = isCompletion
       ? 'Appointment already completed or not found'
       : 'Appointment not found or cannot be edited';

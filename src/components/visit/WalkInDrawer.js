@@ -14,6 +14,7 @@ export default function WalkInDrawer({ onComplete, onClose }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   // Patient search with debounce
   useEffect(() => {
@@ -49,38 +50,22 @@ export default function WalkInDrawer({ onComplete, onClose }) {
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (!name.trim()) return;
+    setError('');
     setSubmitting(true);
     try {
-      // Try to find existing patient
-      if (phone) {
-        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(phone.replace(/\D/g, ''))}`);
-        const data = await res.json();
-        const match = (data.patients || []).find(p =>
-          p.phone?.replace(/\D/g, '') === phone.replace(/\D/g, '')
-        );
-        if (match) {
-          onComplete({
-            id: match.id,
-            name: name.trim(),
-            phone: match.phone || '',
-            age: match.age || '',
-            sex: match.sex || '',
-            location: match.location || '',
-          });
-          setSubmitting(false);
-          return;
-        }
-      }
-
-      // Create new patient
-      onComplete({
+      const result = await onComplete({
         name: name.trim(),
         phone: phone || '',
         age: age || '',
         sex: sex || '',
         location: location || '',
       });
-    } catch {} finally {
+      if (result === false) {
+        setError('Could not register patient. Check details and try again.');
+      }
+    } catch {
+      setError('Could not register walk-in. Please try again.');
+    } finally {
       setSubmitting(false);
     }
   }, [name, phone, age, sex, location, onComplete]);
@@ -190,6 +175,9 @@ export default function WalkInDrawer({ onComplete, onClose }) {
               className="w-full py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50 transition-all active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed">
               {submitting ? 'Creating...' : 'Start Consultation'}
             </button>
+            {error && (
+              <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+            )}
           </form>
         </div>
       </div>

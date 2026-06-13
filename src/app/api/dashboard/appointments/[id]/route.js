@@ -56,7 +56,7 @@ export async function PATCH(req, { params }) {
     setClauses.push('prescription_key = NULL', 'compiled_document_key = NULL', 'updated_at = NOW()');
     values.push(id);
 
-    await sql.query(
+    await sql.unsafe(
       `UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${idx}`,
       values
     );
