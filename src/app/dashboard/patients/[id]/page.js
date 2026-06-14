@@ -24,6 +24,29 @@ function formatDate(d) {
   return fmtDate(dateStr, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function formatScheduledTime(appt) {
+  if (!appt?.date) return '';
+  const today = new Date().toISOString().slice(0, 10);
+  const apptDate = appt.date.slice(0, 10);
+  const time = appt.time ? appt.time.slice(0, 5) : '';
+  let timeStr = '';
+  if (time) {
+    const [h, m] = time.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    timeStr = `${hour12}:${m} ${ampm}`;
+  }
+
+  if (apptDate === today) return timeStr ? `Today at ${timeStr}` : 'Today';
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (apptDate === yesterday) return timeStr ? `Yesterday at ${timeStr} (overdue)` : 'Yesterday (overdue)';
+  if (apptDate < today) return timeStr ? `${formatDate(apptDate)} at ${timeStr} (overdue)` : `${formatDate(apptDate)} (overdue)`;
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (apptDate === tomorrow) return timeStr ? `Tomorrow at ${timeStr}` : 'Tomorrow';
+  return timeStr ? `${formatDate(apptDate)} at ${timeStr}` : formatDate(apptDate);
+}
+
 function formatCurrency(amount) {
   return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 }
@@ -413,8 +436,24 @@ export default function PatientDetailPage() {
   }
 
   const completedVisits = useMemo(() => visits.filter(v => v.status === 'completed'), [visits]);
+  const confirmedAppointments = useMemo(() => visits.filter(v => v.status === 'confirmed'), [visits]);
   const totalRevenue = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0), [completedVisits]);
   const totalCollected = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.paid_amount || 0), 0), [completedVisits]);
+
+  const nextApptInfo = useMemo(() => {
+    const appt = confirmedAppointments[0];
+    if (!appt) return null;
+    const apptDate = appt.date?.slice(0, 10);
+    const apptTime = appt.time?.slice(0, 5);
+    const today = new Date().toISOString().slice(0, 10);
+    const nowHHMM = new Date().toTimeString().slice(0, 5);
+    const isPastDue = apptDate < today || (apptDate === today && apptTime < nowHHMM);
+    const isFutureDate = apptDate > today;
+    const btnColor = isPastDue ? 'bg-amber-600 hover:bg-amber-700'
+      : isFutureDate ? 'bg-blue-600 hover:bg-blue-700'
+      : 'bg-emerald-600 hover:bg-emerald-700';
+    return { appt, isPastDue, isFutureDate, btnColor };
+  }, [confirmedAppointments]);
 
   // All images across all visits, grouped by visit date
   const allVisitMedia = useMemo(() => {
@@ -602,10 +641,20 @@ export default function PatientDetailPage() {
                     </>
                   ) : (
                     <div className="flex items-center gap-2 shrink-0">
-                      <button onClick={() => router.push(`/dashboard/visit?patientId=${id}&mode=${VISIT_MODES.CREATE_WALK_IN}&name=${encodeURIComponent(patient?.name || '')}`)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-all active:scale-95 shadow-sm">
-                        <Plus className="w-4 h-4" />
-                        New Visit
-                      </button>
+                      {nextApptInfo ? (
+                        <button onClick={() => router.push(`/dashboard/visit?appointmentId=${nextApptInfo.appt.id}&mode=${VISIT_MODES.COMPLETE_APPOINTMENT}&name=${encodeURIComponent(patient?.name || '')}`)} className={`inline-flex items-center gap-1.5 px-4 py-2 ${nextApptInfo.btnColor} text-white text-sm font-medium rounded-xl transition-all active:scale-95 shadow-sm`}>
+                          <Calendar className="w-4 h-4 shrink-0" />
+                          <span className="flex flex-col leading-tight text-left">
+                            <span>{nextApptInfo.isPastDue ? 'Complete (Overdue)' : 'Complete Appointment'}</span>
+                            <span className="text-[10px] font-normal opacity-80">{formatScheduledTime(nextApptInfo.appt)}</span>
+                          </span>
+                        </button>
+                      ) : (
+                        <button onClick={() => router.push(`/dashboard/visit?patientId=${id}&mode=${VISIT_MODES.CREATE_WALK_IN}&name=${encodeURIComponent(patient?.name || '')}`)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-all active:scale-95 shadow-sm">
+                          <Plus className="w-4 h-4" />
+                          New Visit
+                        </button>
+                      )}
                       <button onClick={() => setEditing(true)} className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all active:scale-95">
                         <Edit3 className="w-4 h-4" />
                         Edit
@@ -624,6 +673,14 @@ export default function PatientDetailPage() {
                             </button>
                             <button onClick={async () => { setShowMore(false); const latest = completedVisits[0]; if (!latest) { showToast('No completed visits', 'error'); return; } try { const res = await fetch(`/api/dashboard/visits/${latest.id}/chart`, { method: 'POST' }); const data = await res.json(); if (res.ok && data.url) window.open(data.url, '_blank'); else showToast(data.error || 'Failed', 'error'); } catch { showToast('Network error', 'error'); } }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
                               <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> Chart
+                            </button>
+                            {nextApptInfo && (
+                              <button onClick={() => { setShowMore(false); router.push(`/dashboard/visit?appointmentId=${nextApptInfo.appt.id}&mode=${VISIT_MODES.COMPLETE_APPOINTMENT}&name=${encodeURIComponent(patient?.name || '')}`); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                                <Calendar className="w-4 h-4 text-emerald-500" /> Complete Appointment <span className="text-gray-400 ml-auto text-[10px]">{formatScheduledTime(nextApptInfo.appt)}</span>
+                              </button>
+                            )}
+                            <button onClick={() => { setShowMore(false); router.push(`/dashboard/visit?patientId=${id}&mode=${VISIT_MODES.CREATE_WALK_IN}&name=${encodeURIComponent(patient?.name || '')}`); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                              <Plus className="w-4 h-4 text-gray-500" /> New Visit
                             </button>
                             <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
                             <button onClick={async () => { setShowMore(false); await sendGoogleReview(); }} disabled={sendingReviewLink} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all disabled:opacity-50">

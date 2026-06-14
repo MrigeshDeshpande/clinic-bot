@@ -1034,9 +1034,8 @@ export default function DashboardPage() {
       )
       }
 
-      {/* FAB — quick actions on week/day views */}
-      {(viewMode === 'week' || viewMode === 'day') && (
-        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+      {/* FAB — quick actions */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
           {fabOpen && (
             <div className="animate-scale-in origin-bottom-right space-y-1.5 mb-1">
               <button
@@ -1062,7 +1061,6 @@ export default function DashboardPage() {
             {fabOpen ? <ChevronUp className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
           </button>
         </div>
-      )}
 
       {/* Financial Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
