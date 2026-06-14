@@ -120,6 +120,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
     try {
       const payload = {
         mode: VISIT_MODES.CREATE_WALK_IN,
+        patient_id: selectedPatient?.id || undefined,
         patient_name: name.trim(),
         patient_phone: phone ? `+91${phone}` : undefined,
         treatmentCharges: treatmentFee,

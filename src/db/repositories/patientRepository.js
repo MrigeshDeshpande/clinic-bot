@@ -1,7 +1,7 @@
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
-function normalizePhone(phone) {
+export function normalizePhone(phone) {
   if (!phone) return null;
   let cleaned = phone.replace(/\D/g, '');
   // Strip duplicate country codes: if phone starts with 91 and is > 12 digits,

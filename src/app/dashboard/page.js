@@ -199,6 +199,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          patientId: selectedPatient?.id || null,
           patientName: patientName.trim(),
           patientPhone: patientPhone ? `+91${patientPhone}` : null,
           patientAge: patientAge.trim() || null,
@@ -231,7 +232,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         </div>
         <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Appointment Booked</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {bookedAppointment.patient_name}{bookedAppointment.time ? ` — ${bookedAppointment.time?.slice(0, 5)}` : ''}
+          {bookedAppointment.patient_name}{bookedAppointment.time ? ` — ${bookedAppointment.time?.slice(0, 5)}` : ' — Walk-in'}
         </p>
         <div className="flex gap-3 pt-2">
           <button

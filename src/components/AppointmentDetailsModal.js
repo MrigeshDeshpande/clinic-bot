@@ -55,7 +55,7 @@ export default function AppointmentDetailsModal({ appointment, onClose, onQuickC
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{appointment.patient_name || 'Patient'}</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {appointment.time?.slice(0, 5)} · {appointment.treatment || 'Visit'}
+                {appointment.time ? appointment.time.slice(0, 5) : 'Walk-in'} · {appointment.treatment || 'Visit'}
               </p>
             </div>
           </div>

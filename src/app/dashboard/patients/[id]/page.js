@@ -675,7 +675,7 @@ export default function PatientDetailPage() {
                         <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">{visit.treatment || 'Visit'}</h3>
                         <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                           {formatDate(visit.date)}
-                          {visit.time && <><span className="text-gray-300 dark:text-gray-600">·</span><span>{visit.time}</span></>}
+                          <span className="text-gray-300 dark:text-gray-600">·</span><span>{visit.time || 'Walk-in'}</span>
                           {(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0)) > 0 && (
                             <><span className="text-gray-300 dark:text-gray-600">·</span>
                             <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0))}</span>

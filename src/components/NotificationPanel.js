@@ -161,7 +161,7 @@ export default function NotificationPanel({ compact }) {
                       <div className="space-y-1.5">
                         {notifications.upcomingAppointments.map(a => (
                           <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800">
-                            <span className="text-xs font-bold text-amber-700 dark:text-amber-400 w-10 shrink-0">{a.time?.slice(0, 5)}</span>
+                            <span className="text-xs font-bold text-amber-700 dark:text-amber-400 w-10 shrink-0">{a.time?.slice(0, 5) || 'Walk-in'}</span>
                             <span className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{a.patient_name}</span>
                             {a.treatment && <span className="text-xs text-gray-400 dark:text-gray-500 truncate">{a.treatment}</span>}
                           </div>
@@ -197,7 +197,7 @@ export default function NotificationPanel({ compact }) {
                       <div className="space-y-1.5">
                         {notifications.recentCancellations.map(c => (
                           <div key={c.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 w-10 shrink-0">{c.time?.slice(0, 5)}</span>
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 w-10 shrink-0">{c.time?.slice(0, 5) || 'Walk-in'}</span>
                             <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{c.patient_name || 'Patient'}</span>
                           </div>
                         ))}

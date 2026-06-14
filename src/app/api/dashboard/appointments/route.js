@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 import { getClinicDateStr, getClinicMinutes } from '@/lib/clinicTime';
 import { CLINIC } from '@/config/clinic';
+import { normalizePhone } from '@/db/repositories/patientRepository';
 
 export async function POST(req) {
   const csrfErr = requireCsrf(req);
@@ -16,7 +17,7 @@ export async function POST(req) {
     await runMigrations();
     const sql = getSql();
     const body = await req.json();
-    let { patientName, patientPhone, patientAge, patientSex, date, time, treatment, location } = body;
+    let { patientId: bodyPatientId, patientName, patientPhone, patientAge, patientSex, date, time, treatment, location } = body;
     if (patientPhone) patientPhone = patientPhone.replace(/\D/g, '');
 
     if (!patientName || !date || !time) {
@@ -32,14 +33,24 @@ export async function POST(req) {
       }
     }
 
-    // Find or create patient record (with age and sex)
+    let resolvedPhone = patientPhone || null;
+
+    // Find or create patient record
     let patientId = null;
-    if (patientPhone) {
-      const existing = await sql`
-        SELECT id FROM patients WHERE phone = ${patientPhone} LIMIT 1
-      `;
+    if (bodyPatientId) {
+      patientId = bodyPatientId;
+      const pat = await sql`SELECT wa_id FROM patients WHERE id = ${bodyPatientId} LIMIT 1`;
+      if (pat.length > 0 && pat[0].wa_id) {
+        resolvedPhone = pat[0].wa_id.replace(/\D/g, '');
+      }
+    } else if (patientPhone) {
+      const normalizedLookup = normalizePhone(patientPhone);
+      const existing = normalizedLookup
+        ? await sql`SELECT id, wa_id FROM patients WHERE phone = ${normalizedLookup} LIMIT 1`
+        : [];
       if (existing && existing.length > 0) {
         patientId = existing[0].id;
+        if (existing[0].wa_id) resolvedPhone = existing[0].wa_id.replace(/\D/g, '');
         // Update age/sex if provided
         const ageVal = patientAge ? parseInt(patientAge, 10) : null;
         if (ageVal || patientSex) {
@@ -54,8 +65,9 @@ export async function POST(req) {
         }
       } else {
         const ageVal = patientAge ? parseInt(patientAge, 10) : null;
+        const normalizedNewPhone = normalizePhone(patientPhone);
         const cols = ['name', 'phone', 'wa_id'];
-        const vals = [patientName, patientPhone, patientPhone];
+        const vals = [patientName, normalizedNewPhone, patientPhone];
         const placeholders = ['$1', '$2', '$3'];
         let idx = 4;
         if (ageVal) { cols.push('age'); vals.push(ageVal); placeholders.push(`$${idx++}`); }
@@ -71,14 +83,12 @@ export async function POST(req) {
       }
     }
 
-    // Create appointment atomically with slot check
-    const waId = patientPhone || `w-${Date.now()}`;
     // Derive treatments array from single treatment string
     const treatmentsArr = treatment ? [treatment] : [];
 
     const rows = await sql`
       INSERT INTO appointments (logical_id, version, wa_id, patient_name, patient_phone, patient_id, date, time, treatment, treatments, status, location)
-      SELECT gen_random_uuid(), 1, ${waId}, ${patientName}, ${patientPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, ${JSON.stringify(treatmentsArr)}, 'confirmed', ${location || ''}
+      SELECT gen_random_uuid(), 1, ${resolvedPhone || `w-${Date.now()}`}, ${patientName}, ${resolvedPhone || null}, ${patientId}, ${date}::date, ${time}, ${treatment || null}, ${JSON.stringify(treatmentsArr)}, 'confirmed', ${location || ''}
       WHERE NOT EXISTS (
         SELECT 1 FROM appointments
         WHERE date = ${date}::date AND time = ${time} AND status = 'confirmed'

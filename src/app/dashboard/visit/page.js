@@ -1395,7 +1395,9 @@ function VisitPageInner() {
   function validate() {
     const e = {};
     if (!form.patientName.trim()) e.patientName = 'Patient name is required';
-    if (selectedTreatments.length === 0) e.treatment = 'Please select at least one treatment';
+    if (selectedTreatments.length === 0 && visitMode !== VISIT_MODES.CREATE_WALK_IN) {
+      e.treatment = 'Please select at least one treatment';
+    }
     setErrors(e);
     const valid = Object.keys(e).length === 0;
     if (!valid) showToast('Please fill in all required fields (name + treatment)', 'error');
@@ -1404,7 +1406,6 @@ function VisitPageInner() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    console.log('[DEBUG handleSubmit] visitMode:', visitMode, 'isEdit:', isEdit, 'appointmentId:', appointmentId, 'searchParams mode:', searchParams.get('mode'));
     if (!validate()) return;
     setSubmitting(true);
     try {

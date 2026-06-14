@@ -155,7 +155,7 @@ export default function QueuePage() {
                       {a.is_priority && <Star className="w-3 h-3 text-amber-400 fill-amber-400" />}
                       <span className="font-medium text-gray-900 dark:text-gray-100 text-base">{a.patient_name || 'Patient'}</span>
                     </div>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{a.time?.slice(0, 5)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{a.time?.slice(0, 5) || 'Walk-in'}</span>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                   <button
@@ -207,7 +207,7 @@ export default function QueuePage() {
                   <div key={a.id} className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800 ring-1 ring-blue-300 dark:ring-blue-700">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-medium text-gray-900 dark:text-gray-100 text-base">{a.patient_name || 'Patient'}</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{a.time?.slice(0, 5)}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{a.time?.slice(0, 5) || 'Walk-in'}</span>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
@@ -240,7 +240,7 @@ export default function QueuePage() {
                 <div key={a.id} className="bg-green-50/50 dark:bg-green-900/10 rounded-lg p-3 border border-green-100 dark:border-green-800">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">{a.patient_name || 'Patient'}</span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{a.time?.slice(0, 5)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">{a.time?.slice(0, 5) || 'Walk-in'}</span>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{a.treatment || 'Visit'}</p>
                 </div>

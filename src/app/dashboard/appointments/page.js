@@ -512,7 +512,7 @@ function AppointmentsContentInner() {
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
                             <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'completed' ? 'bg-green-400' : a.status === 'no_show' ? 'bg-red-400' : 'bg-blue-400'}`} />
-                            <span className="text-base font-medium text-gray-900 dark:text-gray-100">{a.time?.slice(0, 5)}</span>
+                            <span className="text-base font-medium text-gray-900 dark:text-gray-100">{a.time?.slice(0, 5) || <span className="text-gray-400 dark:text-gray-500 text-sm font-normal">Walk-in</span>}</span>
                             {a.is_priority && <span className="text-xs">⭐</span>}
                           </div>
                         </td>

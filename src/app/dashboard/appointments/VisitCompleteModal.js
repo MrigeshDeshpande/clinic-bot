@@ -197,7 +197,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
               <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Complete Visit</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {appointment.patient_name || 'Patient'}
-                {appointment.time && <span> · {appointment.time?.slice(0, 5)}</span>}
+                <span> · {appointment.time ? appointment.time.slice(0, 5) : 'Walk-in'}</span>
               </p>
             </div>
           </div>
