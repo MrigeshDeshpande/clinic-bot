@@ -123,7 +123,7 @@ export default function AttachmentsPanel({ mediaProps, currentMedia = [], visitM
           {localCount > 0 && (
             <div>
               <div className="flex items-center gap-1.5 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Pending Upload</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Queued Attachments</span>
                 <span className="text-xs text-gray-400 dark:text-gray-500">({localCount})</span>
               </div>
               <div className="space-y-1.5">

@@ -71,6 +71,52 @@ const DEFAULT_VISIT_LAYOUT = {
   ],
 };
 
+const EMPTY_VISIT_FORM = {
+  patientName: '',
+  patientPhone: '',
+  patientAge: '',
+  patientSex: '',
+  patientLocation: '',
+  treatment: '',
+  consultationFee: '',
+  treatmentCharges: '',
+  medicineCharges: 0,
+  diagnosis: '',
+  medicines: [],
+  followUpDate: '',
+  followUpInstructions: '',
+  notes: '',
+  adviceSelected: [],
+  diagnosisSelected: [],
+  toothDiagnoses: [],
+  chiefComplaint: '',
+  generalExamination: '',
+  extraOralExamination: '',
+};
+
+function cleanOptionalText(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text || undefined;
+}
+
+function normalizeVisitForm(value = {}) {
+  const next = { ...EMPTY_VISIT_FORM, ...value };
+  for (const key of [
+    'patientName', 'patientPhone', 'patientAge', 'patientSex', 'patientLocation',
+    'treatment', 'consultationFee', 'treatmentCharges', 'diagnosis',
+    'followUpDate', 'followUpInstructions', 'notes',
+    'chiefComplaint', 'generalExamination', 'extraOralExamination',
+  ]) {
+    next[key] = typeof next[key] === 'string' ? next[key] : '';
+  }
+  next.medicineCharges = next.medicineCharges ?? 0;
+  next.medicines = Array.isArray(next.medicines) ? next.medicines : [];
+  next.adviceSelected = Array.isArray(next.adviceSelected) ? next.adviceSelected : [];
+  next.diagnosisSelected = Array.isArray(next.diagnosisSelected) ? next.diagnosisSelected : [];
+  next.toothDiagnoses = Array.isArray(next.toothDiagnoses) ? next.toothDiagnoses : [];
+  return next;
+}
+
 const FREQUENCY_OPTIONS = ['Daily one time', 'Twice a day', 'Thrice a day'];
 const DURATION_OPTIONS = [3, 5, 7, 10, 14, 21, 30];
 const TIMING_OPTIONS = [
@@ -131,28 +177,11 @@ function VisitPageInner() {
   const isEdit = searchParams.get('edit') === 'true';
   const returnTo = searchParams.get('returnTo') || 'appointments';
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => normalizeVisitForm({
+    ...EMPTY_VISIT_FORM,
     patientName: prefillName,
-    patientPhone: '',
-    patientAge: '',
-    patientSex: '',
-    patientLocation: '',
     treatment: prefillTreatment,
-    consultationFee: '',
-    treatmentCharges: '',
-    medicineCharges: 0,
-    diagnosis: '',
-    medicines: [],
-    followUpDate: '',
-    followUpInstructions: '',
-    notes: '',
-    adviceSelected: [],
-    diagnosisSelected: [],
-    toothDiagnoses: [],
-    chiefComplaint: '',
-    generalExamination: '',
-    extraOralExamination: '',
-  });
+  }));
   const [adviceOptions, setAdviceOptions] = useState([]);
   const [diagnosisOptions, setDiagnosisOptions] = useState([]);
   const [selectedTooth, setSelectedTooth] = useState(null);
@@ -510,11 +539,13 @@ function VisitPageInner() {
         const a = data.appointment || data;
         if (a) {
           setAppointmentMeta(a);
-          setForm({
+          setForm(normalizeVisitForm({
+            ...EMPTY_VISIT_FORM,
             patientName: a.patient_name || '',
             patientPhone: (a.patient_phone || '').replace(/\D/g, ''),
             patientAge: '',
             patientSex: '',
+            patientLocation: a.location || '',
             treatment: a.treatment || '',
             consultationFee: '',
             treatmentCharges: '',
@@ -530,7 +561,10 @@ function VisitPageInner() {
               ...td,
               treatment: resolveTreatmentId(td.treatment) || td.treatment,
             })) : [],
-          });
+            chiefComplaint: a.chief_complaint || '',
+            generalExamination: a.general_examination || '',
+            extraOralExamination: a.extra_oral_examination || '',
+          }));
           const savedTreatments = Array.isArray(a.treatments) && a.treatments.length > 0
             ? a.treatments
             : a.treatment ? [a.treatment] : [];
@@ -756,7 +790,7 @@ function VisitPageInner() {
       if (!saved) return;
       const draft = JSON.parse(saved);
       if (draft.appointmentId !== appointmentId) return;
-      setForm(draft.form);
+      setForm(normalizeVisitForm(draft.form));
       const restoredFees = {};
       Object.entries(draft.treatmentFees || {}).forEach(([k, v]) => { restoredFees[k] = normalizeTreatmentFee(v, k); });
       setTreatmentFees(restoredFees);
@@ -1216,26 +1250,88 @@ function VisitPageInner() {
     ? medicineList.filter(s => s.toLowerCase().includes(saltSearch.toLowerCase()))
     : medicineList;
 
+  async function uploadMediaFiles(files, targetAppointmentId) {
+    if (!targetAppointmentId || files.length === 0) return { uploaded: 0, failed: files.length };
+
+    setUploadingMedia(true);
+    const uploadedFiles = new Set();
+    const uploadedKeys = [];
+
+    try {
+      for (const file of files) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('appointmentId', targetAppointmentId);
+
+          const mediaRes = await apiFetch('/api/dashboard/media', {
+            method: 'POST',
+            body: formData,
+          });
+          const mediaData = await mediaRes.json();
+
+          if (mediaRes.ok) {
+            uploadedFiles.add(file);
+            if (mediaData.key) uploadedKeys.push(mediaData.key);
+          } else {
+            console.error('[MEDIA] Upload failed:', mediaData);
+            showToast(`Upload failed for ${file.name}: ${mediaData.error || 'Unknown error'}`, 'error', { duration: 7000 });
+          }
+        } catch (mediaErr) {
+          console.error('[MEDIA] Upload network error:', mediaErr);
+          showToast(`Upload failed for ${file.name}`, 'error', { duration: 7000 });
+        }
+      }
+    } finally {
+      if (uploadedFiles.size > 0) {
+        setMediaFiles(prev => prev.filter(file => !uploadedFiles.has(file)));
+      }
+      if (uploadedKeys.length > 0) {
+        setAppointmentMeta(prev => prev
+          ? { ...prev, chit_media: [...(Array.isArray(prev.chit_media) ? prev.chit_media : []), ...uploadedKeys] }
+          : prev);
+      }
+      setUploadingMedia(false);
+    }
+
+    const uploaded = uploadedFiles.size;
+    if (uploaded > 0) {
+      showToast(`${uploaded} attachment${uploaded === 1 ? '' : 's'} uploaded`, 'success');
+    }
+    return { uploaded, failed: files.length - uploaded };
+  }
+
   async function handleMediaUpload(e) {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     console.log('[MEDIA] Files selected:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
-    setUploadingMedia(true);
     try {
       setMediaFiles(prev => [...prev, ...files]);
-      console.log('[MEDIA] Added to local state, total files:', mediaFiles.length + files.length);
+      const targetAppointmentId = appointmentMeta?.id || appointmentId;
+      if (targetAppointmentId) {
+        showToast(`Uploading ${files.length} attachment${files.length === 1 ? '' : 's'}...`, 'info');
+        await uploadMediaFiles(files, targetAppointmentId);
+      } else {
+        showToast(`${files.length} attachment${files.length === 1 ? '' : 's'} queued. Save the visit to upload.`, 'info');
+      }
     } catch (err) {
       console.error('[MEDIA] Error adding files:', err);
       showToast('Failed to add media', 'error');
     } finally {
-      setUploadingMedia(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (galleryInputRef.current) galleryInputRef.current.value = '';
     }
   }
 
-  function handleCameraCapture(file) {
+  async function handleCameraCapture(file) {
     setMediaFiles(prev => [...prev, file]);
-    showToast('Photo captured', 'success');
+    const targetAppointmentId = appointmentMeta?.id || appointmentId;
+    if (targetAppointmentId) {
+      showToast('Uploading captured photo...', 'info');
+      await uploadMediaFiles([file], targetAppointmentId);
+    } else {
+      showToast('Photo queued. Save the visit to upload.', 'success');
+    }
   }
 
   function removeMediaFile(idx) {
@@ -1277,27 +1373,28 @@ function VisitPageInner() {
         transactionId: transactionId.trim() || undefined,
       };
 
+      const isEditingCompletedVisit = appointmentMeta?.status === 'completed';
       const payload = appointmentId
         ? {
             appointmentId,
             treatment: primaryTreatment,
             treatments: mappedTreatments,
             treatmentFees,
-            diagnosis: form.diagnosis.trim() || undefined,
-            medicines: form.medicines.filter(m => m.name.trim()),
+            diagnosis: cleanOptionalText(form.diagnosis),
+            medicines: form.medicines.filter(m => cleanOptionalText(m?.name)),
             consultationFee,
             treatmentCharges: computedTreatmentCharges,
             medicineCharges: Number(form.medicineCharges) || 0,
-            notes: form.notes.trim() || undefined,
+            notes: cleanOptionalText(form.notes),
             followUpDate: form.followUpDate || undefined,
-            followUpInstructions: form.followUpInstructions.trim() || undefined,
+            followUpInstructions: cleanOptionalText(form.followUpInstructions),
             advice_selected: form.adviceSelected,
             diagnosis_selected: form.diagnosisSelected,
             tooth_diagnoses: form.toothDiagnoses,
-            status: 'completed',
-            chiefComplaint: form.chiefComplaint.trim() || undefined,
-            generalExamination: form.generalExamination.trim() || undefined,
-            extraOralExamination: form.extraOralExamination.trim() || undefined,
+            status: isEditingCompletedVisit ? undefined : 'completed',
+            chiefComplaint: cleanOptionalText(form.chiefComplaint),
+            generalExamination: cleanOptionalText(form.generalExamination),
+            extraOralExamination: cleanOptionalText(form.extraOralExamination),
             ...paymentPayload,
           }
         : {
@@ -1306,24 +1403,24 @@ function VisitPageInner() {
             patient_phone: form.patientPhone ? `+91${form.patientPhone}` : undefined,
             patient_age: walkInAge,
             patient_sex: form.patientSex || undefined,
-            patient_location: form.patientLocation.trim() || undefined,
+            patient_location: cleanOptionalText(form.patientLocation),
             treatment: primaryTreatment,
             treatments: mappedTreatments,
             treatmentFees,
             consultationFee,
             treatmentCharges: computedTreatmentCharges,
             medicineCharges: Number(form.medicineCharges) || 0,
-            diagnosis: form.diagnosis.trim() || undefined,
-            chiefComplaint: form.chiefComplaint.trim() || undefined,
-            generalExamination: form.generalExamination.trim() || undefined,
-            extraOralExamination: form.extraOralExamination.trim() || undefined,
-            medicines: form.medicines.filter(m => m.name.trim()),
+            diagnosis: cleanOptionalText(form.diagnosis),
+            chiefComplaint: cleanOptionalText(form.chiefComplaint),
+            generalExamination: cleanOptionalText(form.generalExamination),
+            extraOralExamination: cleanOptionalText(form.extraOralExamination),
+            medicines: form.medicines.filter(m => cleanOptionalText(m?.name)),
             followUpDate: form.followUpDate || undefined,
-            followUpInstructions: form.followUpInstructions.trim() || undefined,
+            followUpInstructions: cleanOptionalText(form.followUpInstructions),
             advice_selected: form.adviceSelected,
             diagnosis_selected: form.diagnosisSelected,
             tooth_diagnoses: form.toothDiagnoses,
-            notes: form.notes.trim() || undefined,
+            notes: cleanOptionalText(form.notes),
             ...paymentPayload,
           };
 
@@ -1335,6 +1432,9 @@ function VisitPageInner() {
       const data = await res.json();
       if (!res.ok) {
         showToast(data.error || 'Failed to log visit', 'error');
+        if (mediaFiles.length > 0) {
+          showToast('Visit was not saved, so queued attachments were not uploaded', 'info', { duration: 7000 });
+        }
         return;
       }
 
@@ -1369,27 +1469,7 @@ function VisitPageInner() {
 
       const appointmentIdForMedia = data.appointment?.id || appointmentId;
       if (appointmentIdForMedia && mediaFiles.length > 0) {
-        for (const file of mediaFiles) {
-          try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('appointmentId', appointmentIdForMedia);
-            const mediaRes = await fetch('/api/dashboard/media', {
-              method: 'POST',
-              body: formData,
-            });
-            const mediaData = await mediaRes.json();
-            if (mediaRes.ok) {
-              console.log('[MEDIA] Upload success:', mediaData);
-            } else {
-              console.error('[MEDIA] Upload failed:', mediaData);
-              showToast(`Upload failed for ${file.name}: ${mediaData.error}`, 'error');
-            }
-          } catch (mediaErr) {
-            console.error('[MEDIA] Upload network error:', mediaErr);
-            showToast(`Upload failed for ${file.name}`, 'error');
-          }
-        }
+        await uploadMediaFiles(mediaFiles, appointmentIdForMedia);
       }
 
       localStorage.removeItem(DRAFT_KEY);
