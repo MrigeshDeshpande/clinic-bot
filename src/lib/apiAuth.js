@@ -63,7 +63,18 @@ export function checkBodySize(req) {
 }
 
 export function jsonError(error, status = 500) {
-  const message = typeof error === 'string' ? error : (error?.message || String(error) || 'Internal server error');
+  let message;
+  if (typeof error === 'string') {
+    message = error;
+  } else if (Array.isArray(error?.errors)) {
+    const details = error.errors.map((e, i) => {
+      if (typeof e === 'string') return `[${i}] ${e}`;
+      return `[${i}] ${e?.message || String(e)}`;
+    }).join('; ');
+    message = `${error.name || 'Error'}: ${details}`;
+  } else {
+    message = error?.message || String(error) || 'Internal server error';
+  }
   return NextResponse.json({ error: message }, { status });
 }
 
