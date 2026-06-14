@@ -21,12 +21,23 @@ export async function POST(req, { params }) {
 
   try {
     const { id } = await params;
+    const body = await req.json().catch(() => ({}));
 
     // Ensure schema is up to date (compiled_document_key column)
     await runMigrations();
 
-    // Check for cached compiled document
     const sql = getSql();
+
+    // Force recompile: clear cached key so we regenerate
+    if (body.refresh === true && sql) {
+      await sql`
+        UPDATE appointments SET compiled_document_key = NULL, updated_at = NOW()
+        WHERE id = ${id}
+      `;
+      logger.info('COMPILE_FORCE_REFRESH', { appointmentId: id });
+    }
+
+    // Check for cached compiled document
     if (sql) {
       const existing = await sql`
         SELECT compiled_document_key FROM appointments WHERE id = ${id} LIMIT 1

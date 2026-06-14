@@ -1,7 +1,7 @@
 import { PDFDocument } from 'pdf-lib';
 import { getSql } from '@/db/pool';
 import { uploadToR2, getR2Object, getR2SignedUrl } from '@/lib/r2';
-import { generatePrescription } from '@/lib/prescription';
+import { generatePrescription, generateDentalChart } from '@/lib/prescription';
 import { logger } from '@/lib/logger';
 
 const A4_W = 595.28;
@@ -33,15 +33,16 @@ async function embedImageOnPage(page, buffer, pdfDoc) {
 }
 
 /**
- * Compile all visit documents (prescription + images) into a single PDF.
+ * Compile all visit documents (prescription + dental chart + images) into a single PDF.
  *
  * Flow:
  *  1. Fetch appointment + patient data from DB
  *  2. Download photos from R2
  *  3. Obtain prescription PDF (from cache or generate via generatePrescription)
- *  4. Merge prescription pages + image pages using pdf-lib
- *  5. Upload compiled PDF to R2, store key on appointment
- *  6. Return { key, url, buffer }
+ *  4. Generate dental chart PDF via generateDentalChart
+ *  5. Merge prescription pages + chart pages + image pages using pdf-lib
+ *  6. Upload compiled PDF to R2, store key on appointment
+ *  7. Return { key, url, buffer }
  */
 export async function compileVisitDocument(appointmentId) {
   try {
@@ -136,7 +137,22 @@ export async function compileVisitDocument(appointmentId) {
   }
 
   // ─────────────────────────────────────────────
-  // 4. Merge prescription PDF + image pages
+  // 4. Generate dental chart PDF
+  // ─────────────────────────────────────────────
+  let chartBuffer = null;
+  try {
+    const chartResult = await generateDentalChart({
+      patient: { name: a.p_name || a.patient_name, phone: a.patient_phone, age: a.p_age, sex: a.p_sex },
+      visit: { tooth_diagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [] },
+      appointment: { id: a.id, date: a.date, treatment: a.treatment, treatments: Array.isArray(a.treatments) ? a.treatments : [] },
+    });
+    if (chartResult?.buffer) chartBuffer = chartResult.buffer;
+  } catch (chartErr) {
+    logger.warn('COMPILE_CHART_FAILED', { appointmentId, error: chartErr.message });
+  }
+
+  // ─────────────────────────────────────────────
+  // 5. Merge prescription PDF + chart + image pages
   // ─────────────────────────────────────────────
   const presDoc = await PDFDocument.load(presBuffer);
   const mergedDoc = await PDFDocument.create();
@@ -145,6 +161,19 @@ export async function compileVisitDocument(appointmentId) {
   const presPages = await mergedDoc.copyPages(presDoc, presDoc.getPageIndices());
   for (const page of presPages) {
     mergedDoc.addPage(page);
+  }
+
+  // Add dental chart pages
+  if (chartBuffer) {
+    try {
+      const chartDoc = await PDFDocument.load(chartBuffer);
+      const chartPages = await mergedDoc.copyPages(chartDoc, chartDoc.getPageIndices());
+      for (const page of chartPages) {
+        mergedDoc.addPage(page);
+      }
+    } catch (chartMergeErr) {
+      logger.warn('COMPILE_CHART_MERGE_FAILED', { appointmentId, error: chartMergeErr.message });
+    }
   }
 
   // Add one page per photo
@@ -160,7 +189,7 @@ export async function compileVisitDocument(appointmentId) {
   const pdfBuffer = Buffer.from(await mergedDoc.save());
 
   // ─────────────────────────────────────────────
-  // 5. Upload to R2
+  // 6. Upload to R2
   // ─────────────────────────────────────────────
   const key = `compiled/${appointmentId}_${Date.now()}.pdf`;
   const uploaded = await uploadToR2({ key, buffer: pdfBuffer, contentType: 'application/pdf' });

@@ -525,6 +525,12 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS compiled_document_key TEXT;
     `;
 
+    // Clear stale compiled document keys (force regeneration with dental chart + photos)
+    await db`
+      UPDATE appointments SET compiled_document_key = NULL, updated_at = NOW()
+      WHERE compiled_document_key IS NOT NULL
+    `;
+
     // Location column on patients (city/area the patient is from)
     await db`
       ALTER TABLE patients

@@ -4298,7 +4298,7 @@ async function sendPrescriptionToPatient(waId, appt, vl) {
       if (result?.key) {
         const sql = getSql();
         if (sql) {
-          await sql`UPDATE appointments SET prescription_key = ${result.key}, updated_at = NOW() WHERE id = ${appt.id}`;
+          await sql`UPDATE appointments SET prescription_key = ${result.key}, compiled_document_key = NULL, updated_at = NOW() WHERE id = ${appt.id}`;
         }
       }
     }
