@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
+import { VISIT_MODES } from '@/lib/visitModes';
 import { completeVisit } from '@/services/completeVisit';
 import { createWalkIn } from '@/services/createWalkIn';
+
+const VALID_MODES = new Set(Object.values(VISIT_MODES));
 
 async function updateMedicineUsage(sql, medicines) {
   if (!medicines || !Array.isArray(medicines) || medicines.length === 0) return;
@@ -44,21 +47,30 @@ export async function POST(req) {
   try {
     const sql = getSql();
     const body = await req.json();
+    const mode = body.mode;
 
-    if (body.appointmentId) {
-      const appointment = await completeVisit(sql, body);
-      updateMedicineUsage(sql, body.medicines);
-      return NextResponse.json({ appointment: sanitizeResponse(appointment) });
+    if (!mode || !VALID_MODES.has(mode)) {
+      return NextResponse.json({ error: `Invalid or missing visit mode. Must be one of: ${Object.values(VISIT_MODES).join(', ')}` }, { status: 400 });
     }
 
-    const result = await createWalkIn(sql, body);
+    if (mode === VISIT_MODES.CREATE_WALK_IN) {
+      const result = await createWalkIn(sql, body);
+      updateMedicineUsage(sql, body.medicines);
+      return NextResponse.json({
+        appointment: sanitizeResponse(result.appointment),
+        patient_name: result.patient_name,
+        treatment: result.treatment,
+        fees: result.fees,
+      });
+    }
+
+    if (!body.appointmentId) {
+      return NextResponse.json({ error: 'appointmentId is required for ' + mode }, { status: 400 });
+    }
+
+    const appointment = await completeVisit(sql, body);
     updateMedicineUsage(sql, body.medicines);
-    return NextResponse.json({
-      appointment: sanitizeResponse(result.appointment),
-      patient_name: result.patient_name,
-      treatment: result.treatment,
-      fees: result.fees,
-    });
+    return NextResponse.json({ appointment: sanitizeResponse(appointment) });
   } catch (error) {
     if (error.status) {
       return NextResponse.json({ error: error.message }, { status: error.status });

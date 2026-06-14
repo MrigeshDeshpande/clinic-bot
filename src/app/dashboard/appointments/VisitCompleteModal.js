@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { TREATMENT_NAMES } from '@/lib/treatments';
+import { VISIT_MODES } from '@/lib/visitModes';
 
 const PRESET_FEES = [
   { label: 'General Checkup',     fee: 300,  icon: '🏥' },
@@ -150,6 +151,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode: VISIT_MODES.COMPLETE_APPOINTMENT,
           appointmentId: appointment.id,
           treatment: selectedTreatments[0],
           treatments: selectedTreatments,

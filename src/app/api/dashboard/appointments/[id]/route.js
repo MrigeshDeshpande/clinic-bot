@@ -29,7 +29,30 @@ export async function PATCH(req, { params }) {
       'consultation_fee', 'treatment_charges', 'medicine_charges', 'location',
       'diagnosis', 'medicines', 'notes', 'follow_up_date', 'follow_up_instructions',
       'treatments', 'advice_selected', 'diagnosis_selected',
-      'payment_status', 'payment_method', 'transaction_id', 'paid_amount'];
+      'payment_status', 'payment_method', 'transaction_id', 'paid_amount',
+      'status'];
+
+    // Validate status transitions
+    const VALID_TRANSITIONS = {
+      confirmed: ['no_show'],
+      completed: ['confirmed'],
+      no_show: ['confirmed'],
+    };
+
+    if (body.status !== undefined && body.status !== 'cancelled') {
+      const [current] = await sql`
+        SELECT status FROM appointments WHERE id = ${id}
+      `;
+      if (!current) {
+        return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
+      }
+      const allowedTargets = VALID_TRANSITIONS[current.status];
+      if (!allowedTargets || !allowedTargets.includes(body.status)) {
+        return NextResponse.json({
+          error: `Cannot change status from '${current.status}' to '${body.status}'.`,
+        }, { status: 400 });
+      }
+    }
 
     const setClauses = [];
     const values = [];

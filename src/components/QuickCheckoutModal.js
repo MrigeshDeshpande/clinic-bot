@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { VISIT_MODES } from '@/lib/visitModes';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash', icon: '\u{1F4B5}' },
@@ -38,6 +39,7 @@ export default function QuickCheckoutModal({ appointment, onClose, onSuccess, sh
     setError('');
     try {
       const payload = {
+        mode: VISIT_MODES.COMPLETE_APPOINTMENT,
         appointmentId: appointment.id,
         treatmentCharges: treatmentFee,
         medicineCharges: medicineFee,

@@ -238,7 +238,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
             onClick={() => {
               const close = onClose;
               close?.();
-              window.location.href = `/dashboard/visit?appointmentId=${bookedAppointment.id}&name=${encodeURIComponent(bookedAppointment.patient_name)}`;
+              window.location.href = `/dashboard/visit?appointmentId=${bookedAppointment.id}&name=${encodeURIComponent(bookedAppointment.patient_name)}&mode=completeAppointment`;
             }}
             className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all"
           >

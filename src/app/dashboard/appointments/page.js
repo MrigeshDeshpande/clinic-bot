@@ -12,6 +12,7 @@ import QuickCheckoutModal from '@/components/QuickCheckoutModal';
 import RescheduleModal from './RescheduleModal';
 import { DateContext, ToastContext } from '../layout';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
+import { VISIT_MODES } from '@/lib/visitModes';
 
 function StatusBadge({ status, arrivalStatus }) {
   if (status === 'completed') return <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">Completed</span>;
@@ -134,26 +135,50 @@ function AppointmentsContentInner() {
     const prevArrival = appt?.arrival_status;
     setUpdating(appointmentId);
     try {
-      const res = await fetch('/api/dashboard/visit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appointmentId, status: newStatus }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        lastAction.current = { id: appointmentId, status: prevStatus, arrivalStatus: prevArrival };
-        showToast(
-          <span className="flex items-center gap-3">
-            <span>{newStatus === 'completed' ? '✓ Completed' : '✕ No Show'}</span>
-            <button onClick={undoLastAction}
-              className="ml-2 px-2.5 py-1 text-xs font-medium rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
-              Undo
-            </button>
-          </span>,
-          'success', { duration: 6000 }
-        );
+      if (newStatus === 'no_show') {
+        const res = await fetch(`/api/dashboard/appointments/${appointmentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'no_show' }),
+        });
+        if (res.ok) {
+          lastAction.current = { id: appointmentId, status: prevStatus, arrivalStatus: prevArrival, source: newStatus };
+          showToast(
+            <span className="flex items-center gap-3">
+              <span>✕ No Show</span>
+              <button onClick={undoLastAction}
+                className="ml-2 px-2.5 py-1 text-xs font-medium rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+                Undo
+              </button>
+            </span>,
+            'success', { duration: 6000 }
+          );
+        } else {
+          const data = await res.json();
+          showToast(data.error || 'Failed to update status', 'error');
+        }
       } else {
-        showToast(data.error || 'Failed to update status', 'error');
+        const res = await fetch('/api/dashboard/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: VISIT_MODES.COMPLETE_APPOINTMENT, appointmentId, status: newStatus }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          lastAction.current = { id: appointmentId, status: prevStatus, arrivalStatus: prevArrival, source: newStatus };
+          showToast(
+            <span className="flex items-center gap-3">
+              <span>✓ Completed</span>
+              <button onClick={undoLastAction}
+                className="ml-2 px-2.5 py-1 text-xs font-medium rounded-lg bg-white/20 hover:bg-white/30 text-white transition-colors">
+                Undo
+              </button>
+            </span>,
+            'success', { duration: 6000 }
+          );
+        } else {
+          showToast(data.error || 'Failed to update status', 'error');
+        }
       }
     } catch {
       showToast('Network error', 'error');
@@ -171,12 +196,17 @@ function AppointmentsContentInner() {
     lastAction.current = null;
     setUpdating(action.id);
     try {
-      await fetch('/api/dashboard/visit', {
-        method: 'POST',
+      const res = await fetch(`/api/dashboard/appointments/${action.id}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appointmentId: action.id, status: action.status }),
+        body: JSON.stringify({ status: action.status }),
       });
-      showToast('Change undone', 'success');
+      if (res.ok) {
+        showToast('Change undone', 'success');
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Failed to undo', 'error');
+      }
     } catch {
       showToast('Failed to undo', 'error');
     }
@@ -210,6 +240,12 @@ function AppointmentsContentInner() {
     fetchCached(`/api/dashboard/appointments?date=${selectedDate}`)
       .then(d => { if (d) setData(d); })
       .catch(e => setError(e.message));
+  }
+
+  function getVisitUrl(a) {
+    if (a.status === 'confirmed') return `/dashboard/visit?appointmentId=${a.id}&mode=${VISIT_MODES.COMPLETE_APPOINTMENT}`;
+    if (a.status === 'completed') return `/dashboard/visit?appointmentId=${a.id}&mode=${VISIT_MODES.EDIT_COMPLETED_VISIT}`;
+    return null;
   }
 
   const [quickCheckoutModal, setQuickCheckoutModal] = useState(null);
@@ -472,7 +508,7 @@ function AppointmentsContentInner() {
                     </tr>
                   ) : (
                     filteredAppointments.map((a) => (
-                      <tr key={a.id} onClick={e => { if (e.target.closest('button, a, input, [contenteditable]')) return; router.push(`/dashboard/visit?appointmentId=${a.id}`); }} className={`cursor-pointer border-b border-gray-50 dark:border-gray-800 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors ${updating === a.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <tr key={a.id} onClick={e => { if (e.target.closest('button, a, input, [contenteditable]')) return; const url = getVisitUrl(a); if (url) { router.push(url); } else { showToast('This appointment cannot be edited from here.', 'info'); } }} className={`cursor-pointer border-b border-gray-50 dark:border-gray-800 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors ${updating === a.id ? 'opacity-50 pointer-events-none' : ''}`}>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
                             <span className={`w-1.5 h-1.5 rounded-full ${a.status === 'completed' ? 'bg-green-400' : a.status === 'no_show' ? 'bg-red-400' : 'bg-blue-400'}`} />

@@ -83,7 +83,7 @@ export default function AppointmentDetailsModal({ appointment, onClose, onQuickC
           {appointment.status === 'confirmed' && (
             <>
               <button
-                onClick={() => { router.push(`/dashboard/visit?appointmentId=${appointment.id}`); }}
+                onClick={() => { router.push(`/dashboard/visit?appointmentId=${appointment.id}&mode=completeAppointment`); }}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-[0.98]"
               >
                 <ExternalLink className="w-4 h-4" />

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Clock, Activity, Search, X, Plus, Minus } from 'lucide-react';
 import { TREATMENTS, getTreatmentName } from '@/lib/treatments';
+import { VISIT_MODES, getVisitModeLabel } from '@/lib/visitModes';
 
 const MEDICAL_SECTIONS = [
   {
@@ -216,7 +217,7 @@ export default function ContextSidebar({
   medicalHistory,
   patientVisits,
   form, setForm,
-  submitting, isEdit,
+  submitting, visitMode,
   visitSaved, onCheckout,
   selectedTreatments, treatmentFees, totalFees,
   consultationFee,
@@ -230,6 +231,7 @@ export default function ContextSidebar({
   onAdjustQuantity,
   getFee,
 }) {
+  const submitLabel = getVisitModeLabel(visitMode);
   const mh = medicalHistory || {};
 
   // Last visit date
@@ -431,7 +433,7 @@ export default function ContextSidebar({
               Visit Saved
             </span>
           ) : (
-            <span>{isEdit ? 'Save Changes' : 'Complete Visit'}</span>
+            <span>{submitLabel}</span>
           )}
         </button>
 

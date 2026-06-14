@@ -1,4 +1,5 @@
 import { toPgTextArray } from '@/lib/pgArray';
+import { VISIT_MODES } from '@/lib/visitModes';
 
 export async function completeVisit(sql, body) {
   const {
@@ -7,6 +8,7 @@ export async function completeVisit(sql, body) {
     followUpDate, followUpInstructions, advice_selected, diagnosis_selected,
     status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount,
     chiefComplaint, generalExamination, extraOralExamination,
+    mode,
   } = body;
 
   if (!appointmentId) throw new Error('appointmentId required');
@@ -122,10 +124,13 @@ export async function completeVisit(sql, body) {
   setClauses.push('prescription_key = NULL', 'compiled_document_key = NULL', 'updated_at = NOW()');
   params.push(appointmentId);
 
-  const isCompletion = newStatus === 'completed';
+  const isCompletion = mode === VISIT_MODES.COMPLETE_APPOINTMENT;
+  const isEdit = mode === VISIT_MODES.EDIT_COMPLETED_VISIT;
   const whereClause = isCompletion
     ? `WHERE id = $${p} AND status = 'confirmed'`
-    : `WHERE id = $${p} AND status NOT IN ('cancelled', 'no_show', 'superseded')`;
+    : isEdit
+      ? `WHERE id = $${p} AND status NOT IN ('cancelled', 'no_show', 'superseded')`
+      : `WHERE id = $${p} AND status NOT IN ('cancelled', 'no_show', 'superseded')`;
 
   let updateResult;
 
@@ -180,8 +185,10 @@ export async function completeVisit(sql, body) {
 
   if (updateResult.count === 0) {
     const errorMsg = isCompletion
-      ? 'Appointment already completed or not found'
-      : 'Appointment not found or cannot be edited';
+      ? 'Appointment not found or already completed. Only confirmed appointments can be completed.'
+      : isEdit
+        ? 'Appointment not found or cannot be edited. Cancelled, no-show, and superseded appointments cannot be edited.'
+        : 'Appointment not found or cannot be updated.';
     throw Object.assign(new Error(errorMsg), { status: 400 });
   }
 

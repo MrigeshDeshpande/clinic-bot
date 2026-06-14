@@ -6,11 +6,12 @@ import {
   ArrowLeft, Calendar, Phone,
   Pill, Printer, Download,
   Users, AlertCircle, Star,
-  ClipboardList, Edit3, Save, X, MessageSquare
+  ClipboardList, Edit3, Save, X, MessageSquare, Plus
 } from 'lucide-react';
 import { formatDate as fmtDate } from '@/lib/date';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 import { getTreatmentName } from '@/lib/treatments';
+import { VISIT_MODES } from '@/lib/visitModes';
 import { ToastContext } from '../../layout';
 
 const PHONE_PREFIX = '+91';
@@ -601,6 +602,10 @@ export default function PatientDetailPage() {
                     </>
                   ) : (
                     <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => router.push(`/dashboard/visit?patientId=${id}&mode=${VISIT_MODES.CREATE_WALK_IN}&name=${encodeURIComponent(patient?.name || '')}`)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-all active:scale-95 shadow-sm">
+                        <Plus className="w-4 h-4" />
+                        New Visit
+                      </button>
                       <button onClick={() => setEditing(true)} className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all active:scale-95">
                         <Edit3 className="w-4 h-4" />
                         Edit
@@ -665,7 +670,7 @@ export default function PatientDetailPage() {
                           : visit.status === 'cancelled' ? 'bg-red-400/80'
                           : 'bg-amber-400/80'
                         }`} />
-                      <div onClick={() => { if (visit.status === 'completed') router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&patientId=${id}`); }}
+                      <div onClick={() => { if (visit.status === 'completed') router.push(`/dashboard/visit?appointmentId=${visit.id}&mode=${VISIT_MODES.EDIT_COMPLETED_VISIT}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&patientId=${id}`); }}
                         className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700 p-4 md:p-5 hover:shadow-md dark:hover:shadow-gray-900/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 cursor-pointer active:scale-[0.98]">
                         <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">{visit.treatment || 'Visit'}</h3>
                         <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
@@ -795,7 +800,7 @@ export default function PatientDetailPage() {
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
                               <Download className="w-3 h-3" /> Compile
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`); }}
+                            <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&mode=${VISIT_MODES.EDIT_COMPLETED_VISIT}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&patientId=${id}`); }}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
                               <Edit3 className="w-3 h-3" /> Edit
                             </button>

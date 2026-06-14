@@ -10,6 +10,7 @@ import { COMMON_MEDICINES } from '@/lib/medicines';
 
 import { apiFetch } from '@/lib/clientApi';
 import { fetchCached } from '@/lib/clientFetchCache';
+import { VISIT_MODES, deriveVisitMode } from '@/lib/visitModes';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
 import CameraViewfinder from '@/components/CameraViewfinder';
 
@@ -174,8 +175,15 @@ function VisitPageInner() {
   const [appointmentId, setAppointmentId] = useState(searchParams.get('appointmentId'));
   const prefillName = searchParams.get('name') || '';
   const prefillTreatment = searchParams.get('treatment') || '';
-  const isEdit = searchParams.get('edit') === 'true';
   const returnTo = searchParams.get('returnTo') || 'appointments';
+
+  const [visitMode, setVisitMode] = useState(() => {
+    const derived = deriveVisitMode(searchParams, null);
+    console.log('[DEBUG init] searchParams keys:', [...searchParams.keys()], 'mode param:', searchParams.get('mode'), 'derived:', derived);
+    return derived;
+  });
+
+  const isEdit = visitMode === VISIT_MODES.EDIT_COMPLETED_VISIT;
 
   const [form, setForm] = useState(() => normalizeVisitForm({
     ...EMPTY_VISIT_FORM,
@@ -450,6 +458,8 @@ function VisitPageInner() {
   const galleryInputRef = useRef(null);
   const formReadyRef = useRef(false);
   const queryRef = useRef('');
+  const explicitMode = useRef(!!searchParams.get('mode'));
+  const modeCorrected = useRef(false);
 
   // Auto-save draft
   const [draftRestored, setDraftRestored] = useState(false);
@@ -531,6 +541,69 @@ function VisitPageInner() {
       .catch(() => {});
   }, []);
 
+  // ── Patient profile helpers (extracted for reuse) ──
+  function loadPatientSideData(patientId) {
+    if (!patientId) return;
+    setLoadingExtra(true);
+    Promise.all([
+      fetchCached(`/api/dashboard/patients/${patientId}/messages?limit=10`)
+        .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
+        .catch(() => {}),
+      fetchCached(`/api/dashboard/patients/${patientId}/family`)
+        .then(fData => { if (fData.family) setPatientFamily(fData.family); })
+        .catch(() => {}),
+    ]).finally(() => setLoadingExtra(false));
+  }
+
+  function applyPatientProfile(p) {
+    setPatientProfile(p);
+    setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: normalizeSex(p.sex), patientLocation: p.location || '' }));
+    if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
+    if (p.allergies !== undefined || p.chronicConditions !== undefined || p.bloodGroup !== undefined || p.bp !== undefined || p.weight !== undefined || p.medications !== undefined) {
+      setMedicalHistory({
+        allergies: p.allergies || '',
+        chronicConditions: p.chronicConditions || '',
+        bloodGroup: p.bloodGroup || '',
+        bp: p.bp || '',
+        weight: p.weight || '',
+        medications: p.medications || '',
+      });
+    }
+    if (p.visits) setPatientVisits(p.visits);
+  }
+
+  async function loadPatientProfile(id) {
+    const pData = await fetchCached(`/api/dashboard/patients/${id}`);
+    if (pData.patient) {
+      applyPatientProfile({ ...pData.patient, visits: pData.visits });
+      loadPatientSideData(pData.patient.id);
+    }
+  }
+
+  // Load patient profile when entering via patientId (e.g. New Visit from patient profile)
+  useEffect(() => {
+    const pid = searchParams.get('patientId');
+    if (!pid || appointmentId) return;
+    setLoadingExtra(true);
+    fetchCached(`/api/dashboard/patients/${pid}`)
+      .then(pData => {
+        if (pData.patient) {
+          applyPatientProfile({ ...pData.patient, visits: pData.visits });
+          setForm(f => ({
+            ...f,
+            patientName: pData.patient.name || '',
+            patientPhone: (pData.patient.phone || '').replace(/\D/g, ''),
+            patientAge: pData.patient.age?.toString() || '',
+            patientSex: normalizeSex(pData.patient.sex),
+            patientLocation: pData.patient.location || '',
+          }));
+          loadPatientSideData(pData.patient.id);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingExtra(false));
+  }, []);
+
   // Load existing visit data (auto-fill all fields)
   useEffect(() => {
     if (!appointmentId) return;
@@ -587,37 +660,11 @@ function VisitPageInner() {
           if (a.payment_method) setPaymentMethod(a.payment_method);
           if (a.transaction_id) setTransactionId(a.transaction_id);
           if (a.paid_amount) setPaidAmount(a.paid_amount);
-          // Fetch patient demographics + extra data (visits, messages, family)
-          function applyPatientProfile(p) {
-            setPatientProfile(p);
-            setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: normalizeSex(p.sex), patientLocation: p.location || '' }));
-            if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
-            if (p.allergies !== undefined || p.chronicConditions !== undefined || p.bloodGroup !== undefined || p.bp !== undefined || p.weight !== undefined || p.medications !== undefined) {
-              setMedicalHistory({
-                allergies: p.allergies || '',
-                chronicConditions: p.chronicConditions || '',
-                bloodGroup: p.bloodGroup || '',
-                bp: p.bp || '',
-                weight: p.weight || '',
-                medications: p.medications || '',
-              });
-            }
-            if (p.visits) setPatientVisits(p.visits);
-            if (p.id) {
-              Promise.all([
-                fetchCached(`/api/dashboard/patients/${p.id}/messages?limit=10`)
-                  .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
-                  .catch(() => {}),
-                fetchCached(`/api/dashboard/patients/${p.id}/family`)
-                  .then(fData => { if (fData.family) setPatientFamily(fData.family); })
-                  .catch(() => {}),
-              ]);
-            }
-            setLoadingExtra(false);
-          }
-          async function loadPatientProfile(id) {
-            const pData = await fetchCached(`/api/dashboard/patients/${id}`);
-            if (pData.patient) applyPatientProfile({ ...pData.patient, visits: pData.visits });
+          // Correct mode when appointment status disagrees with URL-derived mode
+          console.log('[DEBUG stale-correction] explicitMode:', explicitMode.current, 'status:', a.status, 'modeCorrected:', modeCorrected.current, 'current visitMode:', visitMode);
+          if (!explicitMode.current && a.status === 'completed' && !modeCorrected.current) {
+            modeCorrected.current = true;
+            setVisitMode(VISIT_MODES.EDIT_COMPLETED_VISIT);
           }
           if (a.patient_id) {
             loadPatientProfile(a.patient_id);
@@ -628,10 +675,7 @@ function VisitPageInner() {
                 const match = (pData.patients || []).find(p => p.phone === a.patient_phone);
                 if (match) {
                   applyPatientProfile(match);
-                  if (match.id) {
-                    const full = await fetchCached(`/api/dashboard/patients/${match.id}`);
-                    if (full.visits) setPatientVisits(full.visits);
-                  }
+                  loadPatientSideData(match.id);
                 }
               } catch {}
             })();
@@ -1360,6 +1404,7 @@ function VisitPageInner() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    console.log('[DEBUG handleSubmit] visitMode:', visitMode, 'isEdit:', isEdit, 'appointmentId:', appointmentId, 'searchParams mode:', searchParams.get('mode'));
     if (!validate()) return;
     setSubmitting(true);
     try {
@@ -1373,9 +1418,9 @@ function VisitPageInner() {
         transactionId: transactionId.trim() || undefined,
       };
 
-      const isEditingCompletedVisit = appointmentMeta?.status === 'completed';
       const payload = appointmentId
         ? {
+            mode: visitMode,
             appointmentId,
             treatment: primaryTreatment,
             treatments: mappedTreatments,
@@ -1391,13 +1436,14 @@ function VisitPageInner() {
             advice_selected: form.adviceSelected,
             diagnosis_selected: form.diagnosisSelected,
             tooth_diagnoses: form.toothDiagnoses,
-            status: isEditingCompletedVisit ? undefined : 'completed',
+            status: isEdit ? undefined : 'completed',
             chiefComplaint: cleanOptionalText(form.chiefComplaint),
             generalExamination: cleanOptionalText(form.generalExamination),
             extraOralExamination: cleanOptionalText(form.extraOralExamination),
             ...paymentPayload,
           }
         : {
+            mode: VISIT_MODES.CREATE_WALK_IN,
             patient_id: patientProfile?.id || undefined,
             patient_name: form.patientName.trim(),
             patient_phone: form.patientPhone ? `+91${form.patientPhone}` : undefined,
@@ -2044,7 +2090,7 @@ function VisitPageInner() {
         patientVisits={patientVisits}
         medicalHistory={medicalHistory}
         form={form} setForm={setForm}
-        submitting={submitting} isEdit={isEdit}
+        submitting={submitting} visitMode={visitMode}
         visitSaved={visitSaved}
         onCheckout={() => handleSubmit()}
         selectedTreatments={selectedTreatments}

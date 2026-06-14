@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Search } from 'lucide-react';
+import { VISIT_MODES } from '@/lib/visitModes';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash', icon: '\u{1F4B5}' },
@@ -118,6 +119,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
     setError('');
     try {
       const payload = {
+        mode: VISIT_MODES.CREATE_WALK_IN,
         patient_name: name.trim(),
         patient_phone: phone ? `+91${phone}` : undefined,
         treatmentCharges: treatmentFee,

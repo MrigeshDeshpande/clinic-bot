@@ -211,7 +211,7 @@ export default function QueuePage() {
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
-                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=queue`)}
+                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=queue&mode=completeAppointment`)}
                     className="w-full py-3 text-sm font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all flex items-center justify-center gap-1"
                   >
                     <ArrowRight className="w-4 h-4" /> Start Visit
