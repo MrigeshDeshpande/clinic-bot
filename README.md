@@ -6,7 +6,6 @@ It handles appointment booking, service/location/timing queries, emergency detec
 human escalation, callback requests, and doctor-facing daily operations (reminders and
 morning summaries).
 
-
 ## Stack
 
 - Next.js 16 (App Router)
