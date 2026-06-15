@@ -142,8 +142,9 @@ function PatientsPageInner() {
             {patients.map((patient, idx) => (
               <button
                 key={`${patient.id}-${idx}`}
+                type="button"
                 onClick={() => router.push(`/dashboard/patients/${patient.id}`)}
-                className="group relative w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4 md:p-5 hover:border-blue-200 dark:hover:border-blue-700 hover:shadow-lg hover:shadow-blue-100/50 dark:hover:shadow-blue-900/20 transition-all duration-200 animate-in"
+                className="group relative w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4 md:p-5 hover:border-blue-200 dark:hover:border-blue-700 hover:shadow-lg hover:shadow-blue-100/50 dark:hover:shadow-blue-900/20 transition-all duration-200 animate-in cursor-pointer"
                 style={{ animationDelay: `${idx * 50}ms` }}
               >
                 <div className="flex items-center gap-4">

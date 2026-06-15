@@ -3,7 +3,7 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ToastContext } from '../layout';
-import { Settings, Stethoscope, FileText, ClipboardCheck, Star, Plus, Trash2, Save, Image, Palette, CheckSquare, Languages, AlertTriangle, Pill, Search, ChevronDown, RotateCcw, GripVertical, Eye, EyeOff, LayoutPanelTop } from 'lucide-react';
+import { Settings, Stethoscope, FileText, ClipboardCheck, Star, Plus, Trash2, Save, ImageIcon, Palette, CheckSquare, Languages, AlertTriangle, Pill, Search, ChevronDown, RotateCcw, GripVertical, Eye, EyeOff, LayoutPanelTop } from 'lucide-react';
 import { CATEGORIES, TREATMENTS, getTreatmentName } from '@/lib/treatments';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -101,6 +101,7 @@ export default function SettingsPage() {
       })
       .catch(() => showToast('Failed to load settings', 'error'))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function saveSettings(key) {
@@ -215,6 +216,17 @@ export default function SettingsPage() {
       const salts = { ...(prev.medicines?.salts || {}) };
       if (salts[name]) {
         salts[name] = { ...salts[name], enabled: !salts[name].enabled };
+      }
+      return { ...prev, medicines: { ...prev.medicines, salts } };
+    });
+  }
+
+  function updateMedicinePrice(name, value) {
+    const price = Math.max(0, Number(value) || 0);
+    setSettings(prev => {
+      const salts = { ...(prev.medicines?.salts || {}) };
+      if (salts[name]) {
+        salts[name] = { ...salts[name], price };
       }
       return { ...prev, medicines: { ...prev.medicines, salts } };
     });
@@ -610,12 +622,12 @@ export default function SettingsPage() {
                   <p className="text-xs text-gray-400 mt-1">Upload a scanned signature image to appear on prescriptions</p>
                   <div className="mt-2 flex items-center gap-4">
                     <label className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                      <Image className="w-4 h-4 text-gray-500" />
+                      <ImageIcon className="w-4 h-4 text-gray-500" />
                       Upload Signature
                       <input type="file" accept="image/*" className="hidden" />
                     </label>
                     <button className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                      <Image className="w-4 h-4 text-gray-500" />
+                      <ImageIcon className="w-4 h-4 text-gray-500" />
                       Upload Stamp
                     </button>
                   </div>
@@ -980,8 +992,14 @@ export default function SettingsPage() {
                                   <span className="text-sm text-gray-800 dark:text-gray-200">{s}</span>
                                   {isCustom && <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full">custom</span>}
                                 </div>
-                                <input type="checkbox" checked={entry.enabled !== false} onChange={() => toggleMedicine(s)}
-                                  className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" />
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400">₹</span>
+                                  <input type="number" min="0" value={entry.price ?? ''} onChange={e => updateMedicinePrice(s, e.target.value)}
+                                    placeholder="0"
+                                    className="w-16 px-1.5 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-500/40 placeholder-gray-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                  <input type="checkbox" checked={entry.enabled !== false} onChange={() => toggleMedicine(s)}
+                                    className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" />
+                                </div>
                               </div>
                             );
                           })}

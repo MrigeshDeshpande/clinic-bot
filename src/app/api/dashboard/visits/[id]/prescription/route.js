@@ -83,9 +83,9 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Failed to generate prescription' }, { status: 500 });
     }
 
-    // Persist the key
+    // Persist the key and invalidate compiled document
     await sql`
-      UPDATE appointments SET prescription_key = ${result.key}, updated_at = NOW()
+      UPDATE appointments SET prescription_key = ${result.key}, compiled_document_key = NULL, updated_at = NOW()
       WHERE id = ${id}
     `;
 

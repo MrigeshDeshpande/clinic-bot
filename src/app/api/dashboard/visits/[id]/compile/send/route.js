@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSql } from '@/db/pool';
+import { getSql, runMigrations } from '@/db/pool';
 import { getR2SignedUrl } from '@/lib/r2';
 import { compileVisitDocument } from '@/lib/compileDocument';
 import { sendDocument } from '@/lib/whatsapp';
@@ -26,8 +26,19 @@ export async function POST(req, { params }) {
     const body = await req.json().catch(() => ({}));
     const caption = body.caption || 'Your visit summary from Shri Balaji Dental Clinic';
 
-    // Fetch patient phone number
+    await runMigrations();
     const sql = getSql();
+
+    // Force recompile: clear cached key so we regenerate
+    if (body.refresh === true) {
+      await sql`
+        UPDATE appointments SET compiled_document_key = NULL, updated_at = NOW()
+        WHERE id = ${id}
+      `;
+      logger.info('COMPILE_SEND_FORCE_REFRESH', { appointmentId: id });
+    }
+
+    // Fetch patient phone number
     const rows = await sql`
       SELECT a.patient_phone, a.patient_name, a.compiled_document_key
       FROM appointments a

@@ -140,6 +140,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
     if (scrollTo > 0) {
       containerRef.current.scrollTop = Math.max(0, scrollTo);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

@@ -93,6 +93,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   const [patientPhone, setPatientPhone] = useState('');
   const [patientAge, setPatientAge] = useState('');
   const [patientSex, setPatientSex] = useState('');
+  const [selectedTime, setSelectedTime] = useState(time || '');
   const [treatment, setTreatment] = useState('');
   const [location, setLocation] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -128,7 +129,17 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         const results = d.patients || [];
         if (queryRef.current !== patientName) return; // stale
         setSearchResults(results);
-        setSearchState(results.length > 0 ? 'success' : 'empty');
+        if (results.length > 0) {
+          setSearchState('success');
+        } else {
+          setSearchState('empty');
+          setTimeout(() => {
+            if (queryRef.current === patientName) {
+              setSearchResults([]);
+              setSearchState('idle');
+            }
+          }, 2000);
+        }
       } catch (e) {
         if (e.name !== 'AbortError') { console.error('Quick book search error:', e); setSearchState('idle'); }
       }
@@ -139,7 +150,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   // Auto-highlight first result
   useEffect(() => {
     setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
-  }, [searchResults]);
+  }, [searchResults, searchState]);
 
   // Focus submit after patient selection
   useEffect(() => {
@@ -179,6 +190,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!patientName.trim()) { setError('Patient name is required'); return; }
+    if (!time && !selectedTime) { setError('Please select a time slot'); return; }
     setSaving(true);
     setError('');
 
@@ -187,12 +199,13 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          patientId: selectedPatient?.id || null,
           patientName: patientName.trim(),
           patientPhone: patientPhone ? `+91${patientPhone}` : null,
           patientAge: patientAge.trim() || null,
           patientSex: patientSex || null,
           date,
-          time,
+          time: time || selectedTime || null,
           treatment: treatment || null,
           location: location.trim() || null,
         }),
@@ -219,14 +232,14 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
         </div>
         <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Appointment Booked</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {bookedAppointment.patient_name}{bookedAppointment.time ? ` — ${bookedAppointment.time?.slice(0, 5)}` : ''}
+          {bookedAppointment.patient_name}{bookedAppointment.time ? ` — ${bookedAppointment.time?.slice(0, 5)}` : ' — Walk-in'}
         </p>
         <div className="flex gap-3 pt-2">
           <button
             onClick={() => {
               const close = onClose;
               close?.();
-              window.location.href = `/dashboard/visit?appointmentId=${bookedAppointment.id}&name=${encodeURIComponent(bookedAppointment.patient_name)}`;
+              window.location.href = `/dashboard/visit?appointmentId=${bookedAppointment.id}&name=${encodeURIComponent(bookedAppointment.patient_name)}&mode=completeAppointment`;
             }}
             className="flex-1 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all"
           >
@@ -239,6 +252,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
               setPatientPhone('');
               setPatientAge('');
               setPatientSex('');
+              setSelectedTime(time || '');
               setTreatment('');
               setLocation('');
               setSelectedPatient(null);
@@ -339,7 +353,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
           <input
             type="tel"
             value={patientPhone}
-            onChange={e => setPatientPhone(e.target.value.replace(/\D/g, ''))}
+            onChange={e => setPatientPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
             placeholder="9876543210"
             className="flex-1 px-3 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
           />
@@ -392,6 +406,31 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
           />
         </div>
       </div>
+
+      {/* Time selector — only when opened without a pre-selected slot */}
+      {!time && (
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Time *</label>
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <select
+              value={selectedTime}
+              onChange={e => setSelectedTime(e.target.value)}
+              className="w-full pl-9 pr-8 py-2.5 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 focus:border-gray-300 dark:focus:border-gray-500 text-gray-900 dark:text-gray-100 appearance-none cursor-pointer transition-colors"
+            >
+              <option value="">Select time...</option>
+              {(new Date(date + 'T12:00:00').getDay() === 0 ? DEFAULT_SLOTS.sunday : DEFAULT_SLOTS.weekday).map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 5-7-5" />
+            </svg>
+          </div>
+        </div>
+      )}
 
       {/* Treatment Dropdown */}
       <div>
@@ -709,6 +748,7 @@ export default function DashboardPage() {
     const params = new URLSearchParams(window.location.search);
     const bookTime = params.get('book');
     if (bookTime) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBookingModal({ open: true, time: bookTime });
       // Clean the URL without full page reload
       const url = new URL(window.location);
@@ -995,9 +1035,8 @@ export default function DashboardPage() {
       )
       }
 
-      {/* FAB — quick actions on week/day views */}
-      {(viewMode === 'week' || viewMode === 'day') && (
-        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+      {/* FAB — quick actions */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
           {fabOpen && (
             <div className="animate-scale-in origin-bottom-right space-y-1.5 mb-1">
               <button
@@ -1023,7 +1062,6 @@ export default function DashboardPage() {
             {fabOpen ? <ChevronUp className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
           </button>
         </div>
-      )}
 
       {/* Financial Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
@@ -1193,7 +1231,7 @@ export default function DashboardPage() {
       {/* Quick Booking Modal — Enhanced */}
       {bookingModal.open && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-          <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={() => setBookingModal({ open: false, time: null })} />
+          <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={() => setBookingModal({ open: false, time: null })} />
           <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">

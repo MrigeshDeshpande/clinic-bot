@@ -55,6 +55,7 @@ export default function MediaCard({ mediaProps }) {
               {mediaFiles.map((file, idx) => (
                 <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700">
                   {getFilePreview(file) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={getFilePreview(file)} alt="" className="w-6 h-6 rounded object-cover" />
                   ) : (
                     <span className="text-xs">{getFileIcon(file)}</span>

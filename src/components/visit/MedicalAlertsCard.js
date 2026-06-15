@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TrendingUp, Clock, CheckCircle2, AlertTriangle, Heart, MessageSquare, Users, Pill } from 'lucide-react';
 
 export default function MedicalAlertsCard({ medicalAlertsProps }) {
+  const [now] = useState(() => Date.now());
   const {
+
     patientProfile,
     patientVisits,
     medicalHistory,
@@ -43,7 +45,7 @@ export default function MedicalAlertsCard({ medicalAlertsProps }) {
             </div>
             <p className="text-xl font-bold text-gray-900 dark:text-gray-100 text-sm leading-tight">{patientProfile.created_at?.slice(0, 10) || '—'}</p>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-              {patientProfile.created_at ? `${Math.floor((Date.now() - new Date(patientProfile.created_at).getTime()) / (1000 * 60 * 60 * 24 * 30))} months ago` : ''}
+              {patientProfile.created_at ? `${Math.floor((now - new Date(patientProfile.created_at).getTime()) / (1000 * 60 * 60 * 24 * 30))} months ago` : ''}
             </p>
           </div>
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
@@ -54,11 +56,11 @@ export default function MedicalAlertsCard({ medicalAlertsProps }) {
             {(() => {
               const lastVisit = patientVisits.find(v => v.follow_up_date);
               const fupDate = lastVisit?.follow_up_date;
-              const isOverdue = fupDate && new Date(fupDate) < new Date();
-              const hasReturned = fupDate && patientVisits.some(v => v.date === fupDate || (v.date > fupDate && v.date < new Date(Date.now() + 86400000).toISOString().slice(0, 10)));
+              const isOverdue = fupDate && new Date(fupDate) < new Date(now);
+              const hasReturned = fupDate && patientVisits.some(v => v.date === fupDate || (v.date > fupDate && v.date < new Date(now + 86400000).toISOString().slice(0, 10)));
               if (!fupDate) return <><p className="text-xl font-bold text-gray-400 dark:text-gray-500">—</p><p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">No follow-up set</p></>;
               if (hasReturned) return <><p className="text-xl font-bold text-emerald-500">✓</p><p className="text-xs text-emerald-500 mt-0.5">Completed</p></>;
-              if (isOverdue) return <><p className="text-xl font-bold text-red-500">{Math.floor((Date.now() - new Date(fupDate).getTime()) / (1000 * 60 * 60 * 24))}d</p><p className="text-xs text-red-500 mt-0.5">Overdue since {fupDate}</p></>;
+              if (isOverdue) return <><p className="text-xl font-bold text-red-500">{Math.floor((now - new Date(fupDate).getTime()) / (1000 * 60 * 60 * 24))}d</p><p className="text-xs text-red-500 mt-0.5">Overdue since {fupDate}</p></>;
               return <><p className="text-xl font-bold text-amber-500">⏳</p><p className="text-xs text-amber-500 mt-0.5">Due {fupDate}</p></>;
             })()}
           </div>

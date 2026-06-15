@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { TREATMENT_NAMES } from '@/lib/treatments';
+import { VISIT_MODES } from '@/lib/visitModes';
 
 const PRESET_FEES = [
   { label: 'General Checkup',     fee: 300,  icon: '🏥' },
@@ -150,6 +151,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode: VISIT_MODES.COMPLETE_APPOINTMENT,
           appointmentId: appointment.id,
           treatment: selectedTreatments[0],
           treatments: selectedTreatments,
@@ -180,7 +182,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-2xl mx-4 animate-scale-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         
         {/* ── Header ── */}
@@ -195,7 +197,7 @@ export default function VisitCompleteModal({ appointment, onClose, onComplete, s
               <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Complete Visit</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {appointment.patient_name || 'Patient'}
-                {appointment.time && <span> · {appointment.time?.slice(0, 5)}</span>}
+                <span> · {appointment.time ? appointment.time.slice(0, 5) : 'Walk-in'}</span>
               </p>
             </div>
           </div>

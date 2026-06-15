@@ -63,7 +63,7 @@ export async function PATCH(req) {
     setClauses.push('updated_at = NOW()');
     params.push(appointmentId);
 
-    await sql.query(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${p}`, params);
+    await sql.unsafe(`UPDATE appointments SET ${setClauses.join(', ')} WHERE id = $${p}`, params);
 
     const updated = await sql`
       SELECT id, status, arrival_status, arrived_at, called_at

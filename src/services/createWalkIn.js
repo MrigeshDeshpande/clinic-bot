@@ -1,8 +1,9 @@
-import { findPatientByPhone, createPatient, updatePatient } from '@/db/repositories/patientRepository';
+import { findPatientByPhone, findPatientById, createPatient, updatePatient } from '@/db/repositories/patientRepository';
 import { recordPayment } from './recordPayment';
 
 export async function createWalkIn(sql, body) {
   const {
+    patient_id,
     patient_name, patient_phone, patient_age, patient_sex, patient_location,
     treatment, treatments, treatmentFees, diagnosis, medicines,
     consultationFee, treatmentCharges, medicineCharges, notes,
@@ -29,11 +30,21 @@ export async function createWalkIn(sql, body) {
     return patient_sex.charAt(0).toUpperCase() + patient_sex.slice(1);
   })();
 
+  let normalizedPhone = patient_phone?.replace(/\D/g, '') || null;
+
   let patientId = null;
-  if (patient_phone) {
-    const existing = await findPatientByPhone(patient_phone);
+  let resolvedPhone = normalizedPhone;
+  if (patient_id) {
+    patientId = patient_id;
+    const patient = await findPatientById(patient_id);
+    if (patient?.wa_id) {
+      resolvedPhone = patient.wa_id.replace(/\D/g, '');
+    }
+  } else if (normalizedPhone) {
+    const existing = await findPatientByPhone(normalizedPhone);
     if (existing) {
       patientId = existing.id;
+      resolvedPhone = existing.wa_id?.replace(/\D/g, '') || normalizedPhone;
       const updateFields = {};
       if (patient_age && (!existing.age || existing.age !== patient_age)) updateFields.age = patient_age;
       if (normalizedSex && (!existing.sex || existing.sex !== normalizedSex)) updateFields.sex = normalizedSex;
@@ -46,8 +57,8 @@ export async function createWalkIn(sql, body) {
         name: patient_name,
         age: patient_age,
         sex: normalizedSex,
-        phone: patient_phone,
-        waId: patient_phone,
+        phone: normalizedPhone,
+        waId: normalizedPhone,
         location: patient_location,
       });
       if (created) patientId = created.id;
@@ -74,14 +85,14 @@ export async function createWalkIn(sql, body) {
       payment_status, payment_method, paid_at, paid_amount,
       chief_complaint, general_examination, extra_oral_examination
     ) VALUES (
-      gen_random_uuid(), 1, ${patient_phone || null}, ${patient_name}, ${patient_phone || null}, ${patientId},
-      ${today}, NULL, ${treatment || 'Walk-in'}, ${JSON.stringify(treatments || [])}, 'completed',
+      gen_random_uuid(), 1, ${resolvedPhone}, ${patient_name}, ${resolvedPhone}, ${patientId},
+      ${today}, NULL, ${treatment || 'Walk-in'}, ${treatments || []}, 'completed',
       ${consFee}, ${treatFee}, ${medFee},
-      ${JSON.stringify(treatmentFees || {})},
-      ${diagnosis || ''}, ${JSON.stringify(medicines || [])}, ${notes || ''},
+      ${treatmentFees || {}},
+      ${diagnosis || ''}, ${medicines || []}, ${notes || ''},
       ${followUpDate || null}, ${followUpInstructions || ''},
       ${advice_selected || []}, ${diagnosis_selected || []},
-      ${JSON.stringify(tooth_diagnoses || [])},
+      ${tooth_diagnoses || []},
       'arrived',
       ${pStatus}, ${pMethod}, ${paidAt}, ${paidAmt},
       ${chiefComplaint || ''}, ${generalExamination || ''}, ${extraOralExamination || ''}

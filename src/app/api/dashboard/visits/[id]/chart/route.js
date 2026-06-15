@@ -5,6 +5,12 @@ import { generateDentalChart } from '@/lib/prescription';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, jsonError } from '@/lib/apiAuth';
 
+function parseToothDiagnoses(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') try { return JSON.parse(raw); } catch { return []; }
+  return [];
+}
+
 export async function POST(req, { params }) {
   const csrfErr = requireCsrf(req);
   if (csrfErr) return csrfErr;
@@ -38,7 +44,7 @@ export async function POST(req, { params }) {
     };
 
     const visit = {
-      tooth_diagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
+      tooth_diagnoses: parseToothDiagnoses(a.tooth_diagnoses),
     };
 
     const appointment = {

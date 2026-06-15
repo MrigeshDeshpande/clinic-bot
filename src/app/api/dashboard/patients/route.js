@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
+import { createPatient, findPatientByPhone } from '@/db/repositories/patientRepository';
 import { logger } from '@/lib/logger';
-import { checkRateLimit, jsonError, sanitizeResponse } from '@/lib/apiAuth';
+import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse } from '@/lib/apiAuth';
 
 export async function GET(req) {
   const rateErr = checkRateLimit(req);
@@ -65,6 +66,55 @@ export async function GET(req) {
     return NextResponse.json({ patients: sanitizeResponse(patients || []) });
   } catch (error) {
     logger.error('DASHBOARD_PATIENTS_ERROR', { error: error.message });
+    return jsonError(error);
+  }
+}
+
+export async function POST(req) {
+  const csrfErr = requireCsrf(req);
+  if (csrfErr) return csrfErr;
+  const rateErr = checkRateLimit(req);
+  if (rateErr) return rateErr;
+  const sizeErr = checkBodySize(req);
+  if (sizeErr) return sizeErr;
+
+  try {
+    const body = await req.json();
+    const name = body.name?.trim();
+
+    if (!name) {
+      return NextResponse.json({ error: 'Patient name required' }, { status: 400 });
+    }
+
+    const existing = body.phone ? await findPatientByPhone(body.phone) : null;
+    if (existing) {
+      const existingName = (existing.name || '').trim().toLowerCase();
+      const incomingName = name.trim().toLowerCase();
+      if (existingName && existingName !== incomingName) {
+        return NextResponse.json(
+          { error: `Phone already belongs to ${existing.name}. Select that patient or enter a different phone.` },
+          { status: 409 }
+        );
+      }
+    }
+
+    const patient = await createPatient({
+      name,
+      age: body.age || null,
+      sex: body.sex || null,
+      phone: body.phone || null,
+      waId: body.phone || null,
+      location: body.location || null,
+    });
+
+    if (!patient) {
+      return NextResponse.json({ error: 'Failed to create patient' }, { status: 500 });
+    }
+
+    logger.info('PATIENT_CREATED_FROM_DASHBOARD', { id: patient.id });
+    return NextResponse.json({ patient: sanitizeResponse(patient) });
+  } catch (error) {
+    logger.error('DASHBOARD_PATIENT_CREATE_ERROR', { error: error.message });
     return jsonError(error);
   }
 }

@@ -11,33 +11,66 @@ export default function EditPatientDrawer({ patientProfile, onClose, onSaved, sh
   const [sex, setSex] = useState(patientProfile?.sex || '');
   const [location, setLocation] = useState(patientProfile?.location || '');
   const [showCustomLocation, setShowCustomLocation] = useState(!LOCATIONS.includes(patientProfile?.location || ''));
+  const [occupation, setOccupation] = useState(patientProfile?.occupation || '');
+  const [address, setAddress] = useState(patientProfile?.address || '');
   const [saving, setSaving] = useState(false);
 
   async function handleSave(e) {
     e.preventDefault();
-    if (!patientProfile?.id) return;
+    const payload = {
+      name: name.trim(),
+      phone: phone || '',
+      age: age ? parseInt(age, 10) : undefined,
+      sex: sex || '',
+      location: location || '',
+      occupation: occupation.trim() || '',
+      address: address.trim() || '',
+    };
+
+    if (!patientProfile?.id) {
+      setSaving(true);
+      try {
+        const apiPayload = { ...payload, phone: phone ? `+91${phone}` : undefined };
+        const res = await apiFetch('/api/dashboard/patients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(apiPayload),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          showToast?.('Patient created & details saved', 'success');
+          onSaved?.(created);
+          onClose();
+        } else {
+          const data = await res.json();
+          showToast?.(data.error || 'Failed to create patient', 'error');
+        }
+      } catch {
+        showToast?.('Network error', 'error');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setSaving(true);
     try {
+      const apiPayload = { ...payload, phone: phone ? `+91${phone}` : undefined };
       const res = await apiFetch(`/api/dashboard/patients/${patientProfile.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: phone ? `+91${phone}` : undefined,
-          age: age ? parseInt(age, 10) : undefined,
-          sex: sex || undefined,
-          location: location || undefined,
-        }),
+        body: JSON.stringify(apiPayload),
       });
       if (res.ok) {
+        const updated = await res.json();
         showToast?.('Patient details updated', 'success');
-        onSaved?.();
+        onSaved?.(updated);
         onClose();
       } else {
         const data = await res.json();
         showToast?.(data.error || 'Failed to update', 'error');
       }
-    } catch {
+    } catch (err) {
       showToast?.('Network error', 'error');
     } finally {
       setSaving(false);
@@ -46,7 +79,7 @@ export default function EditPatientDrawer({ patientProfile, onClose, onSaved, sh
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl h-full overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Edit Patient</h2>
@@ -103,6 +136,18 @@ export default function EditPatientDrawer({ patientProfile, onClose, onSaved, sh
                 placeholder="Enter location"
                 className="mt-1 w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all" />
             )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Occupation</label>
+            <input type="text" value={occupation} onChange={e => setOccupation(e.target.value)}
+              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+              placeholder="e.g. Engineer, Business, Student" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Address</label>
+            <input type="text" value={address} onChange={e => setAddress(e.target.value)}
+              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
+              placeholder="e.g. 123 Main St, City" />
           </div>
 
           <div className="pt-2">

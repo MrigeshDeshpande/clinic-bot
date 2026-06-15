@@ -6,11 +6,12 @@ import {
   ArrowLeft, Calendar, Phone,
   Pill, Printer, Download,
   Users, AlertCircle, Star,
-  ClipboardList, Edit3, Save, X, MessageSquare
+  ClipboardList, Edit3, Save, X, MessageSquare, Plus
 } from 'lucide-react';
 import { formatDate as fmtDate } from '@/lib/date';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 import { getTreatmentName } from '@/lib/treatments';
+import { VISIT_MODES } from '@/lib/visitModes';
 import { ToastContext } from '../../layout';
 
 const PHONE_PREFIX = '+91';
@@ -21,6 +22,29 @@ function formatDate(d) {
   if (!d) return 'N/A';
   const dateStr = typeof d === 'string' ? d.slice(0, 10) : String(d).slice(0, 10);
   return fmtDate(dateStr, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatScheduledTime(appt) {
+  if (!appt?.date) return '';
+  const today = new Date().toISOString().slice(0, 10);
+  const apptDate = appt.date.slice(0, 10);
+  const time = appt.time ? appt.time.slice(0, 5) : '';
+  let timeStr = '';
+  if (time) {
+    const [h, m] = time.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    timeStr = `${hour12}:${m} ${ampm}`;
+  }
+
+  if (apptDate === today) return timeStr ? `Today at ${timeStr}` : 'Today';
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (apptDate === yesterday) return timeStr ? `Yesterday at ${timeStr} (overdue)` : 'Yesterday (overdue)';
+  if (apptDate < today) return timeStr ? `${formatDate(apptDate)} at ${timeStr} (overdue)` : `${formatDate(apptDate)} (overdue)`;
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (apptDate === tomorrow) return timeStr ? `Tomorrow at ${timeStr}` : 'Tomorrow';
+  return timeStr ? `${formatDate(apptDate)} at ${timeStr}` : formatDate(apptDate);
 }
 
 function formatCurrency(amount) {
@@ -412,8 +436,24 @@ export default function PatientDetailPage() {
   }
 
   const completedVisits = useMemo(() => visits.filter(v => v.status === 'completed'), [visits]);
+  const confirmedAppointments = useMemo(() => visits.filter(v => v.status === 'confirmed'), [visits]);
   const totalRevenue = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.consultation_fee || 0) + Number(v.treatment_charges || 0) + Number(v.medicine_charges || 0), 0), [completedVisits]);
   const totalCollected = useMemo(() => completedVisits.reduce((sum, v) => sum + Number(v.paid_amount || 0), 0), [completedVisits]);
+
+  const nextApptInfo = useMemo(() => {
+    const appt = confirmedAppointments[0];
+    if (!appt) return null;
+    const apptDate = appt.date?.slice(0, 10);
+    const apptTime = appt.time?.slice(0, 5);
+    const today = new Date().toISOString().slice(0, 10);
+    const nowHHMM = new Date().toTimeString().slice(0, 5);
+    const isPastDue = apptDate < today || (apptDate === today && apptTime < nowHHMM);
+    const isFutureDate = apptDate > today;
+    const btnColor = isPastDue ? 'bg-amber-600 hover:bg-amber-700'
+      : isFutureDate ? 'bg-blue-600 hover:bg-blue-700'
+      : 'bg-emerald-600 hover:bg-emerald-700';
+    return { appt, isPastDue, isFutureDate, btnColor };
+  }, [confirmedAppointments]);
 
   // All images across all visits, grouped by visit date
   const allVisitMedia = useMemo(() => {
@@ -512,7 +552,7 @@ export default function PatientDetailPage() {
                           <input
                             type="text"
                             value={stripPhonePrefix(editForm.phone)}
-                            onChange={e => setEditForm(f => ({ ...f, phone: stripPhonePrefix(e.target.value) }))}
+                            onChange={e => setEditForm(f => ({ ...f, phone: stripPhonePrefix(e.target.value).slice(0, 10) }))}
                             className="bg-transparent border-b border-t border-r border-gray-300 dark:border-gray-600 focus:border-gray-900 dark:focus:border-gray-100 outline-none w-28 sm:w-32 text-gray-900 dark:text-gray-100 text-sm px-1"
                           />
                         </div>
@@ -601,6 +641,20 @@ export default function PatientDetailPage() {
                     </>
                   ) : (
                     <div className="flex items-center gap-2 shrink-0">
+                      {nextApptInfo ? (
+                        <button onClick={() => router.push(`/dashboard/visit?appointmentId=${nextApptInfo.appt.id}&mode=${VISIT_MODES.COMPLETE_APPOINTMENT}&name=${encodeURIComponent(patient?.name || '')}`)} className={`inline-flex items-center gap-1.5 px-4 py-2 ${nextApptInfo.btnColor} text-white text-sm font-medium rounded-xl transition-all active:scale-95 shadow-sm`}>
+                          <Calendar className="w-4 h-4 shrink-0" />
+                          <span className="flex flex-col leading-tight text-left">
+                            <span>{nextApptInfo.isPastDue ? 'Complete (Overdue)' : 'Complete Appointment'}</span>
+                            <span className="text-[10px] font-normal opacity-80">{formatScheduledTime(nextApptInfo.appt)}</span>
+                          </span>
+                        </button>
+                      ) : (
+                        <button onClick={() => router.push(`/dashboard/visit?patientId=${id}&mode=${VISIT_MODES.CREATE_WALK_IN}&name=${encodeURIComponent(patient?.name || '')}`)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition-all active:scale-95 shadow-sm">
+                          <Plus className="w-4 h-4" />
+                          New Visit
+                        </button>
+                      )}
                       <button onClick={() => setEditing(true)} className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all active:scale-95">
                         <Edit3 className="w-4 h-4" />
                         Edit
@@ -619,6 +673,14 @@ export default function PatientDetailPage() {
                             </button>
                             <button onClick={async () => { setShowMore(false); const latest = completedVisits[0]; if (!latest) { showToast('No completed visits', 'error'); return; } try { const res = await fetch(`/api/dashboard/visits/${latest.id}/chart`, { method: 'POST' }); const data = await res.json(); if (res.ok && data.url) window.open(data.url, '_blank'); else showToast(data.error || 'Failed', 'error'); } catch { showToast('Network error', 'error'); } }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
                               <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> Chart
+                            </button>
+                            {nextApptInfo && (
+                              <button onClick={() => { setShowMore(false); router.push(`/dashboard/visit?appointmentId=${nextApptInfo.appt.id}&mode=${VISIT_MODES.COMPLETE_APPOINTMENT}&name=${encodeURIComponent(patient?.name || '')}`); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                                <Calendar className="w-4 h-4 text-emerald-500" /> Complete Appointment <span className="text-gray-400 ml-auto text-[10px]">{formatScheduledTime(nextApptInfo.appt)}</span>
+                              </button>
+                            )}
+                            <button onClick={() => { setShowMore(false); router.push(`/dashboard/visit?patientId=${id}&mode=${VISIT_MODES.CREATE_WALK_IN}&name=${encodeURIComponent(patient?.name || '')}`); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                              <Plus className="w-4 h-4 text-gray-500" /> New Visit
                             </button>
                             <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
                             <button onClick={async () => { setShowMore(false); await sendGoogleReview(); }} disabled={sendingReviewLink} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all disabled:opacity-50">
@@ -665,12 +727,12 @@ export default function PatientDetailPage() {
                           : visit.status === 'cancelled' ? 'bg-red-400/80'
                           : 'bg-amber-400/80'
                         }`} />
-                      <div onClick={() => { if (visit.status === 'completed') router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&patientId=${id}`); }}
+                      <div onClick={() => { if (visit.status === 'completed') router.push(`/dashboard/visit?appointmentId=${visit.id}&mode=${VISIT_MODES.EDIT_COMPLETED_VISIT}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&patientId=${id}`); }}
                         className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-2xl border border-gray-200/80 dark:border-gray-700 p-4 md:p-5 hover:shadow-md dark:hover:shadow-gray-900/50 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 cursor-pointer active:scale-[0.98]">
                         <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 truncate">{visit.treatment || 'Visit'}</h3>
                         <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                           {formatDate(visit.date)}
-                          {visit.time && <><span className="text-gray-300 dark:text-gray-600">·</span><span>{visit.time}</span></>}
+                          <span className="text-gray-300 dark:text-gray-600">·</span><span>{visit.time || 'Walk-in'}</span>
                           {(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0)) > 0 && (
                             <><span className="text-gray-300 dark:text-gray-600">·</span>
                             <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(Number(visit.consultation_fee || 0) + Number(visit.treatment_charges || 0) + Number(visit.medicine_charges || 0))}</span>
@@ -736,6 +798,7 @@ export default function PatientDetailPage() {
                         {visit.chit_media && visit.chit_media.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {visit.chit_media.filter(k => k.includes('_photo.')).map(key => (
+                              // eslint-disable-next-line @next/next/no-img-element
                               <img key={key} src={getSignedUrl(key)} alt=""
                                 className="w-12 h-12 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
                                 loading="lazy" />
@@ -793,9 +856,9 @@ export default function PatientDetailPage() {
                               setSendingMessage(false);
                             }}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
-                              <Download className="w-3 h-3" /> Compile
+                              <Download className="w-3 h-3" /> Compile & Send
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&edit=true&patientId=${id}`); }}
+                            <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visit?appointmentId=${visit.id}&mode=${VISIT_MODES.EDIT_COMPLETED_VISIT}&name=${encodeURIComponent(patient?.name || '')}&treatment=${encodeURIComponent(visit.treatment || '')}&patientId=${id}`); }}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95 cursor-pointer">
                               <Edit3 className="w-3 h-3" /> Edit
                             </button>
@@ -948,6 +1011,7 @@ export default function PatientDetailPage() {
                         onClick={() => setExpandedImage(key)}
                         className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md transition-all duration-200 shrink-0 focus:outline-none focus:ring-2 focus:ring-violet-400"
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={getSignedUrl(key)}
                           alt=""
@@ -1042,7 +1106,7 @@ export default function PatientDetailPage() {
                   {/* Right drawer */}
                   {expandedTooth && selectedEntries && (
                     <>
-                      <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={() => setExpandedTooth(null)} />
+                      <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm cursor-pointer" onClick={() => setExpandedTooth(null)} />
                       <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto">
                         <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-5 py-4 flex items-center justify-between z-10">
                           <div className="flex items-center gap-2.5">
@@ -1103,7 +1167,7 @@ export default function PatientDetailPage() {
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
                     <Star className="w-4 h-4 text-blue-500" />
-                    Doctor's Patient Rating
+                    Doctor&rsquo;s Patient Rating
                   </h3>
                   <div className="space-y-2">
                     {RATING_CATEGORIES.map(cat => (
@@ -1267,7 +1331,7 @@ export default function PatientDetailPage() {
         {/* Link Family Member Modal */}
         {showLinkFamily && (
           <>
-            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm" onClick={() => { setShowLinkFamily(false); setLinkSearch(''); setLinkSearchResults([]); }} />
+            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm cursor-pointer" onClick={() => { setShowLinkFamily(false); setLinkSearch(''); setLinkSearchResults([]); }} />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
                 <div className="flex items-center justify-between px-4 sm:px-5 pt-4 pb-3 border-b border-gray-100 dark:border-gray-800">
@@ -1356,7 +1420,7 @@ export default function PatientDetailPage() {
         {/* Send Message Modal */}
         {showMessageModal && (
           <>
-            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm" onClick={() => setShowMessageModal(false)} />
+            <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 backdrop-blur-sm cursor-pointer" onClick={() => setShowMessageModal(false)} />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
               <div className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl border border-gray-100 dark:border-gray-800 shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in mx-auto">
                 <div className="flex items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b border-gray-100 dark:border-gray-800">
@@ -1452,7 +1516,7 @@ export default function PatientDetailPage() {
         {/* Expanded Image Lightbox */}
         {expandedImage && (
           <>
-            <div className="fixed inset-0 bg-black/70 dark:bg-black/80 z-50 backdrop-blur-md" onClick={() => setExpandedImage(null)} />
+            <div className="fixed inset-0 bg-black/70 dark:bg-black/80 z-50 backdrop-blur-md cursor-pointer" onClick={() => setExpandedImage(null)} />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
               <div className="relative max-w-3xl w-full max-h-[90vh] flex items-center justify-center animate-scale-in">
                 <button
@@ -1461,6 +1525,7 @@ export default function PatientDetailPage() {
                 >
                   <X className="w-4 h-4" />
                 </button>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={getSignedUrl(expandedImage)}
                   alt=""

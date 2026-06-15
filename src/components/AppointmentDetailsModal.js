@@ -45,7 +45,7 @@ export default function AppointmentDetailsModal({ appointment, onClose, onQuickC
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 animate-scale-in overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-5 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800 flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -55,7 +55,7 @@ export default function AppointmentDetailsModal({ appointment, onClose, onQuickC
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">{appointment.patient_name || 'Patient'}</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {appointment.time?.slice(0, 5)} · {appointment.treatment || 'Visit'}
+                {appointment.time ? appointment.time.slice(0, 5) : 'Walk-in'} · {appointment.treatment || 'Visit'}
               </p>
             </div>
           </div>
@@ -83,7 +83,7 @@ export default function AppointmentDetailsModal({ appointment, onClose, onQuickC
           {appointment.status === 'confirmed' && (
             <>
               <button
-                onClick={() => { router.push(`/dashboard/visit?appointmentId=${appointment.id}`); }}
+                onClick={() => { router.push(`/dashboard/visit?appointmentId=${appointment.id}&mode=completeAppointment`); }}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-all active:scale-[0.98]"
               >
                 <ExternalLink className="w-4 h-4" />

@@ -287,7 +287,7 @@ export default function PerToothDiagnosisPanel({
   onSave,
   onClose,
 }) {
-  const selectedDiagnoses = currentEntry?.diagnoses || [];
+  const selectedDiagnoses = useMemo(() => currentEntry?.diagnoses || [], [currentEntry?.diagnoses]);
   const selectedSurface = currentEntry?.surface || '';
   const selectedTreatment = currentEntry?.treatment || '';
   const selectedSeverity = currentEntry?.severity || '';
@@ -298,12 +298,11 @@ export default function PerToothDiagnosisPanel({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [diagnosisInput, setDiagnosisInput] = useState('');
   const [showDiagnosisSuggestions, setShowDiagnosisSuggestions] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const diagnosisInputRef = useRef(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
     function handler(e) { setIsMobile(e.matches); }
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);

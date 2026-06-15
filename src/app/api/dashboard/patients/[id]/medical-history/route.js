@@ -76,7 +76,7 @@ export async function PATCH(req, { params }) {
     setClauses.push('updated_at = NOW()');
     queryParams.push(id);
 
-    const rows = await sql.query(
+    const rows = await sql.unsafe(
       `UPDATE patients SET ${setClauses.join(', ')} WHERE id = $${p} RETURNING id, allergies, chronic_conditions, blood_group, bp, weight, medications, habits, address, occupation, dental_history, family_history`,
       queryParams
     );

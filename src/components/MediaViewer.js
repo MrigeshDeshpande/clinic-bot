@@ -50,6 +50,7 @@ export default function MediaViewer({ mediaKeys, getSignedUrl }) {
                 onClick={(e) => { e.stopPropagation(); console.log('[MEDIA_VIEWER] Click photo, index:', mediaKeys.indexOf(key)); setOpenIndex(mediaKeys.indexOf(key)); }}
                 className="aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 hover:border-blue-300 hover:shadow-md transition-all group relative cursor-pointer"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={getSignedUrl(key)}
                   alt={getMediaLabel(key)}
@@ -91,10 +92,11 @@ export default function MediaViewer({ mediaKeys, getSignedUrl }) {
       {openIndex !== null && mediaKeys[openIndex] && getMediaType(mediaKeys[openIndex]) === 'photo' && (
         <div className="relative mt-2">
           <div className="relative inline-block max-w-full">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={getSignedUrl(mediaKeys[openIndex])}
               alt={getMediaLabel(mediaKeys[openIndex])}
-              className="max-w-full max-h-[80vh] object-contain rounded-xl border border-gray-200 shadow-lg"
+              className="max-w-full max-h-[80vh] object-contain rounded-xl border border-gray-200 shadow-lg cursor-pointer"
               onClick={() => setOpenIndex(null)}
             />
             <button type="button"

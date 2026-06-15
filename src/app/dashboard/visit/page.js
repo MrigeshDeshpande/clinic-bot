@@ -9,11 +9,13 @@ import { TREATMENTS, TREATMENT_NAMES, getTreatmentName, getDefaultFee, normalize
 import { COMMON_MEDICINES } from '@/lib/medicines';
 
 import { apiFetch } from '@/lib/clientApi';
-import { fetchCached } from '@/lib/clientFetchCache';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
+import { VISIT_MODES, deriveVisitMode } from '@/lib/visitModes';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
 import CameraViewfinder from '@/components/CameraViewfinder';
 
 import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
+import ToothGridLegend from '@/components/ToothGridLegend';
 import ToothChartCard from '@/components/visit/ToothChartCard';
 import AttachmentsPanel from '@/components/visit/AttachmentsPanel';
 import PrescriptionCard from '@/components/visit/PrescriptionCard';
@@ -56,7 +58,6 @@ const DEFAULT_VISIT_LAYOUT = {
     { id: 'chiefComplaint', label: 'Chief Complaint', enabled: true },
     { id: 'medicalHistory', label: 'Medical / Dental History', enabled: true },
     { id: 'toothChart', label: 'Tooth Chart', enabled: true },
-    { id: 'perToothEditor', label: 'Per-Tooth Editor', enabled: true },
     { id: 'findings', label: 'Findings', enabled: true },
     { id: 'overallDiagnosis', label: 'Overall Diagnosis', enabled: true },
     { id: 'treatmentPlan', label: 'Treatment Plan', enabled: true },
@@ -66,10 +67,58 @@ const DEFAULT_VISIT_LAYOUT = {
     { id: 'visitSummary', label: 'Visit Summary', enabled: true },
   ],
   rightColumn: [
+    { id: 'patientSummary', label: 'Patient Summary', enabled: true },
+    { id: 'toothGridLegend', label: 'Dental Legend', enabled: true },
     { id: 'attachments', label: 'Attachments', enabled: true },
     { id: 'contextSidebar', label: 'Context Sidebar', enabled: true },
   ],
 };
+
+const EMPTY_VISIT_FORM = {
+  patientName: '',
+  patientPhone: '',
+  patientAge: '',
+  patientSex: '',
+  patientLocation: '',
+  treatment: '',
+  consultationFee: '',
+  treatmentCharges: '',
+  medicineCharges: 0,
+  diagnosis: '',
+  medicines: [],
+  followUpDate: '',
+  followUpInstructions: '',
+  notes: '',
+  adviceSelected: [],
+  diagnosisSelected: [],
+  toothDiagnoses: [],
+  chiefComplaint: '',
+  generalExamination: '',
+  extraOralExamination: '',
+};
+
+function cleanOptionalText(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text || undefined;
+}
+
+function normalizeVisitForm(value = {}) {
+  const next = { ...EMPTY_VISIT_FORM, ...value };
+  for (const key of [
+    'patientName', 'patientPhone', 'patientAge', 'patientSex', 'patientLocation',
+    'treatment', 'consultationFee', 'treatmentCharges', 'diagnosis',
+    'followUpDate', 'followUpInstructions', 'notes',
+    'chiefComplaint', 'generalExamination', 'extraOralExamination',
+  ]) {
+    next[key] = typeof next[key] === 'string' ? next[key] : '';
+  }
+  next.medicineCharges = next.medicineCharges ?? 0;
+  next.medicines = Array.isArray(next.medicines) ? next.medicines : [];
+  next.adviceSelected = Array.isArray(next.adviceSelected) ? next.adviceSelected : [];
+  next.diagnosisSelected = Array.isArray(next.diagnosisSelected) ? next.diagnosisSelected : [];
+  next.toothDiagnoses = Array.isArray(next.toothDiagnoses) ? next.toothDiagnoses : [];
+  return next;
+}
 
 const FREQUENCY_OPTIONS = ['Daily one time', 'Twice a day', 'Thrice a day'];
 const DURATION_OPTIONS = [3, 5, 7, 10, 14, 21, 30];
@@ -119,40 +168,39 @@ export default function VisitPage() {
   );
 }
 
+function toothQuadrant(num) {
+  const q = Math.floor(num / 10);
+  if (q === 1) return 'UR';
+  if (q === 2) return 'UL';
+  if (q === 3) return 'LL';
+  if (q === 4) return 'LR';
+  return '';
+}
+
 function VisitPageInner() {
   const { showToast } = useContext(ToastContext);
   const { setSidebarCollapsed } = useContext(SidebarContext);
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const appointmentId = searchParams.get('appointmentId');
+  const [appointmentId, setAppointmentId] = useState(searchParams.get('appointmentId'));
   const prefillName = searchParams.get('name') || '';
   const prefillTreatment = searchParams.get('treatment') || '';
-  const isEdit = searchParams.get('edit') === 'true';
   const returnTo = searchParams.get('returnTo') || 'appointments';
 
-  const [form, setForm] = useState({
-    patientName: prefillName,
-    patientPhone: '',
-    patientAge: '',
-    patientSex: '',
-    patientLocation: '',
-    treatment: prefillTreatment,
-    consultationFee: '',
-    treatmentCharges: '',
-    medicineCharges: '',
-    diagnosis: '',
-    medicines: [],
-    followUpDate: '',
-    followUpInstructions: '',
-    notes: '',
-    adviceSelected: [],
-    diagnosisSelected: [],
-    toothDiagnoses: [],
-    chiefComplaint: '',
-    generalExamination: '',
-    extraOralExamination: '',
+  const [visitMode, setVisitMode] = useState(() => {
+    const derived = deriveVisitMode(searchParams, null);
+    console.log('[DEBUG init] searchParams keys:', [...searchParams.keys()], 'mode param:', searchParams.get('mode'), 'derived:', derived);
+    return derived;
   });
+
+  const isEdit = visitMode === VISIT_MODES.EDIT_COMPLETED_VISIT;
+
+  const [form, setForm] = useState(() => normalizeVisitForm({
+    ...EMPTY_VISIT_FORM,
+    patientName: prefillName,
+    treatment: prefillTreatment,
+  }));
   const [adviceOptions, setAdviceOptions] = useState([]);
   const [diagnosisOptions, setDiagnosisOptions] = useState([]);
   const [selectedTooth, setSelectedTooth] = useState(null);
@@ -188,12 +236,17 @@ function VisitPageInner() {
     return getDefaultFee(id);
   }, [feeOverrides]);
 
-  // Escape closes preview
+  // Escape closes preview and per-tooth panel
   useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape' && showPreview) { setShowPreview(false); setSidebarCollapsed(false); } }
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        if (showPreview) { setShowPreview(false); setSidebarCollapsed(false); }
+        if (selectedTooth) { setSelectedTooth(null); }
+      }
+    }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showPreview, setSidebarCollapsed]);
+  }, [showPreview, selectedTooth, setSidebarCollapsed]);
 
   // Restore sidebar on unmount
   useEffect(() => () => setSidebarCollapsed(false), [setSidebarCollapsed]);
@@ -228,7 +281,7 @@ function VisitPageInner() {
   }, []);
 
   // Stable callbacks for ToothGrid + PerToothDiagnosisPanel
-  const stableSetSelectedTooth = useCallback(setSelectedTooth, []);
+  const stableSetSelectedTooth = useCallback(setSelectedTooth, [setSelectedTooth]);
   const handleQuickDiagnosis = useCallback((tooth, diag) => {
     setForm(f => {
       const existing = f.toothDiagnoses.filter(t => t.tooth !== tooth);
@@ -336,7 +389,15 @@ function VisitPageInner() {
 
       return changed ? next : prev;
     });
-  }, [form.toothDiagnoses, feeOverrides]);
+  }, [form.toothDiagnoses, feeOverrides, getFee]);
+
+  // Auto-calculate medicine charges from individual rates
+  useEffect(() => {
+    const total = form.medicines.reduce((sum, m) => sum + (Number(m.rate) || 0), 0);
+    if (Number(form.medicineCharges) !== total) {
+      setForm(f => ({ ...f, medicineCharges: total }));
+    }
+  }, [form.medicines, form.medicineCharges]);
 
   function toggleTreatment(name) {
     setTreatmentFees(prev => {
@@ -379,6 +440,17 @@ function VisitPageInner() {
     });
   }
 
+  function handleUpdateTreatmentFee(key, value) {
+    setTreatmentFees(prev => ({
+      ...prev,
+      [key]: { ...prev[key], amount: Number(value) || 0, source: 'manual' }
+    }));
+  }
+
+  function handleUpdateConsultationFee(value) {
+    setConsultationFee(Number(value) || 0);
+  }
+
   function handleAdjustQuantity(key, delta) {
     setTreatmentFees(prev => {
       const item = prev[key];
@@ -402,6 +474,8 @@ function VisitPageInner() {
   const galleryInputRef = useRef(null);
   const formReadyRef = useRef(false);
   const queryRef = useRef('');
+  const explicitMode = useRef(!!searchParams.get('mode'));
+  const modeCorrected = useRef(false);
 
   // Auto-save draft
   const [draftRestored, setDraftRestored] = useState(false);
@@ -483,6 +557,72 @@ function VisitPageInner() {
       .catch(() => {});
   }, []);
 
+  // ── Patient profile helpers (extracted for reuse) ──
+  function loadPatientSideData(patientId) {
+    if (!patientId) return;
+    setLoadingExtra(true);
+    Promise.all([
+      fetchCached(`/api/dashboard/patients/${patientId}/messages?limit=10`)
+        .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
+        .catch(() => {}),
+      fetchCached(`/api/dashboard/patients/${patientId}/family`)
+        .then(fData => { if (fData.family) setPatientFamily(fData.family); })
+        .catch(() => {}),
+    ]).finally(() => setLoadingExtra(false));
+  }
+
+  function applyPatientProfile(p) {
+    setPatientProfile(p);
+    setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: normalizeSex(p.sex), patientLocation: p.location || '' }));
+    if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
+    if (p.allergies !== undefined || p.chronicConditions !== undefined || p.bloodGroup !== undefined || p.bp !== undefined || p.weight !== undefined || p.medications !== undefined) {
+      setMedicalHistory({
+        allergies: p.allergies || '',
+        chronicConditions: p.chronicConditions || '',
+        bloodGroup: p.bloodGroup || '',
+        bp: p.bp || '',
+        weight: p.weight || '',
+        medications: p.medications || '',
+      });
+    }
+    if (p.visits) setPatientVisits(p.visits);
+  }
+
+  async function loadPatientProfile(id) {
+    const pData = await fetchCached(`/api/dashboard/patients/${id}`);
+    if (pData.patient) {
+      applyPatientProfile({ ...pData.patient, visits: pData.visits });
+      loadPatientSideData(pData.patient.id);
+    }
+  }
+
+  // Load patient profile when entering via patientId (e.g. New Visit from patient profile)
+  useEffect(() => {
+    const pid = searchParams.get('patientId');
+    if (!pid || appointmentId) return;
+    setLoadingExtra(true);
+    fetchCached(`/api/dashboard/patients/${pid}`)
+      .then(pData => {
+        if (pData.patient) {
+          applyPatientProfile({ ...pData.patient, visits: pData.visits });
+          const mergedTooth = mergeToothDiagnoses(pData.visits);
+          setForm(f => ({
+            ...f,
+            patientName: pData.patient.name || '',
+            patientPhone: (pData.patient.phone || '').replace(/\D/g, ''),
+            patientAge: pData.patient.age?.toString() || '',
+            patientSex: normalizeSex(pData.patient.sex),
+            patientLocation: pData.patient.location || '',
+            toothDiagnoses: mergedTooth.length > 0 ? mergedTooth : f.toothDiagnoses,
+          }));
+          loadPatientSideData(pData.patient.id);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingExtra(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointmentId]);
+
   // Load existing visit data (auto-fill all fields)
   useEffect(() => {
     if (!appointmentId) return;
@@ -491,15 +631,17 @@ function VisitPageInner() {
         const a = data.appointment || data;
         if (a) {
           setAppointmentMeta(a);
-          setForm({
+          setForm(normalizeVisitForm({
+            ...EMPTY_VISIT_FORM,
             patientName: a.patient_name || '',
             patientPhone: (a.patient_phone || '').replace(/\D/g, ''),
             patientAge: '',
             patientSex: '',
+            patientLocation: a.location || '',
             treatment: a.treatment || '',
             consultationFee: '',
             treatmentCharges: '',
-            medicineCharges: a.medicine_charges?.toString() || '',
+            medicineCharges: a.medicine_charges?.toString() || 0,
             diagnosis: a.diagnosis || '',
             medicines: Array.isArray(a.medicines) ? a.medicines : [],
             followUpDate: a.follow_up_date?.slice(0, 10) || '',
@@ -511,7 +653,10 @@ function VisitPageInner() {
               ...td,
               treatment: resolveTreatmentId(td.treatment) || td.treatment,
             })) : [],
-          });
+            chiefComplaint: a.chief_complaint || '',
+            generalExamination: a.general_examination || '',
+            extraOralExamination: a.extra_oral_examination || '',
+          }));
           const savedTreatments = Array.isArray(a.treatments) && a.treatments.length > 0
             ? a.treatments
             : a.treatment ? [a.treatment] : [];
@@ -534,37 +679,11 @@ function VisitPageInner() {
           if (a.payment_method) setPaymentMethod(a.payment_method);
           if (a.transaction_id) setTransactionId(a.transaction_id);
           if (a.paid_amount) setPaidAmount(a.paid_amount);
-          // Fetch patient demographics + extra data (visits, messages, family)
-          function applyPatientProfile(p) {
-            setPatientProfile(p);
-            setForm(f => ({ ...f, patientAge: p.age?.toString() || '', patientSex: normalizeSex(p.sex), patientLocation: p.location || '' }));
-            if (p.location && !LOCATIONS.includes(p.location)) setShowCustomLocation(true);
-            if (p.allergies !== undefined || p.chronicConditions !== undefined || p.bloodGroup !== undefined || p.bp !== undefined || p.weight !== undefined || p.medications !== undefined) {
-              setMedicalHistory({
-                allergies: p.allergies || '',
-                chronicConditions: p.chronicConditions || '',
-                bloodGroup: p.bloodGroup || '',
-                bp: p.bp || '',
-                weight: p.weight || '',
-                medications: p.medications || '',
-              });
-            }
-            if (p.visits) setPatientVisits(p.visits);
-            if (p.id) {
-              Promise.all([
-                fetchCached(`/api/dashboard/patients/${p.id}/messages?limit=10`)
-                  .then(mData => { if (mData.messages) setPatientMessages(mData.messages); })
-                  .catch(() => {}),
-                fetchCached(`/api/dashboard/patients/${p.id}/family`)
-                  .then(fData => { if (fData.family) setPatientFamily(fData.family); })
-                  .catch(() => {}),
-              ]);
-            }
-            setLoadingExtra(false);
-          }
-          async function loadPatientProfile(id) {
-            const pData = await fetchCached(`/api/dashboard/patients/${id}`);
-            if (pData.patient) applyPatientProfile({ ...pData.patient, visits: pData.visits });
+          // Correct mode when appointment status disagrees with URL-derived mode
+          console.log('[DEBUG stale-correction] explicitMode:', explicitMode.current, 'status:', a.status, 'modeCorrected:', modeCorrected.current, 'current visitMode:', visitMode);
+          if (!explicitMode.current && a.status === 'completed' && !modeCorrected.current) {
+            modeCorrected.current = true;
+            setVisitMode(VISIT_MODES.EDIT_COMPLETED_VISIT);
           }
           if (a.patient_id) {
             loadPatientProfile(a.patient_id);
@@ -575,10 +694,7 @@ function VisitPageInner() {
                 const match = (pData.patients || []).find(p => p.phone === a.patient_phone);
                 if (match) {
                   applyPatientProfile(match);
-                  if (match.id) {
-                    const full = await fetchCached(`/api/dashboard/patients/${match.id}`);
-                    if (full.visits) setPatientVisits(full.visits);
-                  }
+                  loadPatientSideData(match.id);
                 }
               } catch {}
             })();
@@ -586,7 +702,8 @@ function VisitPageInner() {
         }
       })
       .catch(e => console.error('Failed to load appointment for edit:', e));
-  }, [appointmentId, isEdit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointmentId, isEdit, getFee, visitMode]);
 
   // Symptom auto-suggest
   useEffect(() => {
@@ -606,7 +723,7 @@ function VisitPageInner() {
   // Patient search for walk-in
   useEffect(() => {
     const abort = new AbortController();
-    const query = form.patientName.trim();
+    const query = (form.patientName || '').trim();
     queryRef.current = query;
     if (appointmentId || query.length < 2) {
       setSearchResults([]);
@@ -631,7 +748,7 @@ function VisitPageInner() {
   // Auto-highlight first result
   useEffect(() => {
     setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
-  }, [searchResults]);
+  }, [searchResults, searchState]);
 
   // ── Auto-save draft to localStorage ──
   useEffect(() => {
@@ -737,7 +854,7 @@ function VisitPageInner() {
       if (!saved) return;
       const draft = JSON.parse(saved);
       if (draft.appointmentId !== appointmentId) return;
-      setForm(draft.form);
+      setForm(normalizeVisitForm(draft.form));
       const restoredFees = {};
       Object.entries(draft.treatmentFees || {}).forEach(([k, v]) => { restoredFees[k] = normalizeTreatmentFee(v, k); });
       setTreatmentFees(restoredFees);
@@ -778,10 +895,7 @@ function VisitPageInner() {
                 medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
                 adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
                 diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
-                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses.map(td => ({
-                  ...td,
-                  treatment: resolveTreatmentId(td.treatment) || td.treatment,
-                })) : [],
+                toothDiagnoses: mergeToothDiagnoses(data.visits),
               }));
               const savedTreatments = Array.isArray(lastVisit.treatments) && lastVisit.treatments.length > 0
                 ? lastVisit.treatments
@@ -818,7 +932,6 @@ function VisitPageInner() {
       setFormDirty(true);
     }, 500);
     return () => { if (formDirtyTimerRef.current) clearTimeout(formDirtyTimerRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, treatmentFees, consultationFee]);
 
   // Load templates on mount
@@ -853,11 +966,38 @@ function VisitPageInner() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  function parseToothDiagnoses(raw) {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string') {
+      try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; }
+      catch { return []; }
+    }
+    return [];
+  }
+
+  function mergeToothDiagnoses(visits) {
+    if (!visits?.length) return [];
+    const sorted = [...visits].sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
+    const toothMap = {};
+    for (const visit of sorted) {
+      const entries = parseToothDiagnoses(visit.tooth_diagnoses);
+      if (entries.length === 0) continue;
+      for (const entry of entries) {
+        if (entry.tooth == null) continue;
+        if (toothMap[entry.tooth] !== undefined) continue;
+        if (!entry.diagnoses?.length && !entry.treatment && !entry.severity) continue;
+        toothMap[entry.tooth] = { ...entry, treatment: resolveTreatmentId(entry.treatment) || entry.treatment };
+      }
+    }
+    return Object.values(toothMap);
+  }
+
   async function selectPatient(p) {
+    if (!p) return;
     setForm(f => ({
       ...f,
-      patientName: p.name,
-      patientPhone: (p.phone || '').replace(/\D/g, '') || f.patientPhone,
+      patientName: p.name || '',
+      patientPhone: (p.phone || '').replace(/\D/g, '').slice(0, 10) || f.patientPhone,
       patientAge: p.age?.toString() || '',
       patientSex: normalizeSex(p.sex),
       patientLocation: p.location || '',
@@ -902,10 +1042,7 @@ function VisitPageInner() {
                 medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
                 adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
                 diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
-                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses.map(td => ({
-                  ...td,
-                  treatment: resolveTreatmentId(td.treatment) || td.treatment,
-                })) : [],
+                toothDiagnoses: mergeToothDiagnoses(data.visits),
               }));
               const savedTreatments = Array.isArray(lastVisit.treatments) && lastVisit.treatments.length > 0
                 ? lastVisit.treatments
@@ -938,38 +1075,64 @@ function VisitPageInner() {
   async function handleWalkInComplete(patientData) {
     // If patient has an id, they already exist
     if (patientData.id) {
+      setAppointmentId(null);
+      setAppointmentMeta(null);
       await selectPatient(patientData);
       setShowWalkInDrawer(false);
-      return;
+      return true;
     }
-    // Otherwise create new patient inline
+
     setForm(f => ({
       ...f,
       patientName: patientData.name,
-      patientPhone: (patientData.phone || '').replace(/\D/g, ''),
+      patientPhone: stripPhonePrefix(patientData.phone || ''),
       patientAge: patientData.age?.toString() || '',
       patientSex: patientData.sex || '',
       patientLocation: patientData.location || '',
     }));
     if (patientData.location && !LOCATIONS.includes(patientData.location)) setShowCustomLocation(true);
-    // If phone exists, try to find existing patient after creation
-    if (patientData.phone) {
-      try {
-        const searchRes = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(patientData.phone.replace(/\D/g, ''))}`);
-        const searchData = await searchRes.json();
-        const match = (searchData.patients || []).find(p =>
-          p.phone?.replace(/\D/g, '') === patientData.phone.replace(/\D/g, '')
-        );
-        if (match) {
-          await selectPatient(match);
-          setShowWalkInDrawer(false);
-          return;
-        }
-      } catch {}
+
+    // No existing patient: create a real patient record before consultation starts.
+    try {
+      const res = await apiFetch('/api/dashboard/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: patientData.name,
+          phone: patientData.phone || null,
+          age: patientData.age || null,
+          sex: patientData.sex || '',
+          location: patientData.location || '',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.patient) {
+        setPatientProfile(data.patient);
+        setForm(f => ({
+          ...f,
+          patientName: data.patient.name || patientData.name,
+          patientPhone: stripPhonePrefix(data.patient.phone || patientData.phone || ''),
+          patientAge: data.patient.age?.toString() || patientData.age?.toString() || '',
+          patientSex: normalizeSex(data.patient.sex || patientData.sex),
+          patientLocation: data.patient.location || patientData.location || '',
+        }));
+        setAppointmentId(null);
+        setAppointmentMeta(null);
+        setShowWalkInDrawer(false);
+        return true;
+      }
+
+      if (res.status === 409) {
+        showToast(data.error || 'Phone already belongs to another patient', 'error');
+        return false;
+      }
+
+      showToast(data.error || 'Could not register patient yet', 'error');
+      return false;
+    } catch {
+      showToast('Network error — could not register patient', 'error');
+      return false;
     }
-    // No existing patient, setting up for creation on submit
-    setPatientProfile(prev => prev || { name: patientData.name });
-    setShowWalkInDrawer(false);
   }
 
   // ── Treatment Templates ──
@@ -1047,20 +1210,18 @@ function VisitPageInner() {
     if (existing >= 0) {
       setForm(f => ({ ...f, medicines: f.medicines.filter((_, i) => i !== existing) }));
     } else {
-      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '', timing: 'after' }] }));
+      setForm(f => ({ ...f, medicines: [...f.medicines, { name: salt, dosage: '\u2014', frequency: '', duration: '', timing: 'after', rate: medicineSettings?.salts?.[salt]?.price || 0 }] }));
     }
   }
 
   function loadMedicineTemplate(tpl) {
-    setForm(f => {
-      const existingNames = new Set(f.medicines.map(m => m.name));
-      const newMeds = tpl.medicines
-        .filter(m => m.name && !existingNames.has(m.name))
-        .map(m => ({ name: m.name, dosage: m.dosage || '\u2014', frequency: m.frequency || '', duration: m.duration || '', timing: m.timing || 'after' }));
-      if (newMeds.length === 0) { showToast('All medicines already added', 'info'); return f; }
-      showToast(`Loaded "${tpl.name}" (${newMeds.length} medicines)`, 'success');
-      return { ...f, medicines: [...f.medicines, ...newMeds] };
-    });
+    const existingNames = new Set(form.medicines.map(m => m.name));
+    const newMeds = tpl.medicines
+      .filter(m => m.name && !existingNames.has(m.name))
+      .map(m => ({ name: m.name, dosage: m.dosage || '\u2014', frequency: m.frequency || '', duration: m.duration || '', timing: m.timing || 'after', rate: m.rate || 0 }));
+    if (newMeds.length === 0) { showToast('All medicines already added', 'info'); return; }
+    showToast(`Loaded "${tpl.name}" (${newMeds.length} medicines)`, 'success');
+    setForm(f => ({ ...f, medicines: [...f.medicines, ...newMeds] }));
   }
 
   async function saveMedicineTemplate() {
@@ -1083,6 +1244,7 @@ function VisitPageInner() {
           frequency: m.frequency || '',
           duration: m.duration || '',
           timing: m.timing || 'after',
+          rate: m.rate || 0,
         }))
         .filter(m => m.name),
     };
@@ -1169,26 +1331,88 @@ function VisitPageInner() {
     ? medicineList.filter(s => s.toLowerCase().includes(saltSearch.toLowerCase()))
     : medicineList;
 
+  async function uploadMediaFiles(files, targetAppointmentId) {
+    if (!targetAppointmentId || files.length === 0) return { uploaded: 0, failed: files.length };
+
+    setUploadingMedia(true);
+    const uploadedFiles = new Set();
+    const uploadedKeys = [];
+
+    try {
+      for (const file of files) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('appointmentId', targetAppointmentId);
+
+          const mediaRes = await apiFetch('/api/dashboard/media', {
+            method: 'POST',
+            body: formData,
+          });
+          const mediaData = await mediaRes.json();
+
+          if (mediaRes.ok) {
+            uploadedFiles.add(file);
+            if (mediaData.key) uploadedKeys.push(mediaData.key);
+          } else {
+            console.error('[MEDIA] Upload failed:', mediaData);
+            showToast(`Upload failed for ${file.name}: ${mediaData.error || 'Unknown error'}`, 'error', { duration: 7000 });
+          }
+        } catch (mediaErr) {
+          console.error('[MEDIA] Upload network error:', mediaErr);
+          showToast(`Upload failed for ${file.name}`, 'error', { duration: 7000 });
+        }
+      }
+    } finally {
+      if (uploadedFiles.size > 0) {
+        setMediaFiles(prev => prev.filter(file => !uploadedFiles.has(file)));
+      }
+      if (uploadedKeys.length > 0) {
+        setAppointmentMeta(prev => prev
+          ? { ...prev, chit_media: [...(Array.isArray(prev.chit_media) ? prev.chit_media : []), ...uploadedKeys] }
+          : prev);
+      }
+      setUploadingMedia(false);
+    }
+
+    const uploaded = uploadedFiles.size;
+    if (uploaded > 0) {
+      showToast(`${uploaded} attachment${uploaded === 1 ? '' : 's'} uploaded`, 'success');
+    }
+    return { uploaded, failed: files.length - uploaded };
+  }
+
   async function handleMediaUpload(e) {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     console.log('[MEDIA] Files selected:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
-    setUploadingMedia(true);
     try {
       setMediaFiles(prev => [...prev, ...files]);
-      console.log('[MEDIA] Added to local state, total files:', mediaFiles.length + files.length);
+      const targetAppointmentId = appointmentMeta?.id || appointmentId;
+      if (targetAppointmentId) {
+        showToast(`Uploading ${files.length} attachment${files.length === 1 ? '' : 's'}...`, 'info');
+        await uploadMediaFiles(files, targetAppointmentId);
+      } else {
+        showToast(`${files.length} attachment${files.length === 1 ? '' : 's'} queued. Save the visit to upload.`, 'info');
+      }
     } catch (err) {
       console.error('[MEDIA] Error adding files:', err);
       showToast('Failed to add media', 'error');
     } finally {
-      setUploadingMedia(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (galleryInputRef.current) galleryInputRef.current.value = '';
     }
   }
 
-  function handleCameraCapture(file) {
+  async function handleCameraCapture(file) {
     setMediaFiles(prev => [...prev, file]);
-    showToast('Photo captured', 'success');
+    const targetAppointmentId = appointmentMeta?.id || appointmentId;
+    if (targetAppointmentId) {
+      showToast('Uploading captured photo...', 'info');
+      await uploadMediaFiles([file], targetAppointmentId);
+    } else {
+      showToast('Photo queued. Save the visit to upload.', 'success');
+    }
   }
 
   function removeMediaFile(idx) {
@@ -1196,7 +1420,7 @@ function VisitPageInner() {
   }
 
   function addMedicine() {
-    setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '', timing: 'after' }] }));
+    setForm(f => ({ ...f, medicines: [...f.medicines, { name: '', dosage: '', frequency: '', duration: '', timing: 'after', rate: 0 }] }));
   }
   function updateMedicine(idx, field, value) {
     setForm(f => { const meds = [...f.medicines]; meds[idx] = { ...meds[idx], [field]: value }; return { ...f, medicines: meds }; });
@@ -1208,7 +1432,9 @@ function VisitPageInner() {
   function validate() {
     const e = {};
     if (!form.patientName.trim()) e.patientName = 'Patient name is required';
-    if (selectedTreatments.length === 0) e.treatment = 'Please select at least one treatment';
+    if (selectedTreatments.length === 0 && visitMode !== VISIT_MODES.CREATE_WALK_IN) {
+      e.treatment = 'Please select at least one treatment';
+    }
     setErrors(e);
     const valid = Object.keys(e).length === 0;
     if (!valid) showToast('Please fill in all required fields (name + treatment)', 'error');
@@ -1216,7 +1442,7 @@ function VisitPageInner() {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (!validate()) return;
     setSubmitting(true);
     try {
@@ -1232,50 +1458,53 @@ function VisitPageInner() {
 
       const payload = appointmentId
         ? {
+            mode: visitMode,
             appointmentId,
             treatment: primaryTreatment,
             treatments: mappedTreatments,
             treatmentFees,
-            diagnosis: form.diagnosis.trim() || undefined,
-            medicines: form.medicines.filter(m => m.name.trim()),
+            diagnosis: cleanOptionalText(form.diagnosis),
+            medicines: form.medicines.filter(m => cleanOptionalText(m?.name)),
             consultationFee,
             treatmentCharges: computedTreatmentCharges,
             medicineCharges: Number(form.medicineCharges) || 0,
-            notes: form.notes.trim() || undefined,
+            notes: cleanOptionalText(form.notes),
             followUpDate: form.followUpDate || undefined,
-            followUpInstructions: form.followUpInstructions.trim() || undefined,
+            followUpInstructions: cleanOptionalText(form.followUpInstructions),
             advice_selected: form.adviceSelected,
             diagnosis_selected: form.diagnosisSelected,
             tooth_diagnoses: form.toothDiagnoses,
-            status: 'completed',
-            chiefComplaint: form.chiefComplaint.trim() || undefined,
-            generalExamination: form.generalExamination.trim() || undefined,
-            extraOralExamination: form.extraOralExamination.trim() || undefined,
+            status: isEdit ? undefined : 'completed',
+            chiefComplaint: cleanOptionalText(form.chiefComplaint),
+            generalExamination: cleanOptionalText(form.generalExamination),
+            extraOralExamination: cleanOptionalText(form.extraOralExamination),
             ...paymentPayload,
           }
         : {
+            mode: VISIT_MODES.CREATE_WALK_IN,
+            patient_id: patientProfile?.id || undefined,
             patient_name: form.patientName.trim(),
             patient_phone: form.patientPhone ? `+91${form.patientPhone}` : undefined,
             patient_age: walkInAge,
             patient_sex: form.patientSex || undefined,
-            patient_location: form.patientLocation.trim() || undefined,
+            patient_location: cleanOptionalText(form.patientLocation),
             treatment: primaryTreatment,
             treatments: mappedTreatments,
             treatmentFees,
             consultationFee,
             treatmentCharges: computedTreatmentCharges,
             medicineCharges: Number(form.medicineCharges) || 0,
-            diagnosis: form.diagnosis.trim() || undefined,
-            chiefComplaint: form.chiefComplaint.trim() || undefined,
-            generalExamination: form.generalExamination.trim() || undefined,
-            extraOralExamination: form.extraOralExamination.trim() || undefined,
-            medicines: form.medicines.filter(m => m.name.trim()),
+            diagnosis: cleanOptionalText(form.diagnosis),
+            chiefComplaint: cleanOptionalText(form.chiefComplaint),
+            generalExamination: cleanOptionalText(form.generalExamination),
+            extraOralExamination: cleanOptionalText(form.extraOralExamination),
+            medicines: form.medicines.filter(m => cleanOptionalText(m?.name)),
             followUpDate: form.followUpDate || undefined,
-            followUpInstructions: form.followUpInstructions.trim() || undefined,
+            followUpInstructions: cleanOptionalText(form.followUpInstructions),
             advice_selected: form.adviceSelected,
             diagnosis_selected: form.diagnosisSelected,
             tooth_diagnoses: form.toothDiagnoses,
-            notes: form.notes.trim() || undefined,
+            notes: cleanOptionalText(form.notes),
             ...paymentPayload,
           };
 
@@ -1287,6 +1516,9 @@ function VisitPageInner() {
       const data = await res.json();
       if (!res.ok) {
         showToast(data.error || 'Failed to log visit', 'error');
+        if (mediaFiles.length > 0) {
+          showToast('Visit was not saved, so queued attachments were not uploaded', 'info', { duration: 7000 });
+        }
         return;
       }
 
@@ -1321,27 +1553,7 @@ function VisitPageInner() {
 
       const appointmentIdForMedia = data.appointment?.id || appointmentId;
       if (appointmentIdForMedia && mediaFiles.length > 0) {
-        for (const file of mediaFiles) {
-          try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('appointmentId', appointmentIdForMedia);
-            const mediaRes = await fetch('/api/dashboard/media', {
-              method: 'POST',
-              body: formData,
-            });
-            const mediaData = await mediaRes.json();
-            if (mediaRes.ok) {
-              console.log('[MEDIA] Upload success:', mediaData);
-            } else {
-              console.error('[MEDIA] Upload failed:', mediaData);
-              showToast(`Upload failed for ${file.name}: ${mediaData.error}`, 'error');
-            }
-          } catch (mediaErr) {
-            console.error('[MEDIA] Upload network error:', mediaErr);
-            showToast(`Upload failed for ${file.name}`, 'error');
-          }
-        }
+        await uploadMediaFiles(mediaFiles, appointmentIdForMedia);
       }
 
       localStorage.removeItem(DRAFT_KEY);
@@ -1349,6 +1561,27 @@ function VisitPageInner() {
       setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
       setVisitSaved(true);
       setFormDirty(false);
+      const cachedPatientId = data.appointment?.patient_id || patientProfile?.id || appointmentMeta?.patient_id;
+      if (cachedPatientId) invalidateFetchCache(`/api/dashboard/patients/${cachedPatientId}`);
+
+      // Refresh patient profile from server so age/sex/phone display correctly
+      if (!patientProfile?.id && data.appointment?.patient_id) {
+        fetch(`/api/dashboard/patients/${data.appointment.patient_id}`)
+          .then(r => r.json())
+          .then(pData => {
+            if (pData.patient) {
+              setPatientProfile(pData.patient);
+              setForm(f => ({
+                ...f,
+                patientPhone: (pData.patient.phone || '').replace(/\D/g, ''),
+                patientAge: pData.patient.age?.toString() || '',
+                patientSex: pData.patient.sex || '',
+                patientLocation: pData.patient.location || '',
+              }));
+            }
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('[VISIT] Submit error:', err);
       showToast('Network error — could not save visit', 'error');
@@ -1358,7 +1591,7 @@ function VisitPageInner() {
   }
 
   function resetForm() {
-    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: '', diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '', adviceSelected: [], diagnosisSelected: [], toothDiagnoses: [], chiefComplaint: '', generalExamination: '', extraOralExamination: '' });
+    setForm({ patientName: '', patientPhone: '', patientAge: '', patientSex: '', patientLocation: '', treatment: '', consultationFee: '', treatmentCharges: '', medicineCharges: 0, diagnosis: '', medicines: [], followUpDate: '', followUpInstructions: '', notes: '', adviceSelected: [], diagnosisSelected: [], toothDiagnoses: [], chiefComplaint: '', generalExamination: '', extraOralExamination: '' });
     setTreatmentFees({});
     setConsultationFee(CONSULTATION_DEFAULT);
     setPatientProfile(null);
@@ -1882,6 +2115,43 @@ function VisitPageInner() {
       </div>
     ),
 
+    patientSummary: () => {
+      const entries = form.toothDiagnoses || [];
+      const total = entries.filter(e => e.diagnoses?.length > 0).length;
+      const active = entries.filter(e => e.diagnoses?.length > 0 && !e.treatment && e.status !== 'treated' && e.severity !== 'severe').length;
+      const planned = entries.filter(e => e.treatment && e.status !== 'treated').length;
+      const completed = entries.filter(e => e.status === 'treated' || e.outcome === 'successful').length;
+      const urgent = entries.filter(e => e.severity === 'severe').length;
+      return patientProfile && total > 0 ? (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+          <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3 uppercase tracking-wider">Treatment Summary</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2.5 text-center">
+              <span className="text-xl font-bold text-amber-600 dark:text-amber-400">{active}</span>
+              <p className="text-xs text-amber-500 dark:text-amber-400 mt-0.5">Active</p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2.5 text-center">
+              <span className="text-xl font-bold text-blue-600 dark:text-blue-400">{planned}</span>
+              <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">Planned</p>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2.5 text-center">
+              <span className="text-xl font-bold text-green-600 dark:text-green-400">{completed}</span>
+              <p className="text-xs text-green-500 dark:text-green-400 mt-0.5">Done</p>
+            </div>
+            <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-2.5 text-center">
+              <span className="text-xl font-bold text-red-600 dark:text-red-400">{urgent}</span>
+              <p className="text-xs text-red-500 dark:text-red-400 mt-0.5">Urgent</p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">{total} teeth with diagnoses</p>
+        </div>
+      ) : null;
+    },
+
+    toothGridLegend: () => (
+      <ToothGridLegend toothData={form.toothDiagnoses} />
+    ),
+
     attachments: () => (
       <AttachmentsPanel
         mediaProps={mediaProps}
@@ -1897,7 +2167,7 @@ function VisitPageInner() {
         patientVisits={patientVisits}
         medicalHistory={medicalHistory}
         form={form} setForm={setForm}
-        submitting={submitting} isEdit={isEdit}
+        submitting={submitting} visitMode={visitMode}
         visitSaved={visitSaved}
         onCheckout={() => handleSubmit()}
         selectedTreatments={selectedTreatments}
@@ -1905,6 +2175,9 @@ function VisitPageInner() {
         totalFees={totalFees}
         consultationFee={consultationFee}
         medicines={form.medicines}
+        medicineCharges={form.medicineCharges}
+        onUpdateTreatmentFee={handleUpdateTreatmentFee}
+        onUpdateConsultationFee={handleUpdateConsultationFee}
         onEditPatient={() => setShowEditDrawer(true)}
         onToggleTreatment={toggleTreatment}
         onAdjustQuantity={handleAdjustQuantity}
@@ -1978,80 +2251,6 @@ function VisitPageInner() {
           </div>
         </div>
 
-        {/* ── Patient Context Card ── */}
-        {patientProfile && (
-          <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-900 p-4 mb-6 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-lg font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
-                {(patientProfile.name || form.patientName || '?')[0].toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                    {patientProfile.name || form.patientName}
-                  </span>
-                  {(form.patientAge || patientProfile.age) && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                      {form.patientAge || patientProfile.age}{form.patientSex || patientProfile.sex ? '/': ''}{form.patientSex || patientProfile.sex || ''}
-                    </span>
-                  )}
-                  {patientProfile.phone && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">{patientProfile.phone}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-gray-400 dark:text-gray-500">
-                  {patientProfile.location && <span>📍 {patientProfile.location}</span>}
-                  {patientProfile.created_at && (
-                    <span>Patient since {patientProfile.created_at?.slice(0, 10)}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-              <button type="button" onClick={() => setShowEditDrawer(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                <Pencil className="w-3 h-3" /> Edit
-              </button>
-              <button type="button" onClick={() => setShowWalkInDrawer(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
-                <Plus className="w-3 h-3" /> Walk-in
-              </button>
-              <button type="button" onClick={() => {
-                setShowPatientSearch(s => !s);
-                if (!showPatientSearch) setForm(f => ({ ...f, patientName: '' }));
-              }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                <Search className="w-3 h-3" /> {showPatientSearch ? 'Cancel' : 'Change patient'}
-              </button>
-            </div>
-            {showPatientSearch && (
-              <div className="mt-3 relative">
-                <input type="text" value={form.patientName}
-                  onChange={e => setForm(f => ({ ...f, patientName: e.target.value }))}
-                  placeholder="Search patient by name or phone..."
-                  className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400"
-                  autoFocus />
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                {searchResults.length > 0 && form.patientName.trim().length >= 2 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 max-h-[200px] overflow-y-auto">
-                    {searchResults.slice(0, 5).map((p) => (
-                      <button key={p.id} type="button"
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
-                        onClick={() => { selectPatient(p); setShowPatientSearch(false); }}>
-                        <span className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-xs font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
-                          {(p.name || '?')[0].toUpperCase()}
-                        </span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</span>
-                        <span className="text-gray-400 shrink-0 text-xs">{p.phone || ''}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         <form onSubmit={handleSubmit}>
           {/* ── Draft restore banner ── */}
           {draftAvailable && (
@@ -2087,6 +2286,84 @@ function VisitPageInner() {
 
             {/* ── Clinical Pane (Left) — lg:col-span-12 ── */}
             <div className="lg:col-span-12 space-y-6">
+
+              {/* ── Patient Context Card ── */}
+              {patientProfile && (
+                <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-900 p-4 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-lg font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
+                      {(patientProfile.name || form.patientName || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          {patientProfile.name || form.patientName}
+                        </span>
+                        {(form.patientAge || patientProfile.age) && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                            {form.patientAge || patientProfile.age}{form.patientSex || patientProfile.sex ? '/': ''}{form.patientSex || patientProfile.sex || ''}
+                          </span>
+                        )}
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {patientProfile.phone || form.patientPhone || <span className="text-gray-300 dark:text-gray-600 italic">No phone</span>}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-gray-400 dark:text-gray-500">
+                        {patientProfile.location && <span>📍 {patientProfile.location}</span>}
+                        {patientProfile.occupation && <span>💼 {patientProfile.occupation}</span>}
+                        {patientProfile.blood_group && <span>🩸 {patientProfile.blood_group}</span>}
+                        {patientProfile.address && <span>🏠 {patientProfile.address}</span>}
+                        {patientProfile.created_at && (
+                          <span>Patient since {patientProfile.created_at?.slice(0, 10)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                    <button type="button" onClick={() => setShowEditDrawer(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                      <Pencil className="w-3 h-3" /> Edit
+                    </button>
+                    <button type="button" onClick={() => setShowWalkInDrawer(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
+                      <Plus className="w-3 h-3" /> Walk-in
+                    </button>
+                    <button type="button" onClick={() => {
+                      setShowPatientSearch(s => !s);
+                      if (!showPatientSearch) setForm(f => ({ ...f, patientName: '' }));
+                    }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
+                      <Search className="w-3 h-3" /> {showPatientSearch ? 'Cancel' : 'Change patient'}
+                    </button>
+                  </div>
+                  {showPatientSearch && (
+                    <div className="mt-3 relative">
+                      <input type="text" value={form.patientName}
+                        onChange={e => setForm(f => ({ ...f, patientName: e.target.value }))}
+                        placeholder="Search patient by name or phone..."
+                        className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all placeholder-gray-400"
+                        autoFocus />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      {searchResults.length > 0 && form.patientName.trim().length >= 2 && (
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 max-h-[200px] overflow-y-auto">
+                          {searchResults.slice(0, 5).map((p) => (
+                            <button key={p.id} type="button"
+                              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-3"
+                              onClick={() => { setAppointmentId(null); setAppointmentMeta(null); selectPatient(p); setShowPatientSearch(false); }}>
+                              <span className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-xs font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
+                                {(p.name || '?')[0].toUpperCase()}
+                              </span>
+                              <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</span>
+                              <span className="text-gray-400 shrink-0 text-xs">{p.phone || ''}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {layout.leftColumn.filter(s => s.enabled).map(section => (
                 <Fragment key={section.id}>
                   {SECTIONS[section.id]?.()}
@@ -2127,7 +2404,60 @@ function VisitPageInner() {
           <WalkInDrawer onComplete={handleWalkInComplete} onClose={() => setShowWalkInDrawer(false)} />
         )}
         {showEditDrawer && (
-          <EditPatientDrawer patientProfile={patientProfile} onClose={() => setShowEditDrawer(false)} onSaved={(updated) => selectPatient(updated)} />
+          <EditPatientDrawer patientProfile={patientProfile} onClose={() => setShowEditDrawer(false)} showToast={showToast} onSaved={(updated) => {
+            const p = updated?.patient || updated;
+            if (p?.id) {
+              setPatientProfile(p);
+              setForm(f => ({
+                ...f,
+                patientName: p.name || '',
+                patientPhone: stripPhonePrefix(p.phone || ''),
+                patientAge: p.age?.toString() || '',
+                patientSex: normalizeSex(p.sex),
+                patientLocation: p.location || '',
+              }));
+              return;
+            }
+            setPatientProfile(p);
+            setForm(f => ({
+              ...f,
+              patientName: p?.name || '',
+              patientPhone: stripPhonePrefix(p?.phone || ''),
+              patientAge: p?.age?.toString() || '',
+              patientSex: normalizeSex(p?.sex),
+              patientLocation: p?.location || '',
+            }));
+          }} />
+        )}
+
+        {/* ── Per-Tooth Side Panel ── */}
+        {selectedTooth && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={handleToothClose} />
+            <div className="relative w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
+              <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between z-10">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                  Tooth #{selectedTooth} — {toothQuadrant(selectedTooth)}
+                </span>
+                <button type="button" onClick={handleToothClose}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              <div className="p-4">
+                <PerToothDiagnosisPanel
+                  toothNumber={selectedTooth}
+                  currentEntry={selectedToothEntry}
+                  diagnosisOptions={diagnosisOptions}
+                  treatmentsFavorites={treatmentFavorites}
+                  customTreatments={customTreatments}
+                  history={selectedToothHistory}
+                  onSave={handleToothSave}
+                  onClose={handleToothClose}
+                />
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

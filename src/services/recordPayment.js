@@ -40,7 +40,7 @@ export async function recordPayment(db, {
           WHEN net.amount > 0 THEN 'partial' ELSE 'pending'
         END,
         paid_at = CASE WHEN net.amount > 0 THEN COALESCE(a.paid_at, NOW()) ELSE NULL END,
-        payment_method = CASE WHEN ${kind} = 'payment' AND ${method} IS NOT NULL THEN ${method} ELSE a.payment_method END
+        payment_method = CASE WHEN ${kind} = 'payment' AND COALESCE(${method}, '') <> '' THEN ${method} ELSE a.payment_method END
       FROM net
       WHERE a.id = ${appointmentId}
       RETURNING a.id, a.paid_amount, a.payment_status, a.paid_at, a.payment_method

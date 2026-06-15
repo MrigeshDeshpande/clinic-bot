@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Search } from 'lucide-react';
+import { VISIT_MODES } from '@/lib/visitModes';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash', icon: '\u{1F4B5}' },
@@ -21,6 +22,86 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
   const [medicineFee, setMedicineFee] = useState(0);
   const total = treatmentFee + medicineFee;
   const [paid, setPaid] = useState(500);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchState, setSearchState] = useState('idle');
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [method, setMethod] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notes, setNotes] = useState('');
+  const nameInputRef = useRef(null);
+  const queryRef = useRef('');
+
+  // Focus name input on mount
+  useEffect(() => {
+    setTimeout(() => nameInputRef.current?.focus(), 100);
+  }, []);
+
+  // Debounced patient search
+  useEffect(() => {
+    const abort = new AbortController();
+    queryRef.current = name;
+    if (name.length < 2 || selectedPatient) {
+      setSearchResults([]);
+      setSearchState('idle');
+      return;
+    }
+    setSearchResults([]);
+    setSearchState('searching');
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/dashboard/patients/search?q=${encodeURIComponent(name)}`, { signal: abort.signal });
+        const d = await res.json();
+        const results = d.patients || [];
+        if (queryRef.current !== name) return; // stale
+        setSearchResults(results);
+        if (results.length > 0) {
+          setSearchState('success');
+        } else {
+          setSearchState('empty');
+          setTimeout(() => {
+            if (queryRef.current === name) {
+              setSearchResults([]);
+              setSearchState('idle');
+            }
+          }, 2000);
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') { console.error('Walk-in search error:', e); setSearchState('idle'); }
+      }
+    }, 250);
+    return () => { clearTimeout(timer); abort.abort(); };
+  }, [name, selectedPatient]);
+
+  // Auto-highlight first result
+  useEffect(() => {
+    setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
+  }, [searchResults, searchState]);
+
+  // Global Escape handler
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') {
+        if (searchState !== 'idle') {
+          setSearchResults([]);
+          setSearchState('idle');
+        } else {
+          onClose?.();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [searchState, searchResults, onClose]);
+
+  function selectPatient(p) {
+    setSelectedPatient(p);
+    setName(p.name);
+    setPhone((p.phone || '').replace(/\D/g, '').slice(0, 10));
+    setSearchResults([]);
+    setSearchState('idle');
+  }
 
   const outstanding = Math.max(0, total - paid);
 
@@ -38,6 +119,8 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
     setError('');
     try {
       const payload = {
+        mode: VISIT_MODES.CREATE_WALK_IN,
+        patient_id: selectedPatient?.id || undefined,
         patient_name: name.trim(),
         patient_phone: phone ? `+91${phone}` : undefined,
         treatmentCharges: treatmentFee,
@@ -70,7 +153,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
-      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 animate-scale-in overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <div>
@@ -159,7 +242,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
               <input
                 type="tel"
                 value={phone}
-                onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 placeholder="9876543210"
                 className="flex-1 px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-r-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
               />

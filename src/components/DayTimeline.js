@@ -129,6 +129,7 @@ export default function DayTimeline({ selectedDate, onDateSelect, onRefresh, onA
     if (scrollTo > 0) {
       containerRef.current.scrollTop = Math.max(0, scrollTo);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isToday]);
 
   useEffect(() => {

@@ -156,6 +156,7 @@ export default function CameraViewfinder({ onCapture, onClose }) {
           )}
 
           {captured && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={captured.preview}
               alt="Captured"

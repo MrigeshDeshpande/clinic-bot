@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 import { Poppins } from 'next/font/google';
 import styles from './PrescriptionHeader.module.css';
 
@@ -14,7 +15,7 @@ export default function PrescriptionHeader() {
       <div className={styles.left}>
         <div>
           <div className={styles['brand-row']}>
-            <img className={styles.logo} src="/logo1.png" alt="Shri Balaji logo" />
+            <Image className={styles.logo} src="/logo1.png" alt="Shri Balaji logo" width={58} height={58} />
             <div className={styles.brand}>
               <div className={styles.name}>Shri Balaji</div>
             </div>

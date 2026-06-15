@@ -3,6 +3,7 @@ import { Stethoscope, X, Trash2, Lightbulb } from 'lucide-react';
 
 export default function BillingProjectionCard({ billingProjectionProps }) {
   const {
+
     setShowTemplateLoad,
     setShowTemplateInput,
     showTemplateInput,
@@ -267,7 +268,7 @@ export default function BillingProjectionCard({ billingProjectionProps }) {
 
           {/* Medicine Charges */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-600 dark:text-gray-300">Medicine</span>
+            <span className="text-xs text-gray-600 dark:text-gray-300">Medicines ({form.medicines?.filter(m => m.name).length || 0})</span>
             <div className="relative">
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">₹</span>
               <input type="number" min="0" value={form.medicineCharges} onChange={e => setForm(f => ({ ...f, medicineCharges: e.target.value }))}
@@ -353,12 +354,16 @@ export default function BillingProjectionCard({ billingProjectionProps }) {
                 </div>
                 {paymentMethod === 'upi' && (
                   <div className="flex items-center gap-2">
-                    <a href={upiDeepLink(paidAmount || totalFees, transactionId || Date.now().toString(36), `${form.patientName} ${form.diagnosis?.slice(0, 30) || ''}`)}
-                      target="_blank" rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = upiDeepLink(paidAmount || totalFees, transactionId || Date.now().toString(36), `${form.patientName} ${form.diagnosis?.slice(0, 30) || ''}`);
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                      }}
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all">
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                       UPI Link
-                    </a>
+                    </button>
                     <span className="text-xs text-gray-400 dark:text-gray-500">Opens UPI app</span>
                   </div>
                 )}
