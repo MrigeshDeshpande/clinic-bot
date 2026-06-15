@@ -2169,7 +2169,6 @@ function VisitPageInner() {
         form={form} setForm={setForm}
         submitting={submitting} visitMode={visitMode}
         visitSaved={visitSaved}
-        onCheckout={() => handleSubmit()}
         selectedTreatments={selectedTreatments}
         treatmentFees={treatmentFees}
         totalFees={totalFees}
@@ -2182,6 +2181,13 @@ function VisitPageInner() {
         onToggleTreatment={toggleTreatment}
         onAdjustQuantity={handleAdjustQuantity}
         getFee={getFee}
+        // Payment props
+        paymentStatus={paymentStatus} setPaymentStatus={setPaymentStatus}
+        paidAmount={paidAmount} setPaidAmount={setPaidAmount}
+        paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod}
+        transactionId={transactionId} setTransactionId={setTransactionId}
+        sendingPaymentLink={sendingPaymentLink} sendPaymentLink={sendPaymentLink}
+        upiDeepLink={upiDeepLink} PAYMENT_METHODS={PAYMENT_METHODS} withPhonePrefix={withPhonePrefix}
         onMedicalHistorySave={async (payload) => {
           const patientId = patientProfile?.id || appointmentMeta?.patient_id;
           if (!patientId) { showToast('No patient selected', 'error'); return; }
