@@ -367,7 +367,7 @@ export async function supersedeAppointment(logicalId, { date, time, treatment },
             ${diagnosis}, ${JSON.stringify(medicines || [])},
             ${consultation_fee}, ${treatment_charges}, ${medicine_charges},
             ${notes}, ${follow_up_date}, ${follow_up_instructions},
-            ${advice_selected || []}, ${diagnosis_selected || []}, ${JSON.stringify(tooth_diagnoses || [])},
+            ${advice_selected || []}, ${diagnosis_selected || []}, ${tooth_diagnoses || []},
             ${location}, ${payment_status}, ${payment_method}, ${transaction_id},
             ${paid_amount}, ${paid_at}, ${arrival_status}, ${chit_media}, 'confirmed'
           WHERE EXISTS (SELECT 1 FROM updated)

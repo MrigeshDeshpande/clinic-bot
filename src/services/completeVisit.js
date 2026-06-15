@@ -83,7 +83,7 @@ export async function completeVisit(sql, body) {
   }
   if (tooth_diagnoses !== undefined) {
     setClauses.push(`tooth_diagnoses = $${p++}`);
-    params.push(JSON.stringify(tooth_diagnoses));
+    params.push(tooth_diagnoses);
   }
   if (newStatus !== undefined) {
     setClauses.push(`status = $${p++}`);

@@ -1,35 +1,18 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 import { getSql } from '@/db/pool';
 import { uploadToR2, getR2Object, getR2SignedUrl } from '@/lib/r2';
 import { generatePrescription, generateDentalChart } from '@/lib/prescription';
+import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
 
 const A4_W = 595.28;
 const A4_H = 842;
 const IMG_MARGIN = 18;
 
-async function embedImageOnPage(page, buffer, pdfDoc) {
-  const isPng = buffer[0] === 0x89 && buffer[1] === 0x50;
-  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8;
-  let image;
-  if (isPng) {
-    image = await pdfDoc.embedPng(buffer);
-  } else if (isJpeg) {
-    image = await pdfDoc.embedJpg(buffer);
-  } else {
-    throw new Error('Unsupported image format (only PNG/JPEG supported)');
-  }
-  const maxW = A4_W - IMG_MARGIN * 2;
-  const maxH = A4_H - IMG_MARGIN * 2;
-  const scale = Math.min(maxW / image.width, maxH / image.height, 1);
-  const dw = image.width * scale;
-  const dh = image.height * scale;
-  page.drawImage(image, {
-    x: (A4_W - dw) / 2,
-    y: (A4_H - dh) / 2,
-    width: dw,
-    height: dh,
-  });
+function parseToothDiagnoses(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') try { return JSON.parse(raw); } catch { return []; }
+  return [];
 }
 
 /**
@@ -110,7 +93,7 @@ export async function compileVisitDocument(appointmentId) {
     const visit = {
       treatment: a.treatment,
       treatments: Array.isArray(a.treatments) ? a.treatments : [],
-      tooth_diagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [],
+      tooth_diagnoses: parseToothDiagnoses(a.tooth_diagnoses),
       diagnosis: a.diagnosis,
       medicines: Array.isArray(a.medicines) ? a.medicines : [],
       advice_selected: Array.isArray(a.advice_selected) ? a.advice_selected : [],
@@ -143,7 +126,7 @@ export async function compileVisitDocument(appointmentId) {
   try {
     const chartResult = await generateDentalChart({
       patient: { name: a.p_name || a.patient_name, phone: a.patient_phone, age: a.p_age, sex: a.p_sex },
-      visit: { tooth_diagnoses: Array.isArray(a.tooth_diagnoses) ? a.tooth_diagnoses : [] },
+      visit: { tooth_diagnoses: parseToothDiagnoses(a.tooth_diagnoses) },
       appointment: { id: a.id, date: a.date, treatment: a.treatment, treatments: Array.isArray(a.treatments) ? a.treatments : [] },
     });
     if (chartResult?.buffer) chartBuffer = chartResult.buffer;
@@ -176,13 +159,83 @@ export async function compileVisitDocument(appointmentId) {
     }
   }
 
-  // Add one page per photo
-  for (const img of images) {
+  // Add one page per photo with branded overlay
+  const headerH = 36;
+  const footerH = 22;
+  const font = await mergedDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await mergedDoc.embedFont(StandardFonts.HelveticaBold);
+
+  for (let i = 0; i < images.length; i++) {
     try {
       const page = mergedDoc.addPage([A4_W, A4_H]);
-      await embedImageOnPage(page, img.buffer, mergedDoc);
+
+      // Header bar
+      page.drawRectangle({
+        x: 0, y: A4_H - headerH, width: A4_W, height: headerH,
+        color: rgb(0.05, 0.11, 0.16),
+      });
+      page.drawText('Shri Balaji', {
+        x: IMG_MARGIN, y: A4_H - headerH + 10, size: 14, font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+      page.drawText(`Photo ${i + 1} of ${images.length}`, {
+        x: A4_W - IMG_MARGIN - 120, y: A4_H - headerH + 11, size: 10, font,
+        color: rgb(0.69, 0.75, 0.87),
+      });
+
+      // Centered watermark
+      const wmText = 'Shri Balaji';
+      const wmSize = 36;
+      const wmW = fontBold.widthOfTextAtSize(wmText, wmSize);
+      page.drawText(wmText, {
+        x: (A4_W - wmW) / 2,
+        y: A4_H / 2 - 12,
+        size: wmSize,
+        font: fontBold,
+        color: rgb(0.05, 0.11, 0.16),
+        opacity: 0.06,
+        rotate: degrees(-20),
+      });
+
+      // Footer bar
+      page.drawRectangle({
+        x: 0, y: 0, width: A4_W, height: footerH,
+        color: rgb(0.05, 0.11, 0.16),
+      });
+      const phoneDigits = String(CLINIC.phone || '+91 91833 74850')
+        .replace(/[^\d]/g, '').replace(/^91(?=\d{10}$)/, '');
+      const doctorLabel = (CLINIC.doctor?.name || 'Dr. M. Vishnu Vardhan').toUpperCase();
+      page.drawText(`${doctorLabel}  |  +91-${phoneDigits}`, {
+        x: IMG_MARGIN, y: 6, size: 8, font,
+        color: rgb(0.9, 0.93, 0.97),
+      });
+
+      // Embed image (centered between header and footer)
+      const buf = images[i].buffer;
+      const isPng = buf[0] === 0x89 && buf[1] === 0x50;
+      const isJpeg = buf[0] === 0xFF && buf[1] === 0xD8;
+      let image;
+      if (isPng) {
+        image = await mergedDoc.embedPng(buf);
+      } else if (isJpeg) {
+        image = await mergedDoc.embedJpg(buf);
+      } else {
+        throw new Error('Unsupported image format (only PNG/JPEG supported)');
+      }
+      const contentH = A4_H - headerH - footerH;
+      const maxW = A4_W - IMG_MARGIN * 2;
+      const maxH = contentH - IMG_MARGIN * 2;
+      const scale = Math.min(maxW / image.width, maxH / image.height, 1);
+      const dw = image.width * scale;
+      const dh = image.height * scale;
+      page.drawImage(image, {
+        x: (A4_W - dw) / 2,
+        y: footerH + (contentH - dh) / 2,
+        width: dw,
+        height: dh,
+      });
     } catch (imgErr) {
-      logger.warn('COMPILE_IMAGE_EMBED_SKIPPED', { key: img.key, error: imgErr.message });
+      logger.warn('COMPILE_IMAGE_EMBED_SKIPPED', { key: images[i].key, error: imgErr.message });
     }
   }
 
