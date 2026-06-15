@@ -281,7 +281,7 @@ function VisitPageInner() {
   }, []);
 
   // Stable callbacks for ToothGrid + PerToothDiagnosisPanel
-  const stableSetSelectedTooth = useCallback(setSelectedTooth, []);
+  const stableSetSelectedTooth = useCallback(setSelectedTooth, [setSelectedTooth]);
   const handleQuickDiagnosis = useCallback((tooth, diag) => {
     setForm(f => {
       const existing = f.toothDiagnoses.filter(t => t.tooth !== tooth);
@@ -389,7 +389,7 @@ function VisitPageInner() {
 
       return changed ? next : prev;
     });
-  }, [form.toothDiagnoses, feeOverrides]);
+  }, [form.toothDiagnoses, feeOverrides, getFee]);
 
   // Auto-calculate medicine charges from individual rates
   useEffect(() => {
@@ -397,7 +397,7 @@ function VisitPageInner() {
     if (Number(form.medicineCharges) !== total) {
       setForm(f => ({ ...f, medicineCharges: total }));
     }
-  }, [form.medicines]);
+  }, [form.medicines, form.medicineCharges]);
 
   function toggleTreatment(name) {
     setTreatmentFees(prev => {
@@ -620,7 +620,8 @@ function VisitPageInner() {
       })
       .catch(() => {})
       .finally(() => setLoadingExtra(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointmentId]);
 
   // Load existing visit data (auto-fill all fields)
   useEffect(() => {
@@ -701,7 +702,8 @@ function VisitPageInner() {
         }
       })
       .catch(e => console.error('Failed to load appointment for edit:', e));
-  }, [appointmentId, isEdit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointmentId, isEdit, getFee, visitMode]);
 
   // Symptom auto-suggest
   useEffect(() => {
@@ -746,7 +748,7 @@ function VisitPageInner() {
   // Auto-highlight first result
   useEffect(() => {
     setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
-  }, [searchResults]);
+  }, [searchResults, searchState]);
 
   // ── Auto-save draft to localStorage ──
   useEffect(() => {
@@ -930,7 +932,6 @@ function VisitPageInner() {
       setFormDirty(true);
     }, 500);
     return () => { if (formDirtyTimerRef.current) clearTimeout(formDirtyTimerRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, treatmentFees, consultationFee]);
 
   // Load templates on mount
@@ -1214,15 +1215,13 @@ function VisitPageInner() {
   }
 
   function loadMedicineTemplate(tpl) {
-    setForm(f => {
-      const existingNames = new Set(f.medicines.map(m => m.name));
-      const newMeds = tpl.medicines
-        .filter(m => m.name && !existingNames.has(m.name))
-        .map(m => ({ name: m.name, dosage: m.dosage || '\u2014', frequency: m.frequency || '', duration: m.duration || '', timing: m.timing || 'after', rate: m.rate || 0 }));
-      if (newMeds.length === 0) { showToast('All medicines already added', 'info'); return f; }
-      showToast(`Loaded "${tpl.name}" (${newMeds.length} medicines)`, 'success');
-      return { ...f, medicines: [...f.medicines, ...newMeds] };
-    });
+    const existingNames = new Set(form.medicines.map(m => m.name));
+    const newMeds = tpl.medicines
+      .filter(m => m.name && !existingNames.has(m.name))
+      .map(m => ({ name: m.name, dosage: m.dosage || '\u2014', frequency: m.frequency || '', duration: m.duration || '', timing: m.timing || 'after', rate: m.rate || 0 }));
+    if (newMeds.length === 0) { showToast('All medicines already added', 'info'); return; }
+    showToast(`Loaded "${tpl.name}" (${newMeds.length} medicines)`, 'success');
+    setForm(f => ({ ...f, medicines: [...f.medicines, ...newMeds] }));
   }
 
   async function saveMedicineTemplate() {
@@ -1443,7 +1442,7 @@ function VisitPageInner() {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (!validate()) return;
     setSubmitting(true);
     try {

@@ -798,6 +798,7 @@ export default function PatientDetailPage() {
                         {visit.chit_media && visit.chit_media.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             {visit.chit_media.filter(k => k.includes('_photo.')).map(key => (
+                              // eslint-disable-next-line @next/next/no-img-element
                               <img key={key} src={getSignedUrl(key)} alt=""
                                 className="w-12 h-12 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
                                 loading="lazy" />
@@ -1010,6 +1011,7 @@ export default function PatientDetailPage() {
                         onClick={() => setExpandedImage(key)}
                         className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md transition-all duration-200 shrink-0 focus:outline-none focus:ring-2 focus:ring-violet-400"
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={getSignedUrl(key)}
                           alt=""
@@ -1165,7 +1167,7 @@ export default function PatientDetailPage() {
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
                     <Star className="w-4 h-4 text-blue-500" />
-                    Doctor's Patient Rating
+                    Doctor&rsquo;s Patient Rating
                   </h3>
                   <div className="space-y-2">
                     {RATING_CATEGORIES.map(cat => (
@@ -1523,6 +1525,7 @@ export default function PatientDetailPage() {
                 >
                   <X className="w-4 h-4" />
                 </button>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={getSignedUrl(expandedImage)}
                   alt=""

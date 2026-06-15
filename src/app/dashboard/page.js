@@ -150,7 +150,7 @@ function QuickBookForm({ date, time, onClose, onBooked }) {
   // Auto-highlight first result
   useEffect(() => {
     setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
-  }, [searchResults]);
+  }, [searchResults, searchState]);
 
   // Focus submit after patient selection
   useEffect(() => {
@@ -748,6 +748,7 @@ export default function DashboardPage() {
     const params = new URLSearchParams(window.location.search);
     const bookTime = params.get('book');
     if (bookTime) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBookingModal({ open: true, time: bookTime });
       // Clean the URL without full page reload
       const url = new URL(window.location);

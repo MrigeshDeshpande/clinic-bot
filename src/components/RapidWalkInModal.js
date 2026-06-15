@@ -77,7 +77,7 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
   // Auto-highlight first result
   useEffect(() => {
     setHighlightedIndex(searchState === 'success' && searchResults.length > 0 ? 0 : -1);
-  }, [searchResults]);
+  }, [searchResults, searchState]);
 
   // Global Escape handler
   useEffect(() => {

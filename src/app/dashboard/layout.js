@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
@@ -167,7 +168,7 @@ function SidebarContent({ pathname, onNavClick }) {
       <div className={`${collapsed ? 'flex justify-center py-3 border-b border-gray-100 dark:border-gray-800' : 'p-4 md:p-6 border-b border-gray-100 dark:border-gray-800'}`}>
         <Link href="/dashboard" onClick={onNavClick} className={`flex items-center ${collapsed ? '' : 'gap-3'}`}>
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
-            <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-7 h-7 rounded-lg object-contain" />
+            <Image src="/logo1.png" alt="Shri Balaji Dental Clinic" width={28} height={28} className="w-7 h-7 rounded-lg object-contain" />
           </div>
           {!collapsed && (
             <div>
@@ -309,6 +310,7 @@ export default function DashboardLayout({ children }) {
   // Hydrate dark mode from localStorage after first mount (avoids hydration mismatch)
   useEffect(() => {
     const saved = localStorage.getItem('dashboard-dark-mode');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved === 'true') setDarkMode(true);
   }, []);
 
@@ -369,9 +371,9 @@ export default function DashboardLayout({ children }) {
               <Menu className="w-5 h-5" />
             </button>
             <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-md flex items-center justify-center">
-                <img src="/logo1.png" alt="Shri Balaji Dental Clinic" className="w-7 h-7 rounded-md object-contain" />
-              </div>
+            <div className="w-7 h-7 rounded-md flex items-center justify-center">
+              <Image src="/logo1.png" alt="Shri Balaji Dental Clinic" width={28} height={28} className="w-7 h-7 rounded-md object-contain" />
+            </div>
               <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Shri Balaji</span>
             </Link>
             <ThemeToggle compact />

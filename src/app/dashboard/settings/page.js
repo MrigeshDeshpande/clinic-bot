@@ -3,7 +3,7 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ToastContext } from '../layout';
-import { Settings, Stethoscope, FileText, ClipboardCheck, Star, Plus, Trash2, Save, Image, Palette, CheckSquare, Languages, AlertTriangle, Pill, Search, ChevronDown, RotateCcw, GripVertical, Eye, EyeOff, LayoutPanelTop } from 'lucide-react';
+import { Settings, Stethoscope, FileText, ClipboardCheck, Star, Plus, Trash2, Save, ImageIcon, Palette, CheckSquare, Languages, AlertTriangle, Pill, Search, ChevronDown, RotateCcw, GripVertical, Eye, EyeOff, LayoutPanelTop } from 'lucide-react';
 import { CATEGORIES, TREATMENTS, getTreatmentName } from '@/lib/treatments';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -101,6 +101,7 @@ export default function SettingsPage() {
       })
       .catch(() => showToast('Failed to load settings', 'error'))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function saveSettings(key) {
@@ -621,12 +622,12 @@ export default function SettingsPage() {
                   <p className="text-xs text-gray-400 mt-1">Upload a scanned signature image to appear on prescriptions</p>
                   <div className="mt-2 flex items-center gap-4">
                     <label className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                      <Image className="w-4 h-4 text-gray-500" />
+                      <ImageIcon className="w-4 h-4 text-gray-500" />
                       Upload Signature
                       <input type="file" accept="image/*" className="hidden" />
                     </label>
                     <button className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                      <Image className="w-4 h-4 text-gray-500" />
+                      <ImageIcon className="w-4 h-4 text-gray-500" />
                       Upload Stamp
                     </button>
                   </div>

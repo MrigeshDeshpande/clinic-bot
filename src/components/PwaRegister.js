@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
@@ -44,7 +45,7 @@ export default function PwaRegister() {
     <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 z-50 animate-slide-up">
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-4">
         <div className="flex items-start gap-3">
-          <img src="/icon-192.png" alt="" className="w-10 h-10 rounded-xl shrink-0" />
+          <Image src="/icon-192.png" alt="" width={40} height={40} className="w-10 h-10 rounded-xl shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Install App</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Add Shri Balaji Dental Clinic to your home screen for quick access</p>
