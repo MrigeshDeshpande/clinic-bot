@@ -86,13 +86,13 @@ export async function createWalkIn(sql, body) {
       chief_complaint, general_examination, extra_oral_examination
     ) VALUES (
       gen_random_uuid(), 1, ${resolvedPhone}, ${patient_name}, ${resolvedPhone}, ${patientId},
-      ${today}, NULL, ${treatment || 'Walk-in'}, ${JSON.stringify(treatments || [])}, 'completed',
+      ${today}, NULL, ${treatment || 'Walk-in'}, ${treatments || []}, 'completed',
       ${consFee}, ${treatFee}, ${medFee},
-      ${JSON.stringify(treatmentFees || {})},
-      ${diagnosis || ''}, ${JSON.stringify(medicines || [])}, ${notes || ''},
+      ${treatmentFees || {}},
+      ${diagnosis || ''}, ${medicines || []}, ${notes || ''},
       ${followUpDate || null}, ${followUpInstructions || ''},
       ${advice_selected || []}, ${diagnosis_selected || []},
-      ${JSON.stringify(tooth_diagnoses || [])},
+      ${tooth_diagnoses || []},
       'arrived',
       ${pStatus}, ${pMethod}, ${paidAt}, ${paidAmt},
       ${chiefComplaint || ''}, ${generalExamination || ''}, ${extraOralExamination || ''}

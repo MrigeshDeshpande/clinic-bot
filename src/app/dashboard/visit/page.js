@@ -9,12 +9,13 @@ import { TREATMENTS, TREATMENT_NAMES, getTreatmentName, getDefaultFee, normalize
 import { COMMON_MEDICINES } from '@/lib/medicines';
 
 import { apiFetch } from '@/lib/clientApi';
-import { fetchCached } from '@/lib/clientFetchCache';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 import { VISIT_MODES, deriveVisitMode } from '@/lib/visitModes';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
 import CameraViewfinder from '@/components/CameraViewfinder';
 
 import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
+import ToothGridLegend from '@/components/ToothGridLegend';
 import ToothChartCard from '@/components/visit/ToothChartCard';
 import AttachmentsPanel from '@/components/visit/AttachmentsPanel';
 import PrescriptionCard from '@/components/visit/PrescriptionCard';
@@ -57,7 +58,6 @@ const DEFAULT_VISIT_LAYOUT = {
     { id: 'chiefComplaint', label: 'Chief Complaint', enabled: true },
     { id: 'medicalHistory', label: 'Medical / Dental History', enabled: true },
     { id: 'toothChart', label: 'Tooth Chart', enabled: true },
-    { id: 'perToothEditor', label: 'Per-Tooth Editor', enabled: true },
     { id: 'findings', label: 'Findings', enabled: true },
     { id: 'overallDiagnosis', label: 'Overall Diagnosis', enabled: true },
     { id: 'treatmentPlan', label: 'Treatment Plan', enabled: true },
@@ -67,6 +67,8 @@ const DEFAULT_VISIT_LAYOUT = {
     { id: 'visitSummary', label: 'Visit Summary', enabled: true },
   ],
   rightColumn: [
+    { id: 'patientSummary', label: 'Patient Summary', enabled: true },
+    { id: 'toothGridLegend', label: 'Dental Legend', enabled: true },
     { id: 'attachments', label: 'Attachments', enabled: true },
     { id: 'contextSidebar', label: 'Context Sidebar', enabled: true },
   ],
@@ -166,6 +168,15 @@ export default function VisitPage() {
   );
 }
 
+function toothQuadrant(num) {
+  const q = Math.floor(num / 10);
+  if (q === 1) return 'UR';
+  if (q === 2) return 'UL';
+  if (q === 3) return 'LL';
+  if (q === 4) return 'LR';
+  return '';
+}
+
 function VisitPageInner() {
   const { showToast } = useContext(ToastContext);
   const { setSidebarCollapsed } = useContext(SidebarContext);
@@ -225,12 +236,17 @@ function VisitPageInner() {
     return getDefaultFee(id);
   }, [feeOverrides]);
 
-  // Escape closes preview
+  // Escape closes preview and per-tooth panel
   useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape' && showPreview) { setShowPreview(false); setSidebarCollapsed(false); } }
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        if (showPreview) { setShowPreview(false); setSidebarCollapsed(false); }
+        if (selectedTooth) { setSelectedTooth(null); }
+      }
+    }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showPreview, setSidebarCollapsed]);
+  }, [showPreview, selectedTooth, setSidebarCollapsed]);
 
   // Restore sidebar on unmount
   useEffect(() => () => setSidebarCollapsed(false), [setSidebarCollapsed]);
@@ -589,6 +605,7 @@ function VisitPageInner() {
       .then(pData => {
         if (pData.patient) {
           applyPatientProfile({ ...pData.patient, visits: pData.visits });
+          const mergedTooth = mergeToothDiagnoses(pData.visits);
           setForm(f => ({
             ...f,
             patientName: pData.patient.name || '',
@@ -596,6 +613,7 @@ function VisitPageInner() {
             patientAge: pData.patient.age?.toString() || '',
             patientSex: normalizeSex(pData.patient.sex),
             patientLocation: pData.patient.location || '',
+            toothDiagnoses: mergedTooth.length > 0 ? mergedTooth : f.toothDiagnoses,
           }));
           loadPatientSideData(pData.patient.id);
         }
@@ -875,10 +893,7 @@ function VisitPageInner() {
                 medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
                 adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
                 diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
-                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses.map(td => ({
-                  ...td,
-                  treatment: resolveTreatmentId(td.treatment) || td.treatment,
-                })) : [],
+                toothDiagnoses: mergeToothDiagnoses(data.visits),
               }));
               const savedTreatments = Array.isArray(lastVisit.treatments) && lastVisit.treatments.length > 0
                 ? lastVisit.treatments
@@ -950,6 +965,32 @@ function VisitPageInner() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  function parseToothDiagnoses(raw) {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string') {
+      try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; }
+      catch { return []; }
+    }
+    return [];
+  }
+
+  function mergeToothDiagnoses(visits) {
+    if (!visits?.length) return [];
+    const sorted = [...visits].sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
+    const toothMap = {};
+    for (const visit of sorted) {
+      const entries = parseToothDiagnoses(visit.tooth_diagnoses);
+      if (entries.length === 0) continue;
+      for (const entry of entries) {
+        if (entry.tooth == null) continue;
+        if (toothMap[entry.tooth] !== undefined) continue;
+        if (!entry.diagnoses?.length && !entry.treatment && !entry.severity) continue;
+        toothMap[entry.tooth] = { ...entry, treatment: resolveTreatmentId(entry.treatment) || entry.treatment };
+      }
+    }
+    return Object.values(toothMap);
+  }
+
   async function selectPatient(p) {
     if (!p) return;
     setForm(f => ({
@@ -1000,10 +1041,7 @@ function VisitPageInner() {
                 medicines: Array.isArray(lastVisit.medicines) ? lastVisit.medicines : [],
                 adviceSelected: Array.isArray(lastVisit.advice_selected) ? lastVisit.advice_selected : [],
                 diagnosisSelected: Array.isArray(lastVisit.diagnosis_selected) ? lastVisit.diagnosis_selected : [],
-                toothDiagnoses: Array.isArray(lastVisit.tooth_diagnoses) ? lastVisit.tooth_diagnoses.map(td => ({
-                  ...td,
-                  treatment: resolveTreatmentId(td.treatment) || td.treatment,
-                })) : [],
+                toothDiagnoses: mergeToothDiagnoses(data.visits),
               }));
               const savedTreatments = Array.isArray(lastVisit.treatments) && lastVisit.treatments.length > 0
                 ? lastVisit.treatments
@@ -1524,6 +1562,8 @@ function VisitPageInner() {
       setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
       setVisitSaved(true);
       setFormDirty(false);
+      const cachedPatientId = data.appointment?.patient_id || patientProfile?.id || appointmentMeta?.patient_id;
+      if (cachedPatientId) invalidateFetchCache(`/api/dashboard/patients/${cachedPatientId}`);
 
       // Refresh patient profile from server so age/sex/phone display correctly
       if (!patientProfile?.id && data.appointment?.patient_id) {
@@ -2076,6 +2116,43 @@ function VisitPageInner() {
       </div>
     ),
 
+    patientSummary: () => {
+      const entries = form.toothDiagnoses || [];
+      const total = entries.filter(e => e.diagnoses?.length > 0).length;
+      const active = entries.filter(e => e.diagnoses?.length > 0 && !e.treatment && e.status !== 'treated' && e.severity !== 'severe').length;
+      const planned = entries.filter(e => e.treatment && e.status !== 'treated').length;
+      const completed = entries.filter(e => e.status === 'treated' || e.outcome === 'successful').length;
+      const urgent = entries.filter(e => e.severity === 'severe').length;
+      return patientProfile && total > 0 ? (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+          <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3 uppercase tracking-wider">Treatment Summary</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2.5 text-center">
+              <span className="text-xl font-bold text-amber-600 dark:text-amber-400">{active}</span>
+              <p className="text-xs text-amber-500 dark:text-amber-400 mt-0.5">Active</p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2.5 text-center">
+              <span className="text-xl font-bold text-blue-600 dark:text-blue-400">{planned}</span>
+              <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">Planned</p>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2.5 text-center">
+              <span className="text-xl font-bold text-green-600 dark:text-green-400">{completed}</span>
+              <p className="text-xs text-green-500 dark:text-green-400 mt-0.5">Done</p>
+            </div>
+            <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-2.5 text-center">
+              <span className="text-xl font-bold text-red-600 dark:text-red-400">{urgent}</span>
+              <p className="text-xs text-red-500 dark:text-red-400 mt-0.5">Urgent</p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">{total} teeth with diagnoses</p>
+        </div>
+      ) : null;
+    },
+
+    toothGridLegend: () => (
+      <ToothGridLegend toothData={form.toothDiagnoses} />
+    ),
+
     attachments: () => (
       <AttachmentsPanel
         mediaProps={mediaProps}
@@ -2352,6 +2429,36 @@ function VisitPageInner() {
               patientLocation: p?.location || '',
             }));
           }} />
+        )}
+
+        {/* ── Per-Tooth Side Panel ── */}
+        {selectedTooth && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={handleToothClose} />
+            <div className="relative w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
+              <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between z-10">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                  Tooth #{selectedTooth} — {toothQuadrant(selectedTooth)}
+                </span>
+                <button type="button" onClick={handleToothClose}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              <div className="p-4">
+                <PerToothDiagnosisPanel
+                  toothNumber={selectedTooth}
+                  currentEntry={selectedToothEntry}
+                  diagnosisOptions={diagnosisOptions}
+                  treatmentsFavorites={treatmentFavorites}
+                  customTreatments={customTreatments}
+                  history={selectedToothHistory}
+                  onSave={handleToothSave}
+                  onClose={handleToothClose}
+                />
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -16,7 +16,8 @@ function getClient() {
     return postgres(DATABASE_URL, {
       max: 5,
       idle_timeout: 30,
-      connect_timeout: 15,
+      connect_timeout: 30,
+      max_lifetime: 300,
     });
   } catch (e) {
     logger.error('DB_CLIENT_INIT_FAILED', { error: e.message });
@@ -40,6 +41,7 @@ export function getSql() {
   }
 
   sql = rawSql;
+  startKeepalive();
   return sql;
 }
 
@@ -52,6 +54,16 @@ export async function ensureConnection() {
   } catch {
     return false;
   }
+}
+
+// Keepalive ping every 30s to prevent Neon free-tier cold starts
+let keepaliveTimer;
+export function startKeepalive() {
+  if (keepaliveTimer) return;
+  keepaliveTimer = setInterval(() => {
+    const db = getSql();
+    if (db) db`SELECT 1`.catch(() => {});
+  }, 30000);
 }
 
 async function sleep(ms) {

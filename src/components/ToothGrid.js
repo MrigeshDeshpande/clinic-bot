@@ -50,10 +50,24 @@ function toothQuadrant(num) {
   return '';
 }
 
-function toothColor(diagnoses, severity, color) {
-  if (color) return color;
-  if (!diagnoses?.length) return null;
-  return DIAG_COLORS[diagnoses[0]] || FALLBACK_COLOR;
+function toothStatusColor(entry) {
+  if (!entry) return null;
+  const diagnoses = entry.diagnoses || [];
+  const severity = entry.severity || '';
+  const status = entry.status || 'active';
+  const outcome = entry.outcome || '';
+
+  if (diagnoses.includes('Missing')) return null;
+
+  if (status === 'treated' || outcome === 'successful') return '#22c55e';
+
+  if (severity === 'severe') return '#ef4444';
+
+  if (entry.treatment || status === 'wip') return '#3b82f6';
+
+  if (diagnoses.length > 0) return '#f59e0b';
+
+  return null;
 }
 
 function severityOpacity(severity) {
@@ -79,7 +93,7 @@ const ToothButton = memo(function ToothButton({
   const severity = entry?.severity || '';
   const treatment = entry?.treatment || '';
   const status = entry?.status || 'active';
-  const color = toothColor(diagnoses, severity, null);
+  const color = toothStatusColor(entry);
   const isMissing = diagnoses.includes('Missing');
   const path = toothPath(num);
   const strokeColor = color || (isActive ? '#3b82f6' : '#9ca3af');
@@ -249,7 +263,7 @@ export default function ToothGrid({
   const [multiSelect, setMultiSelect] = useState(false);
   const [selectedTeeth, setSelectedTeeth] = useState(new Set());
   const [menuStyle, setMenuStyle] = useState({});
-  const [showAllLegend, setShowAllLegend] = useState(false);
+
   const [undoSnapshot, setUndoSnapshot] = useState(null);
   const menuRef = useRef(null);
   const gridRef = useRef(null);
@@ -368,16 +382,6 @@ export default function ToothGrid({
   function handleDeselectAll() {
     setSelectedTeeth(new Set());
   }
-
-  const allDiagnoses = useMemo(() => {
-    const set = new Set();
-    for (const d of toothData) {
-      for (const diag of (d.diagnoses || [])) {
-        if (diag !== 'Missing') set.add(diag);
-      }
-    }
-    return Array.from(set);
-  }, [toothData]);
 
   if (loading) return <LoadingSkeleton />;
 
@@ -506,52 +510,6 @@ export default function ToothGrid({
           </div>
         </div>
       )}
-
-      {/* Legend */}
-      {allDiagnoses.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 text-sm text-gray-500 dark:text-gray-400 justify-center">
-          {(showAllLegend ? allDiagnoses : allDiagnoses.slice(0, 5)).map(d => (
-            <span key={d} className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: DIAG_COLORS[d] || FALLBACK_COLOR }} />
-              {d}
-            </span>
-          ))}
-          {allDiagnoses.length > 5 && (
-            <button
-              type="button"
-              onClick={() => setShowAllLegend(!showAllLegend)}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
-            >
-              {showAllLegend ? '▲ less' : `+${allDiagnoses.length - 5} more`}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Tooth type legend */}
-      <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-400 dark:text-gray-500 flex-wrap">
-        {[
-          { path: MOLAR_PATH, label: 'Molar' },
-          { path: PREMOLAR_PATH, label: 'Premolar' },
-          { path: CANINE_PATH, label: 'Canine' },
-          { path: INCISOR_PATH, label: 'Incisor' },
-        ].map(({ path, label }) => (
-          <span key={label} className="flex items-center gap-1">
-            <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 inline-block">
-              <path d={path} fill="none" stroke="currentColor" strokeWidth="0.8" />
-            </svg>
-            {label}
-          </span>
-        ))}
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 opacity-50 inline-block" />
-          Treated
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-blue-500 opacity-50 inline-block" />
-          WIP
-        </span>
-      </div>
 
       {/* Context menu */}
       {contextMenu && (

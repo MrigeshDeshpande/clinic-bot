@@ -5,6 +5,7 @@ import { requireCsrf, checkRateLimit, checkBodySize, jsonError, sanitizeResponse
 import { VISIT_MODES } from '@/lib/visitModes';
 import { completeVisit } from '@/services/completeVisit';
 import { createWalkIn } from '@/services/createWalkIn';
+import { invalidateCache } from '@/lib/dataCache';
 
 const VALID_MODES = new Set(Object.values(VISIT_MODES));
 
@@ -56,6 +57,7 @@ export async function POST(req) {
     if (mode === VISIT_MODES.CREATE_WALK_IN) {
       const result = await createWalkIn(sql, body);
       updateMedicineUsage(sql, body.medicines);
+      if (result.appointment?.patient_id) invalidateCache('patient_detail:' + result.appointment.patient_id);
       return NextResponse.json({
         appointment: sanitizeResponse(result.appointment),
         patient_name: result.patient_name,
@@ -70,6 +72,7 @@ export async function POST(req) {
 
     const appointment = await completeVisit(sql, body);
     updateMedicineUsage(sql, body.medicines);
+    if (appointment?.patient_id) invalidateCache('patient_detail:' + appointment.patient_id);
     return NextResponse.json({ appointment: sanitizeResponse(appointment) });
   } catch (error) {
     if (error.status) {
