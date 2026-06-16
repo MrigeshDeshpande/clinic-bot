@@ -129,20 +129,20 @@ export default function FeedbackPage() {
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
               {entries.map((e, i) => (
                                   <div key={e.id || i} className="px-6 py-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/patients?q=${encodeURIComponent(e.patient_name || '')}`)}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border ${ratingBadge(e.rating)}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border shrink-0 ${ratingBadge(e.rating)}`}>
                         {ratingIcon(e.rating)}
-                        {e.rating}
+                        <span className="capitalize">{e.rating}</span>
                       </span>
                       <div className="min-w-0">
-                        <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">{e.patient_name || 'Anonymous'}</p>
-                        {e.comment && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{e.comment}</p>}
+                        <p className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">{e.patient_name || 'Anonymous'}</p>
+                        {e.comment && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-3">{e.comment}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
                       {e.callback && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-medium">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-semibold">
                           <Phone className="w-3 h-3" /> Callback
                         </span>
                       )}
