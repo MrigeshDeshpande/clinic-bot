@@ -73,10 +73,14 @@ export default function WalkInDrawer({ onComplete, onClose }) {
   const isExistingPatient = searchQuery.trim().length >= 2 && searchResults.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm cursor-pointer" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl h-full overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
+    <div className="fixed inset-0 z-50 flex items-end md:items-stretch md:justify-end">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] cursor-pointer animate-in fade-in duration-200" onClick={onClose} />
+      <div className="relative w-full max-h-[92vh] md:max-h-none md:h-full md:max-w-md bg-white dark:bg-gray-900 rounded-t-3xl md:rounded-t-none shadow-2xl overflow-y-auto animate-in slide-in-from-bottom md:slide-in-from-right duration-300 flex flex-col">
+        {/* Mobile handle indicator */}
+        <div className="flex justify-center pt-2.5 pb-1.5 shrink-0 md:hidden">
+          <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-650" />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">New Walk-in</h2>
           <button type="button" onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all">
@@ -84,7 +88,7 @@ export default function WalkInDrawer({ onComplete, onClose }) {
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 pb-10 md:pb-5 flex-1">
           {/* Search existing */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />

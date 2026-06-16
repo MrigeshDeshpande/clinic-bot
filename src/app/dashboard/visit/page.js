@@ -10,7 +10,7 @@ import { COMMON_MEDICINES } from '@/lib/medicines';
 
 import { apiFetch } from '@/lib/clientApi';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
-import { VISIT_MODES, deriveVisitMode } from '@/lib/visitModes';
+import { VISIT_MODES, deriveVisitMode, getVisitModeLabel } from '@/lib/visitModes';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
 import CameraViewfinder from '@/components/CameraViewfinder';
 
@@ -1922,41 +1922,88 @@ function VisitPageInner() {
     ),
 
     medicalHistory: () => patientProfile && (
-      <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6 space-y-2">
+      <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-6 space-y-3">
         {(medicalHistory.allergies || medicalHistory.chronicConditions || medicalHistory.bloodGroup || medicalHistory.bp || medicalHistory.weight || medicalHistory.medications) && (
-          <div>
-            <button type="button" onClick={() => setShowMedicalSummary(!showMedicalSummary)}
-              className="flex items-center gap-2 w-full text-left">
-              {showMedicalSummary
-                ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              }
-              <span className="text-base font-bold leading-6 text-gray-700 dark:text-gray-300 uppercase tracking-wide">Medical History</span>
+          <div className="border border-gray-100 dark:border-gray-800 rounded-xl bg-gray-50/30 dark:bg-gray-900/10 overflow-hidden shadow-sm">
+            <button
+              type="button"
+              onClick={() => setShowMedicalSummary(!showMedicalSummary)}
+              className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base font-bold text-gray-800 dark:text-gray-200">Medical History</span>
+                {medicalHistory.allergies && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-full animate-pulse">Allergies</span>
+                )}
+              </div>
+              {showMedicalSummary ? (
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              )}
             </button>
             {showMedicalSummary && (
-              <div className="mt-2 ml-5 text-base text-gray-700 dark:text-gray-300 space-y-1.5 leading-7">
-                {medicalHistory.allergies && <p><span className="font-medium">Allergies:</span> {medicalHistory.allergies}</p>}
-                {medicalHistory.chronicConditions && <p><span className="font-medium">Conditions:</span> {medicalHistory.chronicConditions}</p>}
-                {medicalHistory.bloodGroup && <p><span className="font-medium">Blood Group:</span> {medicalHistory.bloodGroup}</p>}
-                {medicalHistory.bp && <p><span className="font-medium">BP:</span> {medicalHistory.bp}</p>}
-                {medicalHistory.weight && <p><span className="font-medium">Weight:</span> {medicalHistory.weight}</p>}
-                {medicalHistory.medications && <p><span className="font-medium">Medications:</span> {medicalHistory.medications}</p>}
+              <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-850 pt-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  {medicalHistory.allergies && (
+                    <div className="bg-red-50/50 dark:bg-red-950/10 p-2.5 rounded-lg border border-red-100/50 dark:border-red-900/20">
+                      <span className="block text-[10px] font-bold text-red-500 uppercase tracking-wider mb-0.5">Allergies</span>
+                      <p className="text-red-950 dark:text-red-300 font-medium">{medicalHistory.allergies}</p>
+                    </div>
+                  )}
+                  {medicalHistory.chronicConditions && (
+                    <div className="bg-amber-50/50 dark:bg-amber-950/10 p-2.5 rounded-lg border border-amber-100/50 dark:border-amber-900/20">
+                      <span className="block text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-0.5">Conditions</span>
+                      <p className="text-amber-950 dark:text-amber-300 font-medium">{medicalHistory.chronicConditions}</p>
+                    </div>
+                  )}
+                  {medicalHistory.medications && (
+                    <div className="bg-blue-50/50 dark:bg-blue-950/10 p-2.5 rounded-lg border border-blue-100/50 dark:border-blue-900/20 md:col-span-2">
+                      <span className="block text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">Current Medications</span>
+                      <p className="text-blue-950 dark:text-blue-300 font-medium">{medicalHistory.medications}</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-3 gap-2 col-span-1 md:col-span-2">
+                    {medicalHistory.bloodGroup && (
+                      <div className="bg-gray-100/30 dark:bg-gray-800/40 p-2 rounded-lg text-center">
+                        <span className="block text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-0.5">Blood Group</span>
+                        <p className="text-gray-900 dark:text-gray-100 font-bold">{medicalHistory.bloodGroup}</p>
+                      </div>
+                    )}
+                    {medicalHistory.bp && (
+                      <div className="bg-gray-100/30 dark:bg-gray-800/40 p-2 rounded-lg text-center">
+                        <span className="block text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-0.5">BP</span>
+                        <p className="text-gray-900 dark:text-gray-100 font-bold">{medicalHistory.bp}</p>
+                      </div>
+                    )}
+                    {medicalHistory.weight && (
+                      <div className="bg-gray-100/30 dark:bg-gray-800/40 p-2 rounded-lg text-center">
+                        <span className="block text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-0.5">Weight</span>
+                        <p className="text-gray-900 dark:text-gray-100 font-bold">{medicalHistory.weight}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
         )}
         {medicalHistory.dentalHistory && (
-          <div>
-            <button type="button" onClick={() => setShowDentalSummary(!showDentalSummary)}
-              className="flex items-center gap-2 w-full text-left">
-              {showDentalSummary
-                ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              }
-              <span className="text-base font-bold leading-6 text-gray-700 dark:text-gray-300 uppercase tracking-wide">Dental History</span>
+          <div className="border border-gray-100 dark:border-gray-800 rounded-xl bg-gray-50/30 dark:bg-gray-900/10 overflow-hidden shadow-sm">
+            <button
+              type="button"
+              onClick={() => setShowDentalSummary(!showDentalSummary)}
+              className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+            >
+              <span className="text-base font-bold text-gray-800 dark:text-gray-200">Dental History</span>
+              {showDentalSummary ? (
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              )}
             </button>
             {showDentalSummary && (
-              <div className="mt-2 ml-5 text-base text-gray-700 dark:text-gray-300 leading-7">
+              <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-850 pt-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                 {medicalHistory.dentalHistory}
               </div>
             )}
@@ -2208,36 +2255,36 @@ function VisitPageInner() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950 dark:to-gray-900">
-      <div className="p-3">
+      <div className="p-3 pb-24 lg:pb-3">
         {/* ── Title Bar ── */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2 md:gap-3">
             {appointmentId && (
-              <button onClick={() => router.push(returnTo === 'queue' ? '/dashboard/queue' : '/dashboard/appointments')} className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <button onClick={() => router.push(returnTo === 'queue' ? '/dashboard/queue' : '/dashboard/appointments')} className="p-1.5 md:p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                 <ArrowLeft className="w-4 h-4 text-gray-500 dark:text-gray-400" />
               </button>
             )}
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50">
-              <Stethoscope className="w-6 h-6 text-white" />
+            <div className="p-2 md:p-3 rounded-xl md:rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 dark:shadow-emerald-900/50 shrink-0">
+              <Stethoscope className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Log Visit</h1>
+            <h1 className="text-xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Log Visit</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 justify-end">
             {formDirty && !visitSaved && (
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700 flex items-center gap-1.5 shadow-sm">
+              <span className="px-2.5 py-1 rounded-full text-[11px] md:text-xs font-semibold bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700 flex items-center gap-1 shadow-sm">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                 Unsaved
               </span>
             )}
             {!formDirty && visitSaved && (
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700 flex items-center gap-1.5 shadow-sm">
+              <span className="px-2.5 py-1 rounded-full text-[11px] md:text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700 flex items-center gap-1 shadow-sm">
                 <CheckCircle2 className="w-3 h-3" />
                 Saved
               </span>
             )}
             <button type="button"
               onClick={() => setShowPreview(s => { const next = !s; setSidebarCollapsed(next); return next; })}
-              className={`px-4 py-2 text-xs font-medium rounded-xl border transition-all active:scale-95 flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 md:px-4 md:py-2 text-[11px] md:text-xs font-medium rounded-xl border transition-all active:scale-95 flex items-center gap-1 ${
                 showPreview
                   ? 'bg-blue-500 text-white border-blue-500 hover:bg-blue-600 shadow-sm'
                   : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400'
@@ -2290,50 +2337,69 @@ function VisitPageInner() {
               {/* ── Patient Context Card ── */}
               {patientProfile && (
                 <div className="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-900 p-4 shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-lg font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
-                      {(patientProfile.name || form.patientName || '?')[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                          {patientProfile.name || form.patientName}
-                        </span>
-                        {(form.patientAge || patientProfile.age) && (
-                          <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                            {form.patientAge || patientProfile.age}{form.patientSex || patientProfile.sex ? '/': ''}{form.patientSex || patientProfile.sex || ''}
-                          </span>
-                        )}
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          {patientProfile.phone || form.patientPhone || <span className="text-gray-300 dark:text-gray-600 italic">No phone</span>}
-                        </span>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    {/* Top Row: Avatar + Main Info */}
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-800/30 flex items-center justify-center text-lg font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
+                        {(patientProfile.name || form.patientName || '?')[0].toUpperCase()}
                       </div>
-                      <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-gray-400 dark:text-gray-500">
-                        {patientProfile.location && <span>📍 {patientProfile.location}</span>}
-                        {patientProfile.occupation && <span>💼 {patientProfile.occupation}</span>}
-                        {patientProfile.blood_group && <span>🩸 {patientProfile.blood_group}</span>}
-                        {patientProfile.address && <span>🏠 {patientProfile.address}</span>}
+                      <div className="min-w-0">
+                        <h2 className="text-lg font-extrabold text-gray-900 dark:text-gray-100 truncate">
+                          {patientProfile.name || form.patientName}
+                        </h2>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+                          {(form.patientAge || patientProfile.age) && (
+                            <span>
+                              {form.patientAge || patientProfile.age} yrs · {form.patientSex || patientProfile.sex || '—'}
+                            </span>
+                          )}
+                          <span>·</span>
+                          <span className="font-mono">
+                            {patientProfile.phone || form.patientPhone || 'No phone'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Details Row (Stacks on mobile, aligns right/left on desktop) */}
+                    <div className="flex-1 sm:ml-auto">
+                      <div className="flex flex-wrap gap-1.5 text-xs text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-800/30 p-2 sm:p-0 rounded-xl border border-gray-100 dark:border-gray-800/50 sm:border-none">
+                        {patientProfile.location && (
+                          <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800/60 rounded-md">📍 {patientProfile.location}</span>
+                        )}
+                        {patientProfile.occupation && (
+                          <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800/60 rounded-md">💼 {patientProfile.occupation}</span>
+                        )}
+                        {patientProfile.blood_group && (
+                          <span className="px-2 py-0.5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-md font-medium">🩸 {patientProfile.blood_group}</span>
+                        )}
+                        {patientProfile.address && (
+                          <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800/60 rounded-md max-w-[200px] truncate" title={patientProfile.address}>🏠 {patientProfile.address}</span>
+                        )}
                         {patientProfile.created_at && (
-                          <span>Patient since {patientProfile.created_at?.slice(0, 10)}</span>
+                          <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800/60 rounded-md text-[10px] text-gray-400 dark:text-gray-500">Since {patientProfile.created_at?.slice(0, 10)}</span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex flex-col sm:flex-row gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                     <button type="button" onClick={() => setShowEditDrawer(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                      <Pencil className="w-3 h-3" /> Edit
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/30 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all active:scale-95 w-full sm:w-auto">
+                      <Pencil className="w-3.5 h-3.5 shrink-0" />
+                      <span>Edit Profile</span>
                     </button>
                     <button type="button" onClick={() => setShowWalkInDrawer(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
-                      <Plus className="w-3 h-3" /> Walk-in
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all active:scale-95 w-full sm:w-auto">
+                      <Plus className="w-3.5 h-3.5 shrink-0" />
+                      <span>New Walk-in</span>
                     </button>
                     <button type="button" onClick={() => {
                       setShowPatientSearch(s => !s);
                       if (!showPatientSearch) setForm(f => ({ ...f, patientName: '' }));
                     }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-                      <Search className="w-3 h-3" /> {showPatientSearch ? 'Cancel' : 'Change patient'}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl border border-violet-100 dark:border-violet-900/30 bg-violet-50/30 dark:bg-violet-900/10 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all active:scale-95 w-full sm:w-auto">
+                      <Search className="w-3.5 h-3.5 shrink-0" />
+                      <span>{showPatientSearch ? 'Cancel Search' : 'Change Patient'}</span>
                     </button>
                   </div>
                   {showPatientSearch && (
@@ -2381,6 +2447,69 @@ function VisitPageInner() {
             </div>
           </div>
         </form>
+
+        {/* Mobile Sticky Bottom Bar */}
+        {patientProfile && (
+          <div className="fixed bottom-0 left-0 right-0 lg:hidden bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-200/80 dark:border-gray-800/80 px-4 py-3 flex items-center justify-between z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] pb-safe-bottom">
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider truncate max-w-[150px]">
+                {patientProfile.name}
+              </span>
+              <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                ₹{totalFees.toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPreview(s => { const next = !s; setSidebarCollapsed(next); return next; })}
+                className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center ${
+                  showPreview
+                    ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
+                    : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:text-blue-500 hover:border-blue-200'
+                }`}
+                title="Preview Prescription"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+              {visitSaved ? (
+                <button
+                  type="button"
+                  onClick={() => handleSubmit()}
+                  className="px-4 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none hover:from-emerald-600 hover:to-emerald-700 transition-all active:scale-[0.98]"
+                >
+                  Checkout
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleSubmit()}
+                  disabled={submitting}
+                  className={`px-4 py-2.5 text-sm font-semibold rounded-xl transition-all active:scale-[0.98] flex items-center gap-1.5 ${
+                    submitting
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-100 dark:shadow-none hover:from-emerald-600 hover:to-emerald-700'
+                  }`}
+                >
+                  {submitting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Saving...
+                    </>
+                  ) : (
+                    <span>{getVisitModeLabel(visitMode)}</span>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Overlays ── */}
         {showPreview && (
