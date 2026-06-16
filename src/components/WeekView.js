@@ -95,7 +95,7 @@ function LoadingSkeleton() {
   );
 }
 
-export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppointmentSelect }) {
+export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppointmentSelect, onBookSlot, onWalkInSlot }) {
   const router = useRouter();
   const [weekStart, setWeekStart] = useState(() => getMonday(parseDateOnly(selectedDate) || new Date()));
   const [appointments, setAppointments] = useState([]);
@@ -133,6 +133,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
 
   const [isMobile, setIsMobile] = useState(false);
   const [activeDayIdx, setActiveDayIdx] = useState(0);
+  const [activeBooking, setActiveBooking] = useState(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -282,9 +283,12 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
     } catch { setToast('Network error'); }
   }
 
-  function handleSlotClick(dayDateStr, time) {
-    onDateSelect?.(dayDateStr);
-    router.push(`/dashboard?date=${dayDateStr}&book=${time}`);
+  function handleSlotClick(dayDateStr, time, e) {
+    if (e && e.clientX && e.clientY) {
+      setActiveBooking({ dayStr: dayDateStr, time, x: e.clientX, y: e.clientY });
+    } else {
+      setActiveBooking({ dayStr: dayDateStr, time, x: typeof window !== 'undefined' ? window.innerWidth / 2 : 200, y: typeof window !== 'undefined' ? window.innerHeight / 2 : 200 });
+    }
   }
 
   function handleAppointmentClick(appt) {
@@ -563,10 +567,18 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
                       return (
                         <button
                           key={`book-${si}`}
-                          onClick={() => handleSlotClick(dayStr, slotTime)}
-                          className="absolute left-0 right-0 z-5 cursor-pointer transition-colors duration-150 group-hover/day:bg-blue-50/20 dark:group-hover/day:bg-blue-900/10"
+                          onClick={(e) => handleSlotClick(dayStr, slotTime, e)}
+                          className="absolute left-0 right-0 z-5 cursor-pointer transition-colors duration-150 group-hover/day:bg-blue-50/20 dark:group-hover/day:bg-blue-900/10 flex items-center justify-center group"
                           style={{ top: si * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                        />
+                        >
+                          <span className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-extrabold transition-all tracking-wider uppercase leading-none shadow-sm ${
+                            isMobile 
+                              ? 'bg-gray-150/90 dark:bg-gray-800/90 text-gray-500 dark:text-gray-400 border border-gray-205 dark:border-gray-700/60 scale-100' 
+                              : 'opacity-0 group-hover:opacity-100 text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/50 border border-teal-200/50 dark:border-teal-900/50'
+                          }`}>
+                            <Plus className="w-3 h-3" /> Book
+                          </span>
+                        </button>
                       );
                     })}
                   </div>
@@ -596,6 +608,142 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
             {toast}
           </div>
         </div>
+      )}
+
+      {/* Popover / Bottom Sheet for slot action */}
+      {activeBooking && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-[9990] bg-black/20 dark:bg-black/60 backdrop-blur-[1px] cursor-pointer"
+            onClick={() => setActiveBooking(null)}
+          />
+
+          {isMobile ? (
+            /* Bottom Sheet for Mobile */
+            <div className="fixed bottom-0 left-0 right-0 z-[9995] bg-white dark:bg-gray-900 rounded-t-2xl border-t border-gray-100 dark:border-gray-800 shadow-2xl animate-slide-up flex flex-col max-h-[80vh] overflow-hidden pb-6">
+              <div className="w-12 h-1 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-3 shrink-0" />
+              <div className="px-5 pb-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+                <h4 className="font-bold text-gray-900 dark:text-gray-100 text-base">Schedule Slot</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {popoverDateFormat(activeBooking.dayStr)} at <span className="font-semibold text-teal-650 dark:text-teal-450">{activeBooking.time}</span>
+                </p>
+              </div>
+
+              <div className="p-4 space-y-2.5 overflow-y-auto">
+                <button
+                  onClick={() => {
+                    const { dayStr, time } = activeBooking;
+                    setActiveBooking(null);
+                    onDateSelect?.(dayStr);
+                    if (onBookSlot) {
+                      onBookSlot(dayStr, time);
+                    } else {
+                      router.push(`/dashboard?date=${dayStr}&book=${time}`);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3.5 p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-left active:scale-[0.98] cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-teal-50 dark:bg-teal-950/30 flex items-center justify-center text-teal-600 dark:text-teal-400 shrink-0 font-bold text-lg">
+                    📅
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-105">New Appointment</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Schedule a standard appointment for a patient</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    const { dayStr, time } = activeBooking;
+                    setActiveBooking(null);
+                    onDateSelect?.(dayStr);
+                    if (onWalkInSlot) {
+                      onWalkInSlot(dayStr, time);
+                    } else {
+                      router.push(`/dashboard?date=${dayStr}`);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3.5 p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-all text-left active:scale-[0.98] cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 font-bold text-lg">
+                    ⚡
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-105">Rapid Walk-In</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Quickly complete a check-in and checkout now</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setActiveBooking(null)}
+                  className="w-full py-3.5 text-center text-sm font-medium text-gray-500 dark:text-gray-405 hover:text-gray-700 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800/50 rounded-xl transition-all active:scale-[0.98] cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Floating Dropdown for Desktop */
+            <div
+              className="fixed z-[9995] w-64 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-2xl p-2 animate-scale-in"
+              style={{
+                top: Math.min(activeBooking.y, typeof window !== 'undefined' ? window.innerHeight - 150 : 200),
+                left: Math.min(activeBooking.x, typeof window !== 'undefined' ? window.innerWidth - 270 : 200),
+              }}
+            >
+              <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800/60 mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Schedule at {activeBooking.time}</p>
+              </div>
+              <button
+                onClick={() => {
+                  const { dayStr, time } = activeBooking;
+                  setActiveBooking(null);
+                  onDateSelect?.(dayStr);
+                  if (onBookSlot) {
+                    onBookSlot(dayStr, time);
+                  } else {
+                    router.push(`/dashboard?date=${dayStr}&book=${time}`);
+                  }
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
+              >
+                <span className="text-base">📅</span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-850 dark:text-gray-100">New Appointment</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  const { dayStr, time } = activeBooking;
+                  setActiveBooking(null);
+                  onDateSelect?.(dayStr);
+                  if (onWalkInSlot) {
+                    onWalkInSlot(dayStr, time);
+                  } else {
+                    router.push(`/dashboard?date=${dayStr}`);
+                  }
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
+              >
+                <span className="text-base">⚡</span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-850 dark:text-gray-100">Rapid Walk-In</p>
+                </div>
+              </button>
+
+              <div className="border-t border-gray-100 dark:border-gray-800/40 my-1" />
+
+              <button
+                onClick={() => setActiveBooking(null)}
+                className="w-full text-center px-3 py-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

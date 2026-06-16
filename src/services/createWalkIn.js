@@ -10,6 +10,7 @@ export async function createWalkIn(sql, body) {
     followUpDate, followUpInstructions, advice_selected, diagnosis_selected,
     tooth_diagnoses, paymentStatus, paymentMethod, paidAmount,
     chiefComplaint, generalExamination, extraOralExamination,
+    date, time,
   } = body;
 
   if (!patient_name) {
@@ -86,7 +87,7 @@ export async function createWalkIn(sql, body) {
       chief_complaint, general_examination, extra_oral_examination
     ) VALUES (
       gen_random_uuid(), 1, ${resolvedPhone}, ${patient_name}, ${resolvedPhone}, ${patientId},
-      ${today}, NULL, ${treatment || 'Walk-in'}, ${treatments || []}, 'completed',
+      ${date || today}, ${time || null}, ${treatment || 'Walk-in'}, ${treatments || []}, 'completed',
       ${consFee}, ${treatFee}, ${medFee},
       ${treatmentFees || {}},
       ${diagnosis || ''}, ${medicines || []}, ${notes || ''},

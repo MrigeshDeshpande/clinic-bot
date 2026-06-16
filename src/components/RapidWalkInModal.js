@@ -15,7 +15,7 @@ const PHONE_PREFIX = '+91';
 function stripPhonePrefix(v) { return v?.replace(/^(\+91|91)/, '') || v || ''; }
 function withPhonePrefix(v) { const s = stripPhonePrefix(v); return s ? `${PHONE_PREFIX}${s}` : ''; }
 
-export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
+export default function RapidWalkInModal({ onClose, onSuccess, showToast, date, time }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [treatmentFee, setTreatmentFee] = useState(500);
@@ -128,6 +128,8 @@ export default function RapidWalkInModal({ onClose, onSuccess, showToast }) {
         paidAmount: paid,
         paymentStatus: getPaymentStatus(),
         notes: notes.trim() || undefined,
+        date: date || undefined,
+        time: time || undefined,
       };
       if (paid > 0) {
         payload.paymentMethod = method;
