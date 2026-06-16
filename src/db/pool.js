@@ -322,18 +322,28 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS follow_up_instructions TEXT DEFAULT '';
     `;
 
-    // Feedback table
+    // Patient Reviews table (doctor reviews of patients per visit)
     await db`
-      CREATE TABLE IF NOT EXISTS feedback (
+      CREATE TABLE IF NOT EXISTS patient_reviews (
         id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        appointment_id  UUID REFERENCES appointments(id),
-        wa_id           VARCHAR(50) NOT NULL,
-        rating          VARCHAR(10) NOT NULL,
-        comment         TEXT DEFAULT '',
-        callback        BOOLEAN NOT NULL DEFAULT FALSE,
-        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        patient_id      UUID NOT NULL REFERENCES patients(id),
+        appointment_id  UUID NOT NULL REFERENCES appointments(id),
+        ratings         JSONB NOT NULL DEFAULT '{}',
+        notes           TEXT DEFAULT '',
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_patient_reviews_patient ON patient_reviews(patient_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_patient_reviews_appointment ON patient_reviews(appointment_id);
+    `;
+
+    // Drop old feedback table (replaced by patient_reviews)
+    await db`DROP TABLE IF EXISTS feedback;`;
 
     // feedback_sent_at on appointments
     await db`
@@ -484,12 +494,6 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_patient_relationships_related ON patient_relationships(related_patient_id);
     `;
 
-    // Callback contacted tracking
-    await db`
-      ALTER TABLE feedback
-        ADD COLUMN IF NOT EXISTS callback_contacted_at TIMESTAMPTZ;
-    `;
-
     // Ensure the valid_state constraint covers ALL states (patient + doctor)
     // Drop first to allow constraint redefinition across deploys
     await db`
@@ -607,6 +611,43 @@ export async function runMigrations() {
         ('google_maps', '{"review_url":""}'),
         ('medicines', '{"salts":{"Amoxicillin":{"category":"antibiotics","enabled":true},"Amoxicillin + Clavulanic Acid":{"category":"antibiotics","enabled":true},"Azithromycin":{"category":"antibiotics","enabled":true},"Cefixime":{"category":"antibiotics","enabled":true},"Ceftriaxone Injection":{"category":"antibiotics","enabled":true},"Cefuroxime":{"category":"antibiotics","enabled":true},"Cephalexin":{"category":"antibiotics","enabled":true},"Ciprofloxacin":{"category":"antibiotics","enabled":true},"Clindamycin":{"category":"antibiotics","enabled":true},"Doxycycline":{"category":"antibiotics","enabled":true},"Erythromycin":{"category":"antibiotics","enabled":true},"Metronidazole":{"category":"antibiotics","enabled":true},"Penicillin V":{"category":"antibiotics","enabled":true},"Tetracycline":{"category":"antibiotics","enabled":true},"Mouthwash - Chlorhexidine":{"category":"antibiotics","enabled":true},"Mouthwash - Povidone Iodine":{"category":"antibiotics","enabled":true},"Aceclofenac":{"category":"painkillers","enabled":true},"Combiflam (Ibuprofen + Paracetamol)":{"category":"painkillers","enabled":true},"Diclofenac":{"category":"painkillers","enabled":true},"Gabapentin":{"category":"painkillers","enabled":true},"Ibuprofen":{"category":"painkillers","enabled":true},"Ketorolac":{"category":"painkillers","enabled":true},"Ketorolac Injection":{"category":"painkillers","enabled":true},"Lornoxicam":{"category":"painkillers","enabled":true},"Mefenamic Acid":{"category":"painkillers","enabled":true},"Naproxen":{"category":"painkillers","enabled":true},"Paracetamol":{"category":"painkillers","enabled":true},"Paracetamol + Diclofenac Combination":{"category":"painkillers","enabled":true},"Pregabalin":{"category":"painkillers","enabled":true},"Betamethasone":{"category":"corticosteroids","enabled":true},"Dexamethasone":{"category":"corticosteroids","enabled":true},"Prednisolone":{"category":"corticosteroids","enabled":true},"Triamcinolone Acetonide":{"category":"corticosteroids","enabled":true},"Triamcinolone Ointment":{"category":"corticosteroids","enabled":true},"Articaine":{"category":"anaesthetics","enabled":true},"Bupivacaine":{"category":"anaesthetics","enabled":true},"Lignocaine":{"category":"anaesthetics","enabled":true},"Lignocaine Gel":{"category":"anaesthetics","enabled":true},"Lignocaine Spray":{"category":"anaesthetics","enabled":true},"Lignocaine with Adrenaline":{"category":"anaesthetics","enabled":true},"Mepivacaine":{"category":"anaesthetics","enabled":true},"Amphotericin B Oral Suspension":{"category":"antifungals","enabled":true},"Clotrimazole Gel":{"category":"antifungals","enabled":true},"Clotrimazole Mouth Paint":{"category":"antifungals","enabled":true},"Fluconazole":{"category":"antifungals","enabled":true},"Itraconazole":{"category":"antifungals","enabled":true},"Miconazole Gel":{"category":"antifungals","enabled":true},"Nystatin Oral Suspension":{"category":"antifungals","enabled":true},"Acyclovir":{"category":"antivirals","enabled":true},"Acyclovir Cream":{"category":"antivirals","enabled":true},"Valacyclovir":{"category":"antivirals","enabled":true},"Codeine Phosphate":{"category":"analgesics","enabled":true},"Tramadol":{"category":"analgesics","enabled":true},"Domperidone":{"category":"gi","enabled":true},"Metoclopramide":{"category":"gi","enabled":true},"Omeprazole":{"category":"gi","enabled":true},"Ondansetron":{"category":"gi","enabled":true},"Pantoprazole":{"category":"gi","enabled":true},"Ranitidine":{"category":"gi","enabled":true},"Calcium + Vitamin D3":{"category":"vitamins","enabled":true},"Iron + Folic Acid":{"category":"vitamins","enabled":true},"Multivitamin Tablet":{"category":"vitamins","enabled":true},"Vitamin B Complex":{"category":"vitamins","enabled":true},"Vitamin C":{"category":"vitamins","enabled":true},"Vitamin D3":{"category":"vitamins","enabled":true},"Zinc":{"category":"vitamins","enabled":true},"Alprazolam":{"category":"sedatives","enabled":true},"Diazepam":{"category":"sedatives","enabled":true},"Ketamine":{"category":"sedatives","enabled":true},"Lorazepam":{"category":"sedatives","enabled":true},"Midazolam":{"category":"sedatives","enabled":true},"Nitrous Oxide":{"category":"sedatives","enabled":true},"Tranexamic Acid":{"category":"hemostatics","enabled":true},"Tranexamic Acid Injection":{"category":"hemostatics","enabled":true},"Benzocaine Gel":{"category":"mouthwashes_topical","enabled":true},"Chlorhexidine Mouthwash":{"category":"mouthwashes_topical","enabled":true},"Choline Salicylate Gel (Bonjela)":{"category":"mouthwashes_topical","enabled":true},"Hydrogen Peroxide Mouthwash":{"category":"mouthwashes_topical","enabled":true},"Metronidazole Gel":{"category":"mouthwashes_topical","enabled":true},"Saline Mouthwash":{"category":"mouthwashes_topical","enabled":true},"Triamcinolone Oral Paste":{"category":"mouthwashes_topical","enabled":true},"Calcium Hydroxide Paste":{"category":"other_dental","enabled":true},"Desensitizing Paste":{"category":"other_dental","enabled":true},"Fluoride Varnish":{"category":"other_dental","enabled":true},"Formocresol":{"category":"other_dental","enabled":true},"MTA (Mineral Trioxide Aggregate)":{"category":"other_dental","enabled":true},"Potassium Nitrate Gel":{"category":"other_dental","enabled":true},"Sensodyne Toothpaste":{"category":"other_dental","enabled":true},"Sodium Fluoride Gel":{"category":"other_dental","enabled":true},"Tetracycline Ointment":{"category":"other_dental","enabled":true},"Zinc Oxide Eugenol Paste":{"category":"other_dental","enabled":true}},"custom":[],"usage":{},"templates":[]}')
       ON CONFLICT (key) DO NOTHING;
+    `;
+
+    // Clean corrupted patient_reviews ratings — only keep known category keys with valid numeric values
+    // jsonb_typeof prevents ::numeric cast failures on non-numeric JSONB values (e.g. strings like "{" or "p")
+    await db`
+      UPDATE patient_reviews
+      SET ratings = (
+        SELECT COALESCE(jsonb_object_agg(key, value), '{}')
+        FROM jsonb_each(ratings)
+        WHERE key IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
+          AND jsonb_typeof(value) = 'number'
+          AND value::text::numeric BETWEEN 1 AND 5
+      )
+      WHERE EXISTS (
+        SELECT 1 FROM jsonb_each(ratings)
+        WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
+           OR jsonb_typeof(value) != 'number'
+           OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
+      )
+    `;
+
+    // Clean corrupted patient_ratings on patients table
+    await db`
+      UPDATE patients
+      SET patient_ratings = (
+        SELECT COALESCE(jsonb_object_agg(key, value), '{}')
+        FROM jsonb_each(patient_ratings)
+        WHERE key IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
+          AND jsonb_typeof(value) = 'number'
+          AND value::text::numeric BETWEEN 1 AND 5
+      )
+      WHERE EXISTS (
+        SELECT 1 FROM jsonb_each(patient_ratings)
+        WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
+           OR jsonb_typeof(value) != 'number'
+           OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
+      )
     `;
 
       logger.info('DB_MIGRATIONS_COMPLETE');

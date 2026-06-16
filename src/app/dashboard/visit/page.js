@@ -11,6 +11,7 @@ import { COMMON_MEDICINES } from '@/lib/medicines';
 
 import { apiFetch } from '@/lib/clientApi';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
+import { RATING_CATEGORIES } from '@/lib/constants';
 import { VISIT_MODES, deriveVisitMode } from '@/lib/visitModes';
 import PrescriptionPreview from '@/components/PrescriptionPreview';
 import CameraViewfinder from '@/components/CameraViewfinder';
@@ -141,13 +142,6 @@ function resolveTreatmentId(value) {
   return treatment?.id || value;
 }
 
-const RATING_CATEGORIES = [
-  { key: 'payment_time', label: 'Payment on Time' },
-  { key: 'timely_appointment', label: 'Timely Appointment' },
-  { key: 'behaviour', label: 'Behaviour' },
-  { key: 'cooperative_treatment', label: 'Cooperative to Treatment' },
-];
-
 function normalizeSex(sex) {
   if (!sex) return '';
   const lower = sex.toLowerCase();
@@ -217,6 +211,7 @@ function VisitPageInner() {
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [sendingReviewLink, setSendingReviewLink] = useState(false);
   const [patientRatings, setPatientRatings] = useState({});
+  const [reviewNotes, setReviewNotes] = useState('');
   const [savingRatings, setSavingRatings] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -318,13 +313,6 @@ function VisitPageInner() {
   // Full context data
   const [appointmentMeta, setAppointmentMeta] = useState(null);
   const [patientProfile, setPatientProfile] = useState(null);
-
-  // Sync patient ratings from patient profile
-  useEffect(() => {
-    if (patientProfile?.patient_ratings) {
-      setPatientRatings(patientProfile.patient_ratings);
-    }
-  }, [patientProfile]);
 
   const [patientVisits, setPatientVisits] = useState([]);
   const [patientMessages, setPatientMessages] = useState([]);
@@ -1285,17 +1273,20 @@ function VisitPageInner() {
   }
 
   async function saveRatings() {
-    const patientId = patientProfile?.id || appointmentMeta?.patient_id;
-    if (!patientId) { showToast('No patient selected — cannot save ratings', 'error'); return; }
+    const patientId = patientProfile?.id || appointmentMeta?.patient_id || result?.patient_id;
+    const appointmentId = result?.appointment_id;
+    if (!patientId || !appointmentId) { showToast('No patient selected — cannot save ratings', 'error'); return; }
     setSavingRatings(true);
     try {
-      const res = await fetch(`/api/dashboard/patients/${patientId}`, {
-        method: 'PATCH',
+      const res = await fetch('/api/dashboard/patient-reviews', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patient_ratings: patientRatings }),
+        body: JSON.stringify({ patient_id: patientId, appointment_id: appointmentId, ratings: patientRatings, notes: reviewNotes }),
       });
-      if (res.ok) showToast('Ratings saved', 'success');
-      else showToast('Failed to save ratings', 'error');
+      if (res.ok) {
+        showToast('Review saved', 'success');
+        invalidateFetchCache('patient-reviews');
+      } else showToast('Failed to save review', 'error');
     } catch {
       showToast('Network error', 'error');
     } finally {
@@ -1565,7 +1556,7 @@ function VisitPageInner() {
 
       localStorage.removeItem(DRAFT_KEY);
       const appointmentIdForResult = data.appointment?.id || appointmentId;
-      setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult });
+      setResult({ patient_name: form.patientName, treatment: primaryTreatment, appointment_id: appointmentIdForResult, patient_id: data.appointment?.patient_id || patientProfile?.id });
       setVisitSaved(true);
       setFormDirty(false);
       const cachedPatientId = data.appointment?.patient_id || patientProfile?.id || appointmentMeta?.patient_id;
@@ -1618,6 +1609,8 @@ function VisitPageInner() {
     setDraftRestored(false);
     setDraftAvailable(false);
     setSaltSearch('');
+    setPatientRatings({});
+    setReviewNotes('');
     setPaymentStatus('pending');
     setPaymentMethod('');
     setTransactionId('');
@@ -1714,11 +1707,11 @@ function VisitPageInner() {
             <p><span className="font-medium text-gray-700 dark:text-gray-300">{result.patient_name}</span> — {result.treatment}</p>
           </div>
 
-          {/* Doctor's Patient Rating */}
-          {(patientProfile?.id || appointmentMeta?.patient_id) && (
+          {/* Doctor's Patient Review */}
+          {(patientProfile?.id || appointmentMeta?.patient_id || result?.patient_id) && (
             <div className="mb-6 text-left bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 text-center">
-                Rate this Patient
+                Patient Review
               </h3>
               <div className="space-y-2.5">
                 {RATING_CATEGORIES.map(cat => (
@@ -1748,14 +1741,23 @@ function VisitPageInner() {
                   </div>
                 ))}
               </div>
+              <div className="mt-3">
+                <textarea
+                  value={reviewNotes}
+                  onChange={e => setReviewNotes(e.target.value)}
+                  placeholder="Doctor's notes about this patient visit..."
+                  rows={3}
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                />
+              </div>
               <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <p className="text-xs text-gray-400 dark:text-gray-500">Rate the patient across these categories</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">Rate the patient and add notes</p>
                 <button
                   onClick={saveRatings}
                   disabled={savingRatings}
                   className="px-3 py-1.5 text-xs font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-all active:scale-95"
                 >
-                  {savingRatings ? 'Saving...' : 'Save Ratings'}
+                  {savingRatings ? 'Saving...' : 'Save Review'}
                 </button>
               </div>
             </div>

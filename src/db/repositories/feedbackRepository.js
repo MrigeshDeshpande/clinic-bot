@@ -1,21 +1,10 @@
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
 
-export async function insertFeedback({ appointmentId, waId, rating, comment = '', callback = false }) {
-  const sql = getSql();
-  if (!sql) return null;
-
-  try {
-    const rows = await sql`
-      INSERT INTO feedback (appointment_id, wa_id, rating, comment, callback)
-      VALUES (${appointmentId}, ${waId}, ${rating}, ${comment}, ${callback})
-      RETURNING *
-    `;
-    return rows[0] || null;
-  } catch (error) {
-    logger.error('FEEDBACK_INSERT_ERROR', { appointmentId, waId, rating, error: error.message });
-    return null;
-  }
+// insertFeedback is a no-op — the feedback table has been replaced by patient_reviews (doctor reviews of patients).
+// Patient satisfaction is now captured via the feedback_request template → Google Reviews.
+export async function insertFeedback() {
+  return null;
 }
 
 export async function fetchCompletedAppointmentsForFeedback() {
@@ -54,68 +43,16 @@ export async function markFeedbackSent(appointmentId) {
   }
 }
 
-export async function markCallbackContacted(feedbackId) {
-  const sql = getSql();
-  if (!sql) return null;
-
-  try {
-    const rows = await sql`
-      UPDATE feedback
-      SET callback_contacted_at = NOW()
-      WHERE id = ${feedbackId}
-        AND callback = TRUE
-        AND callback_contacted_at IS NULL
-      RETURNING id, callback_contacted_at
-    `;
-    return rows[0] || null;
-  } catch (error) {
-    logger.error('MARK_CALLBACK_CONTACTED_ERROR', { feedbackId, error: error.message });
-    return null;
-  }
+// markCallbackContacted is a no-op — old feedback table dropped.
+export async function markCallbackContacted() {
+  return null;
 }
 
+// getFeedbackSummary is a no-op — old feedback table dropped.
 export async function getFeedbackSummary() {
-  const sql = getSql();
-  if (!sql) return null;
-
-  try {
-    const [stats, recent, callbackRows] = await Promise.all([
-      sql`
-        SELECT
-          COUNT(*)::int AS total,
-          ROUND(AVG(rating)::numeric, 1)::float AS avg_rating,
-          COUNT(*) FILTER (WHERE rating >= 4)::int AS positive,
-          COUNT(*) FILTER (WHERE rating <= 2)::int AS negative,
-          COUNT(*) FILTER (WHERE callback = true)::int AS callbacks
-        FROM feedback
-        WHERE created_at >= NOW() - INTERVAL '30 days'
-      `,
-      sql`
-        SELECT f.id, f.rating, f.comment, f.created_at,
-               a.patient_name, a.patient_phone
-        FROM feedback f
-        LEFT JOIN appointments a ON f.appointment_id = a.id
-        ORDER BY f.created_at DESC
-        LIMIT 5
-      `,
-      sql`
-        SELECT f.id, f.rating, f.comment, f.wa_id, f.created_at,
-               a.patient_name, a.patient_phone
-        FROM feedback f
-        LEFT JOIN appointments a ON f.appointment_id = a.id
-        WHERE f.callback = true
-        ORDER BY f.created_at DESC
-        LIMIT 10
-      `,
-    ]);
-
-    return {
-      stats: stats[0] || { total: 0, avg_rating: 0, positive: 0, negative: 0, callbacks: 0 },
-      recent,
-      pendingCallbacks: callbackRows,
-    };
-  } catch (error) {
-    logger.error('FEEDBACK_SUMMARY_ERROR', { error: error.message });
-    return null;
-  }
+  return {
+    stats: { total: 0, avg_rating: 0, positive: 0, negative: 0, callbacks: 0 },
+    recent: [],
+    pendingCallbacks: [],
+  };
 }

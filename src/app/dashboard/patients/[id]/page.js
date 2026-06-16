@@ -12,6 +12,7 @@ import { formatDate as fmtDate } from '@/lib/date';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 import { getTreatmentName } from '@/lib/treatments';
 import { VISIT_MODES } from '@/lib/visitModes';
+import { RATING_CATEGORIES, safeAvg } from '@/lib/constants';
 import { CLINIC } from '@/config/clinic';
 import { ToastContext } from '../../layout';
 
@@ -61,31 +62,6 @@ function getSignedUrl(key) {
   return `/api/dashboard/media/signed?key=${encodeURIComponent(key)}`;
 }
 
-function ratingEmoji(rating) {
-  if (rating === 'great') return { emoji: '😊', label: 'Great', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30' };
-  if (rating === 'okay') return { emoji: '🙂', label: 'Okay', color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30' };
-  if (rating === 'poor') return { emoji: '😞', label: 'Poor', color: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30' };
-  return { emoji: '—', label: rating, color: 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800' };
-}
-
-function ratingIcon(rating) {
-  switch (rating) {
-    case 'great': return '😊';
-    case 'okay': return '🙂';
-    case 'poor': return '😞';
-    default: return '—';
-  }
-}
-
-function ratingBadge(rating) {
-  switch (rating) {
-    case 'great': return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
-    case 'okay': return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
-    case 'poor': return 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
-    default: return 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700';
-  }
-}
-
 const avatarColors = [
   'from-blue-500 to-blue-600',
   'from-emerald-500 to-teal-600',
@@ -108,13 +84,13 @@ export default function PatientDetailPage() {
   const { showToast } = useContext(ToastContext);
   const [patient, setPatient] = useState(null);
   const [visits, setVisits] = useState([]);
-  const [feedback, setFeedback] = useState([]);
+  const [patientReviews, setPatientReviews] = useState([]);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', age: '', sex: '', phone: '', location: '' });
   const [saving, setSaving] = useState(false);
-  const [showFeedback, setShowFeedback] = useState(false);
+  const [showReviews, setShowReviews] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showMedical, setShowMedical] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -132,8 +108,6 @@ export default function PatientDetailPage() {
   const [linkType, setLinkType] = useState('other');
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(null);
-  const [patientRatings, setPatientRatings] = useState({});
-  const [savingRatings, setSavingRatings] = useState(false);
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [sendingReviewLink, setSendingReviewLink] = useState(false);
   const [showMore, setShowMore] = useState(false);
@@ -157,7 +131,6 @@ export default function PatientDetailPage() {
           return;
         }
         setPatient(data.patient);
-        setPatientRatings(data.patient?.patient_ratings || {});
         setVisits(data.visits || []);
         if (data.review_url) setGoogleMapsUrl(data.review_url);
         setEditForm({
@@ -171,10 +144,10 @@ export default function PatientDetailPage() {
 
         // Fetch secondary data in background after showing content
         const secondaryPromises = [];
-        if (data.patient?.wa_id) {
+        if (data.patient?.id) {
           secondaryPromises.push(
-            fetchCached(`/api/dashboard/feedback?limit=20&waId=${encodeURIComponent(data.patient.wa_id)}`, {}, 60_000)
-              .then(fbData => setFeedback(fbData?.entries || []))
+            fetchCached(`/api/dashboard/patient-reviews?patientId=${encodeURIComponent(data.patient.id)}&limit=20`, {}, 60_000)
+              .then(prData => setPatientReviews(prData?.reviews || []))
               .catch(() => {})
           );
         }
@@ -376,33 +349,6 @@ export default function PatientDetailPage() {
     document.addEventListener('keydown', handle);
     return () => document.removeEventListener('keydown', handle);
   }, [showMore]);
-
-  const RATING_CATEGORIES = [
-    { key: 'payment_time', label: 'Payment on Time' },
-    { key: 'timely_appointment', label: 'Timely Appointment' },
-    { key: 'behaviour', label: 'Behaviour' },
-    { key: 'cooperative_treatment', label: 'Cooperative to Treatment' },
-  ];
-
-  async function saveRatings() {
-    setSavingRatings(true);
-    try {
-      const res = await fetch(`/api/dashboard/patients/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patient_ratings: patientRatings }),
-      });
-      if (res.ok) {
-        showToast('Ratings saved', 'success');
-        invalidateFetchCache(`/api/dashboard/patients/${id}`);
-      } else {
-        showToast('Failed to save ratings', 'error');
-      }
-    } catch {
-      showToast('Network error', 'error');
-    }
-    setSavingRatings(false);
-  }
 
   async function sendGoogleReview() {
     const phone = patient?.phone;
@@ -1148,105 +1094,61 @@ export default function PatientDetailPage() {
               );
             })()}
 
-        {/* Feedback */}
-        {feedback.length > 0 && (
+        {/* Patient Reviews (Doctor's per-visit reviews) */}
+        {patientReviews.length > 0 && (
           <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
-            <button onClick={() => setShowFeedback(v => !v)} className="w-full flex items-center gap-2.5 px-4 md:px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left">
-              <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showFeedback ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-              <Star className="w-4 h-4 text-amber-500" />
-              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Feedback</span>
-              <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-medium">{feedback.length}</span>
+            <button onClick={() => setShowReviews(v => !v)} className="w-full flex items-center gap-2.5 px-4 md:px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left">
+              <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showReviews ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              <Star className="w-4 h-4 text-blue-500" />
+              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Patient Reviews</span>
+              <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-medium">{patientReviews.length}</span>
             </button>
-            {showFeedback && (
-              <div className="px-4 md:px-6 pb-4 md:pb-6 space-y-4">
-                {/* Doctor's Patient Ratings */}
-                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
-                    <Star className="w-4 h-4 text-blue-500" />
-                    Doctor&rsquo;s Patient Rating
-                  </h3>
-                  <div className="space-y-2">
-                    {RATING_CATEGORIES.map(cat => (
-                      <div key={cat.key} className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 min-w-[100px]">{cat.label}</span>
-                        <div className="flex items-center gap-0.5">
-                          {[1, 2, 3, 4, 5].map(star => (
-                            <button
-                              key={star}
-                              type="button"
-                              onClick={() => setPatientRatings(prev => ({ ...prev, [cat.key]: (prev[cat.key] || 0) === star ? 0 : star }))}
-                              className={`w-5 h-5 flex items-center justify-center rounded transition-all hover:scale-110 active:scale-90 ${
-                                (patientRatings[cat.key] || 0) >= star
-                                  ? 'text-amber-400'
-                                  : 'text-gray-300 dark:text-gray-600'
-                              }`}
-                            >
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
-                            </button>
-                          ))}
-                          <span className="ml-1.5 text-xs font-medium text-gray-400 dark:text-gray-500 min-w-[20px]">
-                            {patientRatings[cat.key] || 0}/5
-                          </span>
+            {showReviews && (
+              <div className="px-4 md:px-6 pb-4 md:pb-6 space-y-3">
+                {patientReviews.map((r, i) => {
+                  const avg = safeAvg(r.ratings) > 0 ? safeAvg(r.ratings).toFixed(1) : '-';
+                  return (
+                    <div key={r.id || i} className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>{r.appointment_date ? new Date(r.appointment_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</span>
+                          {r.treatment && <><span>•</span><span className="font-medium text-gray-700 dark:text-gray-300">{r.treatment}</span></>}
                         </div>
+                        {avg !== '-' && (
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map(i => (
+                                <svg key={i} className={`w-3 h-3 ${i <= Math.round(Number(avg)) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                              ))}
+                            </div>
+                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{avg}</span>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <p className="text-xs text-gray-400 dark:text-gray-500">Rate the patient across categories</p>
-                    <button
-                      onClick={saveRatings}
-                      disabled={savingRatings}
-                      className="px-3 py-1.5 text-xs font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-all active:scale-95"
-                    >
-                      {savingRatings ? 'Saving...' : 'Save'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Patient's Feedback (from WhatsApp) */}
-                <div>
-                  {feedback.filter(f => f.rating).length > 0 ? (
-                    <>
-                      <div className="grid grid-cols-3 gap-2 mb-4">
-                        {['great', 'okay', 'poor'].map(rating => {
-                          const entries = feedback.filter(f => f.rating === rating);
-                          if (entries.length === 0) return null;
-                          const r = ratingEmoji(rating);
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mb-2">
+                        {RATING_CATEGORIES.map(cat => {
+                          const val = r.ratings?.[cat.key] || 0;
                           return (
-                            <div key={rating} className={`rounded-xl p-2.5 text-center ${r.color} border border-current/20`}>
-                              <div className="text-lg mb-0.5">{r.emoji}</div>
-                              <div className="text-sm font-bold">{entries.length}</div>
-                              <div className="text-xs font-medium opacity-70">{r.label}</div>
+                            <div key={cat.key} className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate">{cat.label}</span>
+                              <span className={`text-xs font-medium ${val > 0 ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600'}`}>
+                                {val > 0 ? `${val}/5` : '-'}
+                              </span>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="space-y-2">
-                        {feedback.map((f, i) => (
-                          <div key={f.id || i} className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${ratingBadge(f.rating)}`}>
-                                {ratingIcon(f.rating)}
-                                {f.rating}
-                              </span>
-                              <span className="text-xs text-gray-400 dark:text-gray-500">
-                                {new Date(f.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              </span>
-                            </div>
-                            {f.comment && <p className="text-sm text-gray-700 dark:text-gray-300">{f.comment}</p>}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center py-8">
-                      <Star className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-                      <p className="text-xs text-gray-400 dark:text-gray-500">No feedback yet from this patient.</p>
+                      {r.notes && (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
+                          <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{r.notes}</p>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
             )}
           </div>
