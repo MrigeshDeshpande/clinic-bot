@@ -155,28 +155,28 @@ function PatientsPageInner() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {patient.name === '?' ? 'Unknown Patient' : patient.name}
                       </h3>
                       {patient.visit_count > 0 && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800 shrink-0">
                           <Activity className="w-3 h-3" />
                           {patient.visit_count} visit{patient.visit_count !== 1 ? 's' : ''}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 text-base text-gray-500 dark:text-gray-400">
-                      <span className="flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5" />
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm md:text-base text-gray-500 dark:text-gray-400">
+                      <span className="flex items-center gap-1.5 font-medium">
+                        <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         {patient.phone || 'N/A'}
                       </span>
                       {patient.last_visit && (
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5" />
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           Last: {formatDate(patient.last_visit)}
                           {!patient.last_visit_time && patient.visit_count > 0 && (
-                            <span className="text-xs font-medium text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-1.5 py-0.5 rounded-full">Walk-in</span>
+                            <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-1.5 py-0.5 rounded-full border border-violet-100 dark:border-violet-800 shrink-0">Walk-in</span>
                           )}
                         </span>
                       )}
