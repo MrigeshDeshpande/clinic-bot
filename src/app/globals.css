@@ -228,6 +228,7 @@
 /* 16-column grid — separate @theme so Tailwind generates utility classes */
 @theme {
   --grid-template-columns-16: repeat(16, minmax(0, 1fr));
+  --breakpoint-xs: 480px;
 }
 
 body {
@@ -322,6 +323,14 @@ textarea {
 }
 .animate-dot-pulse {
   animation: dotPulse 2s ease-in-out infinite;
+}
+/* Hide scrollbar utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* ─── Print styles ─── */

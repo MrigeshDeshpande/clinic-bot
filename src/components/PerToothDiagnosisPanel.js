@@ -546,14 +546,18 @@ export default function PerToothDiagnosisPanel({
 
   if (isMobile) {
     return (
-      <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[85vh] bg-white dark:bg-gray-900 rounded-t-2xl border-t border-gray-200 dark:border-gray-700 shadow-2xl animate-in slide-in-from-bottom duration-300">
-        <div className="flex justify-center pt-2 pb-1 shrink-0">
-          <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+      <>
+        {/* Backdrop for mobile drawer */}
+        <div onClick={onClose} className="fixed inset-0 bg-black/50 backdrop-blur-[2px] z-40 animate-in fade-in duration-200" />
+        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[85vh] bg-white dark:bg-gray-900 rounded-t-2xl border-t border-gray-200 dark:border-gray-700 shadow-2xl animate-in slide-in-from-bottom duration-300">
+          <div className="flex justify-center pt-2 pb-1 shrink-0">
+            <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+          </div>
+          <div className="overflow-y-auto flex-1 pb-6">
+            {panelContent}
+          </div>
         </div>
-        <div className="overflow-y-auto flex-1">
-          {panelContent}
-        </div>
-      </div>
+      </>
     );
   }
 

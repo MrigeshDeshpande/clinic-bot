@@ -107,7 +107,7 @@ export default function StatsPage() {
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Practice overview and performance insights</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
               onClick={getCSV}
               className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -287,7 +287,7 @@ export default function StatsPage() {
             <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data for this period</div>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={daily}>
+              <AreaChart data={daily} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="completedGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -342,7 +342,7 @@ export default function StatsPage() {
               <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
             ) : (
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={peakHours}>
+                <BarChart data={peakHours} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="time" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 12 }} />
@@ -363,7 +363,7 @@ export default function StatsPage() {
               <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
             ) : (
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={dayOfWeek}>
+                <BarChart data={dayOfWeek} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
@@ -421,7 +421,7 @@ export default function StatsPage() {
               </div>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={treatments} layout="vertical">
+                  <BarChart data={treatments} layout="vertical" margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis type="number" tick={{ fontSize: 12 }} />
                     <YAxis dataKey="treatment" type="category" tick={{ fontSize: 11 }} width={100} />
@@ -508,7 +508,7 @@ export default function StatsPage() {
               <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No data</div>
             ) : (
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={byAgeGroup}>
+                <BarChart data={byAgeGroup} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="ageGroup" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />

@@ -88,7 +88,7 @@ export default function DueRemindersPage() {
   return (
     <div className="animate-fade-in max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Due Reminders</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -107,7 +107,7 @@ export default function DueRemindersPage() {
           <button
             onClick={() => sendReminders()}
             disabled={sending || queue.length === 0}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50 w-full sm:w-auto shrink-0"
           >
             {sending ? (
               <Loader2 className="w-4 h-4 animate-spin" />

@@ -278,7 +278,8 @@ export default function PrescriptionCard({ prescriptionProps }) {
             </div>
             <span className="text-base font-bold leading-6 text-gray-800 dark:text-gray-200">Selected Medicines</span>
           </div>
-          <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-800">
+          {/* Desktop/Tablet Table Layout */}
+          <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-800">
             <table className="w-full text-base leading-6">
               <thead>
                 <tr className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide bg-gray-50/50 dark:bg-gray-800/30">
@@ -345,6 +346,75 @@ export default function PrescriptionCard({ prescriptionProps }) {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Stacked Layout */}
+          <div className="md:hidden space-y-3">
+            {form.medicines.map((med, idx) => (
+              <div key={idx} className="bg-gray-50 dark:bg-gray-800/30 border border-gray-100 dark:border-gray-800 rounded-xl p-3.5 space-y-3 relative">
+                {/* Header: Medicine Name & Delete */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold text-violet-500 uppercase tracking-wider">Medicine #{idx + 1}</span>
+                  <button type="button" onClick={() => removeMedicine(idx)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Name</label>
+                  <input type="text" value={med.name} onChange={e => updateMedicine(idx, 'name', e.target.value)}
+                    placeholder="Medicine name"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
+                </div>
+
+                {/* Grid for parameters */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Dose</label>
+                    <input type="text" value={med.dosage} onChange={e => updateMedicine(idx, 'dosage', e.target.value)}
+                      placeholder="Dose"
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Frequency</label>
+                    <select value={med.frequency} onChange={e => updateMedicine(idx, 'frequency', e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                      <option value="">—</option>
+                      {FREQUENCY_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{freqShort[opt] || opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Duration</label>
+                    <select value={med.duration} onChange={e => updateMedicine(idx, 'duration', e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                      <option value="">—</option>
+                      {DURATION_OPTIONS.map(d => (
+                        <option key={d} value={`${d} days`}>{d} days</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Timing</label>
+                    <select value={med.timing || 'after'} onChange={e => updateMedicine(idx, 'timing', e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200">
+                      {TIMING_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Rate (₹)</label>
+                  <input type="number" min="0" value={med.rate ?? ''} onChange={e => updateMedicine(idx, 'rate', e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-200" />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

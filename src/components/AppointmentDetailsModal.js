@@ -46,8 +46,8 @@ export default function AppointmentDetailsModal({ appointment, onClose, onQuickC
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
       <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={onClose} />
-      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 animate-scale-in overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="px-5 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800 flex items-start justify-between">
+      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 max-h-[90vh] flex flex-col overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="px-5 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800 flex items-start justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center text-sm font-bold text-gray-600 dark:text-gray-300 shrink-0">
               {(appointment.patient_name || '?')[0].toUpperCase()}
@@ -59,10 +59,12 @@ export default function AppointmentDetailsModal({ appointment, onClose, onQuickC
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 -mr-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors">
+          <button onClick={onClose} className="p-1 -mr-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        <div className="overflow-y-auto flex-1 no-scrollbar">
 
         <div className="px-5 py-4 space-y-3">
           <div className="flex items-center gap-2">
@@ -112,6 +114,7 @@ export default function AppointmentDetailsModal({ appointment, onClose, onQuickC
           {appointment.status !== 'confirmed' && (
             <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-2">This appointment is {appointment.status}</p>
           )}
+        </div>
         </div>
       </div>
     </div>
