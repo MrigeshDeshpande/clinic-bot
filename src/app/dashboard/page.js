@@ -3,14 +3,14 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3, ChevronUp, Search, CheckCircle2 } from 'lucide-react';
+import { DollarSign, CalendarDays, Clock, XCircle, Plus, Users, LayoutGrid, Columns3, ChevronUp, Search, CheckCircle2, X } from 'lucide-react';
 import Calendar from '@/components/Calendar';
 import WeekView from '@/components/WeekView';
 import DayTimeline from '@/components/DayTimeline';
 import AppointmentDetailsModal from '@/components/AppointmentDetailsModal';
 import QuickCheckoutModal from '@/components/QuickCheckoutModal';
 import RapidWalkInModal from '@/components/RapidWalkInModal';
-import { DateContext } from './layout';
+import { DateContext, ToastContext } from './layout';
 import { TREATMENT_NAMES } from '@/lib/treatments';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
@@ -708,6 +708,7 @@ function SlotGrid({ selectedDate, appointments, datesData, slotDefinitions, onBo
 export default function DashboardPage() {
   const router = useRouter();
   const { selectedDate, setSelectedDate } = useContext(DateContext);
+  const { showToast } = useContext(ToastContext);
   const [data, setData] = useState(null);
   const [datesData, setDatesData] = useState(null);
   const [slotDefinitions, setSlotDefinitions] = useState(null);
@@ -716,32 +717,12 @@ export default function DashboardPage() {
   const [viewMode, setViewMode] = useState('month');
   const [bookingModal, setBookingModal] = useState({ open: false, time: null });
   const [refreshKey, setRefreshKey] = useState(0);
-  const [toast, setToast] = useState(null);
   const [recentBookings, setRecentBookings] = useState([]);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showQuickCheckout, setShowQuickCheckout] = useState(null);
   const [showWalkIn, setShowWalkIn] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const bookSlotRef = useRef(null);
-  const tabContainerRef = useRef(null);
-  const [pillStyle, setPillStyle] = useState({});
-
-  function movePill(mode) {
-    const container = tabContainerRef.current;
-    if (!container) return;
-    const btn = container.querySelector(`[data-view="${mode}"]`);
-    if (!btn) return;
-    const cr = container.getBoundingClientRect();
-    const br = btn.getBoundingClientRect();
-    setPillStyle({
-      width: br.width,
-      transform: `translateX(${br.left - cr.left}px)`,
-    });
-  }
-
-  useEffect(() => {
-    movePill(viewMode);
-  }, [viewMode]);
 
   // Handle ?book=time query param to pop open QuickBook (from WeekView/DayTimeline slot clicks)
   useEffect(() => {
@@ -787,12 +768,6 @@ export default function DashboardPage() {
     bookSlotRef.current = (time) => setBookingModal({ open: true, time });
   });
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3500);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   function handleBookingComplete(appointment) {
     if (appointment) {
       setRecentBookings(prev => [appointment, ...prev].slice(0, 20));
@@ -819,7 +794,7 @@ export default function DashboardPage() {
         })
         .catch(() => {});
     }
-    setToast('Appointment booked successfully');
+    showToast('Appointment booked successfully', 'success');
   }
 
   function handleAppointmentSelect(appt) {
@@ -829,13 +804,13 @@ export default function DashboardPage() {
   function handleQuickCheckoutSuccess() {
     setShowQuickCheckout(null);
     setSelectedAppointment(null);
-    setToast('Visit completed');
+    showToast('Visit completed', 'success');
     setRefreshKey(k => k + 1);
   }
 
   function handleWalkInSuccess() {
     setShowWalkIn(false);
-    setToast('Walk-in completed');
+    showToast('Walk-in completed', 'success');
     setRefreshKey(k => k + 1);
   }
 
@@ -882,36 +857,32 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="py-3 mb-6 border-b border-gray-100 dark:border-gray-800 transition-all">
         {/* Row 1: Title + Actions */}
-        <div className="flex items-center justify-between gap-4 mb-3">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div className="min-w-0">
-            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight">Dashboard</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">{formatDateLong(selectedDate)}</p>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight leading-none">Dashboard</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 leading-tight">{formatDateLong(selectedDate)}</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 w-full md:w-auto">
             <button
               onClick={() => setBookingModal({ open: true, time: null })}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-semibold rounded-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all shadow-sm"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-teal-600/15 dark:shadow-none active:scale-[0.98] cursor-pointer border border-teal-500/10 w-full md:w-auto"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 text-teal-100" />
               New Appointment
             </button>
-            <div ref={tabContainerRef} className="relative flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
-              <div
-                className="absolute top-0.5 bottom-0.5 bg-white dark:bg-gray-700 rounded-md shadow-sm transition-all duration-200 ease-out z-0"
-                style={pillStyle}
-              />
+            <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-0.5 w-full md:w-auto justify-between">
               {[['month', 'Month', CalendarDays], ['week', 'Week', Columns3], ['day', 'Day', LayoutGrid]].map(([mode, label, Icon]) => (
                 <button
                   key={mode}
                   data-view={mode}
-                  onClick={(e) => { setViewMode(mode); movePill(mode); }}
-                  className={`relative z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors duration-150 ${
+                  onClick={() => setViewMode(mode)}
+                  className={`flex-1 md:flex-none z-10 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
                     viewMode === mode
-                      ? 'text-gray-900 dark:text-gray-100'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
-                  <Icon className="w-3 h-3" />
+                  <Icon className="w-3.5 h-3.5" />
                   {label}
                 </button>
               ))}
@@ -921,35 +892,31 @@ export default function DashboardPage() {
 
         {/* Row 2: KPI Strip */}
         {!loading && (
-          <div className="flex items-center gap-4 overflow-x-auto">
-            <div className="flex items-center gap-1.5 shrink-0">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100/60 dark:bg-gray-800/40 rounded-full border border-gray-200/40 dark:border-gray-700/30 justify-center sm:justify-start">
               <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{appointments.length}</span>
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total</span>
+              <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{appointments.length}</span>
             </div>
-            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Waiting</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.waiting || 0}</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50/60 dark:bg-amber-950/20 rounded-full border border-amber-200/40 dark:border-amber-800/20 justify-center sm:justify-start">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">Waiting</span>
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-300">{totals.waiting || 0}</span>
             </div>
-            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">In Session</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.in_session || 0}</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50/60 dark:bg-blue-950/20 rounded-full border border-blue-200/40 dark:border-blue-800/20 justify-center sm:justify-start">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+              <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">In Session</span>
+              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">{totals.in_session || 0}</span>
             </div>
-            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 px-3 py-1.5 bg-slate-100/60 dark:bg-slate-800/40 rounded-full border border-slate-200/40 dark:border-slate-700/30 justify-center sm:justify-start">
               <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Completed</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{totals.completed || 0}</span>
+              <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Completed</span>
+              <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{totals.completed || 0}</span>
             </div>
-            <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="col-span-1 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-full border border-emerald-200/40 dark:border-emerald-800/20 justify-center sm:justify-start">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Revenue</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(todayRevenue)}</span>
+              <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">Revenue</span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(todayRevenue)}</span>
             </div>
           </div>
         )}
@@ -1107,30 +1074,32 @@ export default function DashboardPage() {
               <span className="text-base font-semibold text-gray-700 dark:text-gray-300">Today&apos;s Collection</span>
             <span className="text-xs text-gray-400 dark:text-gray-500">{completed.length} completed visits</span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div className="grid grid-cols-2 gap-4 sm:flex sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2">
             <div>
               <span className="text-xs text-gray-500 dark:text-gray-400 uppercase">Collected</span>
               <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(todayCollected)}</p>
             </div>
-            <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
+            <div className="hidden sm:block w-px h-8 bg-gray-200 dark:bg-gray-700" />
             <div>
               <span className="text-xs text-gray-500 dark:text-gray-400 uppercase">Pending</span>
               <p className="text-lg font-bold text-amber-500 dark:text-amber-400">{formatCurrency(todayPending)}</p>
             </div>
-            <div className="w-px h-8 bg-gray-200 dark:bg-gray-700" />
-            <div className="flex gap-3">
+            <div className="hidden sm:block w-px h-8 bg-gray-200 dark:bg-gray-700" />
+            <div className="col-span-2 sm:col-span-1 flex gap-4">
               {Object.entries(paymentMethods).map(([method, count]) => (
-                <div key={method} className="text-center">
+                <div key={method} className="text-left sm:text-center">
                   <span className="text-xs text-gray-400 dark:text-gray-500 uppercase block">{method}</span>
                   <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{count}</span>
                 </div>
               ))}
             </div>
             {todayPending > 0 && (
-              <button onClick={() => router.push('/dashboard/appointments?status=completed')}
-                className="ml-auto px-3 py-1.5 text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-lg border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all">
-                Collect Pending
-              </button>
+              <div className="col-span-2 sm:col-span-1 sm:ml-auto">
+                <button onClick={() => router.push('/dashboard/appointments?status=completed')}
+                  className="w-full sm:w-auto px-3.5 py-2 text-xs font-semibold bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-xl border border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all active:scale-[0.98] cursor-pointer">
+                  Collect Pending
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1218,41 +1187,40 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-[9999] animate-scale-in">
-          <div className="flex items-center gap-2.5 px-5 py-3 bg-emerald-600 text-white rounded-2xl shadow-2xl border border-emerald-500/50 text-sm font-medium">
-            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            {toast}
-          </div>
-        </div>
-      )}
+
 
       {/* Quick Booking Modal — Enhanced */}
       {bookingModal.open && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
           <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={() => setBookingModal({ open: false, time: null })} />
-          <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
+          <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 max-h-[90vh] flex flex-col overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Quick Booking</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {formatDateShort(selectedDate)}
+                    {bookingModal.time ? ` at ${bookingModal.time}` : ''}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100">Quick Booking</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {formatDateShort(selectedDate)}
-                  {bookingModal.time ? ` at ${bookingModal.time}` : ''}
-                </p>
-              </div>
+              <button onClick={() => setBookingModal({ open: false, time: null })} className="p-1 -mr-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <QuickBookForm
-              date={selectedDate}
-              time={bookingModal.time}
-              onClose={() => setBookingModal({ open: false, time: null })}
-              onBooked={(appt) => { handleBookingComplete(appt); setBookingModal({ open: false, time: null }); }}
-            />
+            <div className="overflow-y-auto flex-1 no-scrollbar">
+              <QuickBookForm
+                date={selectedDate}
+                time={bookingModal.time}
+                onClose={() => setBookingModal({ open: false, time: null })}
+                onBooked={(appt) => { handleBookingComplete(appt); setBookingModal({ open: false, time: null }); }}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1263,7 +1231,7 @@ export default function DashboardPage() {
           appointment={selectedAppointment}
           onClose={() => setSelectedAppointment(null)}
           onQuickCheckout={(appt) => { setShowQuickCheckout(appt); }}
-          showToast={(msg) => setToast(msg)}
+          showToast={showToast}
         />
       )}
 
@@ -1273,7 +1241,7 @@ export default function DashboardPage() {
           appointment={showQuickCheckout}
           onClose={() => { setShowQuickCheckout(null); setSelectedAppointment(null); }}
           onSuccess={handleQuickCheckoutSuccess}
-          showToast={(msg) => setToast(msg)}
+          showToast={showToast}
         />
       )}
 
@@ -1282,7 +1250,7 @@ export default function DashboardPage() {
         <RapidWalkInModal
           onClose={() => setShowWalkIn(false)}
           onSuccess={handleWalkInSuccess}
-          showToast={(msg) => setToast(msg)}
+          showToast={showToast}
         />
       )}
     </div>

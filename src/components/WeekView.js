@@ -131,6 +131,35 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
   const todayStr = formatISO(today);
   const isThisWeek = days.some(d => isSameDay(d, today));
 
+  const [isMobile, setIsMobile] = useState(false);
+  const [activeDayIdx, setActiveDayIdx] = useState(0);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const tIdx = days.findIndex(d => isSameDay(d, today));
+    setActiveDayIdx(tIdx !== -1 ? tIdx : 0);
+  }, [weekStart]);
+
+  useEffect(() => {
+    if (selectedDate) {
+      const d = parseDateOnly(selectedDate);
+      if (d) {
+        const idx = days.findIndex(day => isSameDay(day, d));
+        if (idx !== -1) {
+          setActiveDayIdx(idx);
+        }
+      }
+    }
+  }, [selectedDate]);
+
   // Scroll to current time on mount (today)
   useEffect(() => {
     if (!containerRef.current || !isSameDay(days.find(d => isSameDay(d, today)) || today, today)) return;
@@ -336,6 +365,49 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
           <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+      {/* Mobile Horizontal Day Strip */}
+      {isMobile && !loading && !error && (
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-3 px-4 bg-gray-50/50 dark:bg-gray-800/10 border-b border-gray-100 dark:border-gray-800">
+          {days.map((day, idx) => {
+            const isSel = idx === activeDayIdx;
+            const dayOfWeek = day.getDay();
+            const dayStr = formatISO(day);
+            const dayAppts = apptsByDay[dayStr] || [];
+            const isTodayDay = isSameDay(day, today);
+            return (
+              <button
+                key={dayStr}
+                onClick={() => {
+                  setActiveDayIdx(idx);
+                  onDateSelect?.(dayStr);
+                }}
+                className={`flex-1 min-w-[54px] flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all relative cursor-pointer ${
+                  isSel
+                    ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md shadow-teal-600/10 scale-105 z-10'
+                    : 'bg-white dark:bg-gray-805 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
+                }`}
+              >
+                <span className={`text-[9px] font-bold uppercase tracking-wider leading-none ${isSel ? 'text-teal-100' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {DAY_NAMES[dayOfWeek].slice(0, 3)}
+                </span>
+                <span className="text-sm font-extrabold leading-none mt-1">
+                  {day.getDate()}
+                </span>
+                {dayAppts.length > 0 && (
+                  <span className={`absolute -top-1 -right-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                    isSel ? 'bg-white text-teal-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 border border-gray-200/40 dark:border-gray-700'
+                  }`}>
+                    {dayAppts.length}
+                  </span>
+                )}
+                {isTodayDay && !isSel && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1 shadow-sm shadow-red-500/20" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {loading ? (
         <LoadingSkeleton />
@@ -349,7 +421,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
         </div>
       ) : (
         <div ref={containerRef} className="overflow-x-auto overflow-y-auto max-h-[75vh] scroll-smooth">
-          <div className="flex min-w-[700px]">
+          <div className={`flex ${isMobile ? 'w-full' : 'min-w-[700px]'}`}>
             {/* Time labels column */}
             <div className="relative shrink-0 w-14 bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800">
               <div className="h-10 border-b border-gray-100 dark:border-gray-800" />
@@ -360,20 +432,12 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
                   </span>
                 </div>
               ))}
-              {/* Current time label in gutter */}
-              {isThisWeek && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
-                <div className="absolute right-0 z-20 pointer-events-none" style={{ top: nowOffset - 7 }}>
-                  <span className="text-xs font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 whitespace-nowrap shadow-sm">
-                    {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* Day columns with spine */}
             <div className="flex-1 min-w-0 border-l border-gray-200 dark:border-gray-700">
               <div className="flex">
-                {days.map((day, idx) => {
+                {(isMobile ? [days[activeDayIdx]] : days).map((day) => {
               const dayStr = formatISO(day);
               const dayAppts = apptsByDay[dayStr] || [];
               const dayOfWeek = day.getDay();
@@ -408,7 +472,7 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
                     onDrop={(e) => handleDrop(e, dayStr)}
                   >
                     {/* Alternating row backgrounds */}
-                    {ALL_SLOTS.map((si) => (
+                    {ALL_SLOTS.map((_, si) => (
                       <div
                         key={`row-${si}`}
                         className={`absolute left-0 right-0 pointer-events-none ${si % 2 === 0 ? 'bg-white dark:bg-transparent' : 'bg-gray-50/30 dark:bg-gray-900/10'}`}
@@ -418,12 +482,12 @@ export default function WeekView({ selectedDate, onDateSelect, onRefresh, onAppo
 
                     {/* Current time indicator (today only) */}
               {isToday && nowOffset >= 0 && nowOffset < HOURS.length * SLOT_HEIGHT * 2 && (
-                      <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: nowOffset }}>
+                      <div className="absolute left-0 right-0 z-20 pointer-events-none -translate-y-1/2" style={{ top: nowOffset }}>
                         <div className="flex items-center">
-                          <span className="text-xs font-bold text-red-500 bg-white dark:bg-gray-900 px-0.5 rounded shadow-sm mr-1">
+                          <span className="text-[10px] font-bold bg-red-600 dark:bg-red-500 text-white px-1.5 py-0.5 rounded shadow-md mr-1">
                             {String(today.getHours()).padStart(2, '0')}:{String(today.getMinutes()).padStart(2, '0')}
                           </span>
-                          <div className="w-2 h-2 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1" />
+                          <div className="w-2 h-2 rounded-full bg-red-500 shadow-red-500/50 shadow-lg -ml-1 border border-white dark:border-gray-900" />
                           <div className="flex-1 h-0.5 bg-red-500 shadow-red-500/30 shadow-sm" />
                         </div>
                       </div>

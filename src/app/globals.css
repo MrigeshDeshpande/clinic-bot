@@ -323,6 +323,14 @@ textarea {
 .animate-dot-pulse {
   animation: dotPulse 2s ease-in-out infinite;
 }
+/* Hide scrollbar utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 
 /* ─── Print styles ─── */
 @media print {

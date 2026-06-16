@@ -73,18 +73,19 @@ export default function QuickCheckoutModal({ appointment, onClose, onSuccess, sh
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center animate-backdrop-in">
       <div className="absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm cursor-pointer" onClick={onClose} />
-      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 animate-scale-in overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl dark:shadow-gray-900/80 border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 max-h-[90vh] flex flex-col overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
           <div>
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">Quick Checkout</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{appointment.patient_name || 'Patient'} · {appointment.treatment || 'Visit'}</p>
           </div>
-          <button onClick={onClose} className="p-1 -mr-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors">
+          <button onClick={onClose} className="p-1 -mr-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <div className="overflow-y-auto flex-1 no-scrollbar">
+          <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Treatment Fee</label>
@@ -203,6 +204,7 @@ export default function QuickCheckoutModal({ appointment, onClose, onSuccess, sh
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );
