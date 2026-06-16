@@ -147,7 +147,55 @@ function PatientsPageInner() {
                 className="group relative w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4 md:p-5 hover:border-blue-200 dark:hover:border-blue-700 hover:shadow-lg hover:shadow-blue-100/50 dark:hover:shadow-blue-900/20 transition-all duration-200 animate-in cursor-pointer"
                 style={{ animationDelay: `${idx * 50}ms` }}
               >
-                <div className="flex items-center gap-4">
+                {/* Mobile Layout (up to sm) */}
+                <div className="flex sm:hidden flex-col gap-3">
+                  {/* Top Row: Avatar + Name + Arrow */}
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getAvatarColor(patient.name)} flex items-center justify-center text-white font-semibold text-xs shadow-md shrink-0`}>
+                      {getInitials(patient.name)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        {patient.name === '?' ? 'Unknown Patient' : patient.name}
+                      </h3>
+                    </div>
+                    <div className="shrink-0 w-7 h-7 rounded-lg bg-gray-50 dark:bg-gray-800 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 flex items-center justify-center transition-colors">
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-gray-100 dark:border-gray-800/80 my-0.5" />
+
+                  {/* Bottom Row: Metadata info */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex flex-wrap items-center gap-3 text-gray-500 dark:text-gray-400">
+                      <span className="flex items-center gap-1.5 font-medium">
+                        <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        {patient.phone || 'N/A'}
+                      </span>
+                      {patient.last_visit && (
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          Last: {formatDate(patient.last_visit)}
+                          {!patient.last_visit_time && patient.visit_count > 0 && (
+                            <span className="text-[9px] font-extrabold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30 px-1.5 py-0.5 rounded-full border border-violet-100/50 dark:border-violet-800/50 shrink-0">Walk-in</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+
+                    {patient.visit_count > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800 shrink-0">
+                        <Activity className="w-3 h-3" />
+                        {patient.visit_count} visit{patient.visit_count !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Desktop Layout (sm and up) */}
+                <div className="hidden sm:flex items-center gap-4">
                   {/* Avatar with initials */}
                   <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getAvatarColor(patient.name)} flex items-center justify-center text-white font-semibold text-sm shadow-md shrink-0`}>
                     {getInitials(patient.name)}
@@ -155,7 +203,7 @@ function PatientsPageInner() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {patient.name === '?' ? 'Unknown Patient' : patient.name}
                       </h3>
@@ -166,7 +214,7 @@ function PatientsPageInner() {
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm md:text-base text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-x-4 gap-y-1 text-base text-gray-500 dark:text-gray-400">
                       <span className="flex items-center gap-1.5 font-medium">
                         <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         {patient.phone || 'N/A'}
