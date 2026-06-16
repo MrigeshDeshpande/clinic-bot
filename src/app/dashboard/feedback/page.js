@@ -1,231 +1,316 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Star, Phone, ThumbsUp, Meh, Frown, CheckCircle } from 'lucide-react';
-import { fetchCached } from '@/lib/clientFetchCache';
+import { Star, Search, Trash2, Edit3, X, MessageSquare, Phone, Calendar, ChevronRight, Loader2 } from 'lucide-react';
+import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
+import { RATING_CATEGORIES, safeAvg } from '@/lib/constants';
 
-export default function FeedbackPage() {
-  const [feedback, setFeedback] = useState(null);
+function StarBar({ avg, size = 'sm' }) {
+  const n = Math.round(Number(avg) || 0);
+  const sizeClass = size === 'sm' ? 'w-3.5 h-3.5' : 'w-5 h-5';
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <svg key={i} className={`${sizeClass} ${i <= n ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+function StarRating({ value, onChange, size = 'sm' }) {
+  const sizeClass = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
+  const containerClass = size === 'sm' ? 'w-5 h-5' : 'w-6 h-6';
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(star => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange?.(value === star ? 0 : star)}
+          className={`${containerClass} flex items-center justify-center rounded-sm transition-all hover:scale-110 active:scale-90 ${
+            value >= star ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'
+          }`}
+        >
+          <svg className={sizeClass} fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReviewEditPanel({ review, onClose, onSaved, onDeleted }) {
+  const [ratings, setRatings] = useState(review?.ratings || {});
+  const [notes, setNotes] = useState(review?.notes || '');
+  const [saving, setSaving] = useState(false);
+  const [savingDelete, setSavingDelete] = useState(false);
+
+  const handleSave = async () => {
+    if (!review?.id) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/dashboard/patient-reviews/${review.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ratings, notes }),
+      });
+      if (res.ok) {
+        onSaved?.();
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!review?.id) return;
+    setSavingDelete(true);
+    try {
+      const res = await fetch(`/api/dashboard/patient-reviews/${review.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        onDeleted?.(review.id);
+      }
+    } finally {
+      setSavingDelete(false);
+    }
+  };
+  const avgRating = safeAvg(ratings);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-800 overflow-y-auto animate-slide-in-right">
+        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-4 flex items-center justify-between z-10">
+          <div>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Edit Review</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{review?.patient_name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+            <Calendar className="w-4 h-4" />
+            <span>{review?.appointment_date ? new Date(review.appointment_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</span>
+            {review?.treatment && (
+              <>
+                <ChevronRight className="w-3 h-3" />
+                <span className="text-gray-700 dark:text-gray-300 font-medium">{review.treatment}</span>
+              </>
+            )}
+          </div>
+
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 text-center">
+            <div className="flex justify-center mb-1">
+              <StarBar avg={avgRating} size="md" />
+            </div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{avgRating > 0 ? avgRating.toFixed(1) + ' / 5' : 'Not rated'}</p>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Ratings</p>
+            {RATING_CATEGORIES.map(cat => (
+              <div key={cat.key} className="flex items-center justify-between gap-3">
+                <span className="text-xs text-gray-600 dark:text-gray-400 min-w-[140px]">{cat.label}</span>
+                <StarRating value={ratings[cat.key] || 0} onChange={v => setRatings(prev => ({ ...prev, [cat.key]: v }))} />
+                <span className="text-xs font-medium text-gray-400 dark:text-gray-500 min-w-[20px] text-right">{ratings[cat.key] || 0}/5</span>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Notes</p>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Doctor's notes about this patient visit..."
+              rows={4}
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 px-4 py-2.5 text-sm font-medium bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={savingDelete}
+              className="px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50 rounded-xl transition-all active:scale-95 flex items-center gap-2"
+            >
+              {savingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PatientReviewsPage() {
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selectedReview, setSelectedReview] = useState(null);
+  const debounceRef = useRef(null);
   const router = useRouter();
 
-  useEffect(() => {
-    fetchCached('/api/dashboard/feedback?limit=50')
-      .then(d => setFeedback(d))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  const loadReviews = useCallback(async (q = '') => {
+    invalidateFetchCache('patient-reviews');
+    setLoading(true);
+    try {
+      const params = q ? `?q=${encodeURIComponent(q)}&limit=50` : '?limit=50';
+      const data = await fetchCached(`/api/dashboard/patient-reviews${params}`, {}, 30_000);
+      setReviews(data?.reviews || []);
+    } catch {
+      setReviews([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  function ratingIcon(rating) {
-    switch (rating) {
-      case 'great': return <ThumbsUp className="w-4 h-4 text-emerald-500" />;
-      case 'okay': return <Meh className="w-4 h-4 text-amber-500" />;
-      case 'poor': return <Frown className="w-4 h-4 text-red-500" />;
-      default: return null;
-    }
-  }
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
 
-  function ratingBadge(rating) {
-    switch (rating) {
-      case 'great': return 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800';
-      case 'okay': return 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800';
-      case 'poor': return 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800';
-      default: return 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700';
-    }
-  }
+  const handleSearch = value => {
+    setSearch(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => loadReviews(value), 400);
+  };
 
-  if (loading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="shimmer h-8 w-48 rounded-lg" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="shimmer h-28 rounded-xl" />)}
-        </div>
-        <div className="shimmer h-64 rounded-xl" />
-      </div>
-    );
-  }
+  const refreshList = () => {
+    setSelectedReview(null);
+    loadReviews(search);
+  };
 
-  const summary = feedback?.summary || { great: 0, okay: 0, poor: 0 };
-  const total = Object.values(summary).reduce((a, b) => Number(a) + Number(b), 0);
-  const satisfaction = total > 0 ? Math.round(((summary.great + summary.okay) / total) * 100) : 0;
-  const entries = feedback?.entries || [];
-  const callbacks = entries.filter(e => e.callback);
-  const pendingCallbacks = callbacks.filter(e => !e.callback_contacted_at);
-  const hasComment = entries.filter(e => e.comment);
+  const removeFromList = id => {
+    setSelectedReview(null);
+    setReviews(prev => prev.filter(r => r.id !== id));
+  };
+
+  const avgRatings = ratings => {
+    const avg = safeAvg(ratings);
+    return avg > 0 ? avg.toFixed(1) : '-';
+  };
 
   return (
     <div className="animate-fade-in">
       <div className="flex items-center gap-4 mb-6">
-        <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-200 dark:shadow-amber-900/50">
+        <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-200 dark:shadow-blue-900/50">
           <Star className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Feedback</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Patient satisfaction and reviews</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Patient Reviews</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Doctor&apos;s ratings and notes for patient visits</p>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Satisfaction</p>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
-              <ThumbsUp className="w-5 h-5 text-emerald-500" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{satisfaction}%</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{total} total responses</p>
-        </div>
-
-        <button onClick={() => document.getElementById('feedback-entries')?.scrollIntoView({ behavior: 'smooth' })}
-          className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer active:scale-[0.98]">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Great</p>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
-              <ThumbsUp className="w-5 h-5 text-emerald-500" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{summary.great}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{total > 0 ? Math.round((summary.great / total) * 100) : 0}% of responses</p>
-        </button>
-
-        <button onClick={() => document.getElementById('feedback-entries')?.scrollIntoView({ behavior: 'smooth' })}
-          className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer active:scale-[0.98]">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Okay</p>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center">
-              <Meh className="w-5 h-5 text-amber-500" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">{summary.okay}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{total > 0 ? Math.round((summary.okay / total) * 100) : 0}% of responses</p>
-        </button>
-
-        <button onClick={() => document.getElementById('feedback-entries')?.scrollIntoView({ behavior: 'smooth' })}
-          className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer active:scale-[0.98]">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Poor</p>
-            <div className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
-              <Frown className="w-5 h-5 text-red-500" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-red-600 dark:text-red-400">{summary.poor}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{total > 0 ? Math.round((summary.poor / total) * 100) : 0}% of responses</p>
-        </button>
+      {/* Search */}
+      <div className="relative mb-6">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => handleSearch(e.target.value)}
+          placeholder="Search by patient name or phone..."
+          className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Feedback Entries */}
-        <div id="feedback-entries" className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
-          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100">Recent Feedback</h2>
+      {/* Summary Bar */}
+      {!loading && reviews.length > 0 && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 px-5 py-3 mb-4 flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 shadow-sm">
+          <span className="font-medium text-gray-900 dark:text-gray-100">{reviews.length} review{reviews.length !== 1 ? 's' : ''}</span>
+          <span className="w-px h-4 bg-gray-200 dark:bg-gray-700" />
+          <span>{reviews.filter(r => r.notes).length} with notes</span>
+        </div>
+      )}
+
+      {/* Reviews Table */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="space-y-4 p-6 animate-pulse">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="shimmer h-5 w-32 rounded" />
+                <div className="shimmer h-5 w-24 rounded" />
+                <div className="shimmer h-5 w-20 rounded" />
+                <div className="shimmer h-5 flex-1 rounded" />
+                <div className="shimmer h-5 w-16 rounded" />
+              </div>
+            ))}
           </div>
-          {entries.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 dark:text-gray-500 text-sm">No feedback yet.</div>
-          ) : (
-            <div className="divide-y divide-gray-50 dark:divide-gray-800">
-              {entries.map((e, i) => (
-                                  <div key={e.id || i} className="px-6 py-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/patients?q=${encodeURIComponent(e.patient_name || '')}`)}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border ${ratingBadge(e.rating)}`}>
-                        {ratingIcon(e.rating)}
-                        {e.rating}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">{e.patient_name || 'Anonymous'}</p>
-                        {e.comment && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{e.comment}</p>}
+        ) : reviews.length === 0 ? (
+          <div className="p-12 text-center">
+            <Star className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">No patient reviews yet</p>
+            <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">Reviews appear here after you rate a patient during visit logging</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50 dark:divide-gray-800">
+            {reviews.map(review => {
+              const avg = avgRatings(review.ratings);
+              return (
+                <div
+                  key={review.id}
+                  className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer group"
+                  onClick={() => setSelectedReview(review)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{review.patient_name}</p>
+                      <span className="text-xs text-gray-400">•</span>
+                      <span className="text-xs text-gray-400">{review.patient_phone}</span>
+                    </div>
+                    {review.notes && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate max-w-md">{review.notes}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {avg !== '-' && (
+                      <div className="flex items-center gap-1.5">
+                        <StarBar avg={avg} size="sm" />
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{avg}</span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {e.callback && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-medium">
-                          <Phone className="w-3 h-3" /> Callback
-                        </span>
-                      )}
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(e.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      </span>
-                    </div>
+                    )}
+                    <span className="text-xs text-gray-400 dark:text-gray-500 min-w-[60px] text-right">
+                      {review.appointment_date
+                        ? new Date(review.appointment_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : '-'}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 transition-colors" />
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Callbacks & Comments Sidebar */}
-        <div className="space-y-4">
-          {/* Callback Requests */}
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-red-500" />
-                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Callback Requests</h3>
-              </div>
-              <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full">{pendingCallbacks.length}</span>
-            </div>
-            {pendingCallbacks.length === 0 ? (
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">No pending callback requests</p>
-            ) : (
-              <div className="space-y-2">
-                {pendingCallbacks.map((e, i) => (
-                  <div key={e.id || i} className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-100 dark:border-red-800">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{e.patient_name || 'Anonymous'}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(e.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const res = await fetch(`/api/dashboard/feedback/${e.id}/contact`, { method: 'PATCH' });
-                          if (res.ok) {
-                            setFeedback(prev => ({
-                              ...prev,
-                              entries: prev.entries.map(entry =>
-                                entry.id === e.id ? { ...entry, callback_contacted_at: new Date().toISOString() } : entry
-                              ),
-                            }));
-                          }
-                        }}
-                        className="shrink-0 text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 px-2.5 py-1.5 rounded-lg transition-colors font-medium flex items-center gap-1"
-                      >
-                        <CheckCircle className="w-3 h-3" /> Mark Contacted
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+              );
+            })}
           </div>
-
-          {/* Rating Distribution Bar */}
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-4">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">Distribution</h3>
-            <div className="space-y-2">
-              {[
-                { label: 'Great', count: summary.great, color: 'bg-emerald-500' },
-                { label: 'Okay', count: summary.okay, color: 'bg-amber-500' },
-                { label: 'Poor', count: summary.poor, color: 'bg-red-500' },
-              ].map(item => (
-                <div key={item.label} className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 w-10">{item.label}</span>
-                  <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${item.color} transition-all duration-500`}
-                      style={{ width: `${total > 0 ? (item.count / total) * 100 : 0}%` }}
-                    />
-                  </div>
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-6 text-right">{item.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* Edit Panel */}
+      {selectedReview && (
+        <ReviewEditPanel
+          review={selectedReview}
+          onClose={() => setSelectedReview(null)}
+          onSaved={refreshList}
+          onDeleted={removeFromList}
+        />
+      )}
     </div>
   );
 }

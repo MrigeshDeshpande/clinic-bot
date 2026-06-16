@@ -2,40 +2,15 @@
 
 ## Overview
 
-Template messages bypass Meta's 24-hour messaging window, allowing the bot to proactively message patients who haven't interacted recently. The code now supports templates with automatic fallback to free-form text (which works within the 24h window).
+Template messages bypass Meta's 24-hour messaging window, allowing the bot to proactively message patients who haven't interacted recently. The code supports templates with automatic fallback to free-form text (which works within the 24h window).
 
-## Step 1: Create Templates in Meta Business Manager
+Only create templates in Meta that are actively used at runtime. Unused templates (`booking_confirmation`, `visit_summary`) are registered in code as reserved but should not be created in Meta.
 
-1. Go to [Meta Business Manager > WhatsApp > Message Templates](https://business.facebook.com/wa/manage/message-templates/)
-2. Select your WABA (WhatsApp Business Account)
-3. Click **Create Template**
-4. Choose category: **Utility** (fastest approval)
+## Active Templates in Meta
 
-### Template 1: `appointment_reminder`
+Currently **2 templates** are created and active in Meta Business Manager:
 
-| Field | Value |
-|-------|-------|
-| Name | `appointment_reminder` |
-| Category | Utility |
-| Language | English |
-| Header | None |
-| Body | `Hi {{1}}, just a reminder for tomorrow — {{2}} at {{3}}.` |
-| | `Treatment: {{4}}` |
-| | `📍 {{5}}, {{6}}` |
-| | `Reply confirm to keep it or cancel to cancel.` |
-| Footer | `Shri Balaji Dental Clinic` |
-
-**Parameters:**
-| # | Content |
-|---|---------|
-| `{{1}}` | Patient first name (e.g. "Ramesh") |
-| `{{2}}` | Formatted date (e.g. "Wednesday, 3 June") |
-| `{{3}}` | Formatted time (e.g. "10:00 AM") |
-| `{{4}}` | Treatment (e.g. "Root Canal") |
-| `{{5}}` | Clinic name (e.g. "Shri Balaji Dental Clinic") |
-| `{{6}}` | Location (e.g. "Bhilai") |
-
-### Template 2: `feedback_request`
+### Template 1: `feedback_request`
 
 | Field | Value |
 |-------|-------|
@@ -43,56 +18,72 @@ Template messages bypass Meta's 24-hour messaging window, allowing the bot to pr
 | Category | Utility |
 | Language | English |
 | Header | None |
-| Body | `Hi {{1}}! How was your visit to {{2}}?` |
-| | `Your feedback helps us serve you better.` |
-| Footer | None |
+| Body | `Hi {{1}},` |
+| | `Thank you for visiting {{2}}.` |
+| | `If you have a moment, we'd be grateful if you could share your experience with others. Your feedback helps patients make informed decisions and helps us continue improving our care.` |
+| | `Thank you.` |
+| Footer | `Shri Balaji Advanced Dental Care & Implant Center` |
+| URL Button | **Button text:** `Leave a Review` |
+| | **URL:** `https://g.page/r/CREFemgdjOejEBM/review` |
 
 **Parameters:**
 | # | Content |
 |---|---------|
-| `{{1}}` | Patient first name (e.g. "Priya") |
-| `{{2}}` | Clinic name (e.g. "Shri Balaji Dental Clinic") |
+| `{{1}}` | Patient first name (e.g. "Ramesh") |
+| `{{2}}` | Clinic name (e.g. "Shri Balaji Advanced Dental Care & Implant Center") |
 
-### Optional: `booking_confirmation`
+**Called from:**
+- `src/app/api/cron/feedback/route.js`
 
-If you also want booking confirmations as templates:
+---
 
-| Field | Value |
-|-------|-------|
-| Name | `booking_confirmation` |
-| Category | Utility |
-| Language | English |
-| Body | `Hi {{1}}, your appointment is confirmed:` |
-| | `📅 {{2}} at {{3}}` |
-| | `🦷 {{4}}` |
-| | `📍 {{5}}` |
-
-### Optional: `visit_summary`
+### Template 2: `payment_reminder`
 
 | Field | Value |
 |-------|-------|
-| Name | `visit_summary` |
+| Name | `payment_reminder` |
 | Category | Utility |
 | Language | English |
-| Body | `Hi {{1}}, thank you for your visit on {{2}}.` |
-| | `Treatment: {{3}}` |
-| | `Total: ₹{{4}}` |
-| | `📍 {{5}}` |
+| Header | None |
+| Body | `Hi {{1}},` |
+| | `This is a payment reminder from Shri Balaji Advanced Dental Care & Implant Center.` |
+| | `Amount due: {{2}}` |
+| | `Payment link: {{3}}` |
+| | `Thank you.` |
+| Footer | `Shri Balaji Advanced Dental Care & Implant Center` |
 
-## Step 2: Approval Process
+> **Note:** The body in Meta currently still says `Shri Balaji Dental Clinic` — edit the template in Meta Business Manager to use the updated clinic name.
 
-- **Utility templates** are typically approved within minutes to a few hours
-- Once approved, status changes to **APPROVED**
-- The template is available immediately across all phone numbers in your WABA
+**Parameters:**
+| # | Content |
+|---|---------|
+| `{{1}}` | Patient name (e.g. "Ramesh") |
+| `{{2}}` | Amount (e.g. "₹5,500") |
+| `{{3}}` | UPI payment link |
 
-## Step 3: Verify in Code
+**Called from:**
+- `src/app/dashboard/visit/page.js` — `sendPaymentLink()` → `sendTemplate(waId, 'payment_reminder', [name, amount, link])`
+- `POST /api/dashboard/send-whatsapp` with body `{ to, template: 'payment_reminder', params: [...] }`
 
-Templates are called from:
+## Templates Using Fallback (Not in Meta)
 
-- `src/app/api/cron/reminders/route.js` — `sendTemplate(waId, 'appointment_reminder', [...])`
-- `src/app/api/cron/feedback/route.js` — `sendTemplate(waId, 'feedback_request', [...])`
+These templates are registered in code but **not created in Meta**. The code falls back to `sendText` automatically.
 
-The registry lives at `src/config/templates.js`.
+| Template | Params | Code fallback |
+|---|---|---|
+| `appointment_reminder` | 6 — `patient_name`, `date`, `time`, `treatment`, `clinic_name`, `location` | `cron/reminders/route.js` sends plain text with `CLINIC.name` |
+| `due_reminder` | 4 — `patient_name`, `clinic_name`, `due_amount`, `upi_id` | `cron/due-reminders/route.js` sends plain text with `CLINIC.name` & `CLINIC.upiId` |
+| `booking_confirmation` | 5 — (reserved, no runtime usage) | — |
+| `visit_summary` | 5 — (reserved, no runtime usage) | — |
+
+The fallback messages already use `CLINIC.name` dynamically and work correctly within the 24-hour messaging window.
+
+## Templates NOT Created in Meta (Reserved for Future Use)
+
+| Template | Reason |
+|---|---|
+| `booking_confirmation` | Registered in code but not yet sent at runtime |
+| `visit_summary` | Registered in code but not yet sent at runtime (uses `sendText` fallback instead) |
 
 ## Fallback Behavior
 

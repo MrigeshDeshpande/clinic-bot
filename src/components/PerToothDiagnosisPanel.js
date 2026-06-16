@@ -177,36 +177,36 @@ function TreatmentsSelector({ favorites = [], customTreatments = [], selected, o
 
 const ZONE_POSITIONS = {
   molar: [
-    { id: 'O', x: 20, y: 3 },
-    { id: 'M', x: 5, y: 17 },
-    { id: 'B', x: 20, y: 19 },
-    { id: 'D', x: 35, y: 17 },
-    { id: 'L', x: 10, y: 33 },
-    { id: 'R', x: 30, y: 33 },
+    { id: 'O', x: 20, y: 5 },
+    { id: 'M', x: 3, y: 23 },
+    { id: 'B', x: 20, y: 27 },
+    { id: 'D', x: 37, y: 23 },
+    { id: 'L', x: 8, y: 35 },
+    { id: 'R', x: 32, y: 35 },
   ],
   premolar: [
-    { id: 'O', x: 20, y: 3 },
-    { id: 'M', x: 7, y: 17 },
-    { id: 'B', x: 20, y: 19 },
-    { id: 'D', x: 33, y: 17 },
-    { id: 'L', x: 10, y: 33 },
-    { id: 'R', x: 30, y: 33 },
+    { id: 'O', x: 20, y: 5 },
+    { id: 'M', x: 4, y: 23 },
+    { id: 'B', x: 20, y: 27 },
+    { id: 'D', x: 36, y: 23 },
+    { id: 'L', x: 8, y: 35 },
+    { id: 'R', x: 32, y: 35 },
   ],
   canine: [
-    { id: 'O', x: 18, y: 3 },
-    { id: 'M', x: 6, y: 17 },
-    { id: 'B', x: 18, y: 20 },
-    { id: 'D', x: 30, y: 17 },
-    { id: 'L', x: 8, y: 33 },
-    { id: 'R', x: 28, y: 33 },
+    { id: 'O', x: 18, y: 5 },
+    { id: 'M', x: 3, y: 23 },
+    { id: 'B', x: 18, y: 27 },
+    { id: 'D', x: 33, y: 23 },
+    { id: 'L', x: 7, y: 35 },
+    { id: 'R', x: 29, y: 35 },
   ],
   incisor: [
-    { id: 'O', x: 20, y: 3 },
-    { id: 'M', x: 8, y: 17 },
-    { id: 'B', x: 20, y: 19 },
-    { id: 'D', x: 32, y: 17 },
-    { id: 'L', x: 10, y: 33 },
-    { id: 'R', x: 30, y: 33 },
+    { id: 'O', x: 20, y: 5 },
+    { id: 'M', x: 5, y: 23 },
+    { id: 'B', x: 20, y: 27 },
+    { id: 'D', x: 35, y: 23 },
+    { id: 'L', x: 8, y: 35 },
+    { id: 'R', x: 32, y: 35 },
   ],
 };
 
@@ -247,9 +247,9 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
   return (
     <div className="flex flex-col items-center">
       <svg viewBox="0 0 40 40" className="w-28 h-28">
-        <g transform="translate(8, 8) scale(1)">
-          <path d={shape} fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2"
-            className="dark:fill-gray-800 dark:stroke-gray-600" />
+        <g transform="translate(10, 17) scale(0.82)">
+          <path d={shape} fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1"
+            className="dark:fill-gray-800 dark:stroke-gray-600" opacity="0.45" />
         </g>
         {zones.map(z => {
           const isSel = selectedSurfaces.includes(z.id);
@@ -259,7 +259,7 @@ function SurfaceDiagram({ toothNumber, selected, onChange }) {
                 fill={isSel ? '#3b82f6' : 'transparent'}
                 fillOpacity={isSel ? 0.25 : 0}
                 className="group-hover:fill-blue-500/10 dark:group-hover:fill-blue-400/15 transition-colors" />
-              <text x={z.x} y={z.y + 4} textAnchor="middle" fontSize="12" fontWeight="700"
+              <text x={z.x} y={z.y + 4} textAnchor="middle" fontSize="11" fontWeight="700"
                 fill={isSel ? '#1e40af' : '#94a3b8'}
                 className="select-none pointer-events-none transition-colors">
                 {z.id}
@@ -419,7 +419,7 @@ export default function PerToothDiagnosisPanel({
         )}
 
         {/* ── Surface SVG ── */}
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center mb-5">
           <SurfaceDiagram toothNumber={toothNumber} selected={selectedSurface} onChange={setSurface} />
         </div>
 

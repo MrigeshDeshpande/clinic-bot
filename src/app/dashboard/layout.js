@@ -30,7 +30,7 @@ const NAV_GROUPS = [
     items: [
       { href: '/dashboard/queue', label: 'Queue Board', icon: ClipboardList },
       { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
-      { href: '/dashboard/feedback', label: 'Feedback', icon: Star },
+      { href: '/dashboard/feedback', label: 'Patient Reviews', icon: Star },
       { href: '/dashboard/due-reminders', label: 'Due Reminders', icon: Bell },
     ],
   },

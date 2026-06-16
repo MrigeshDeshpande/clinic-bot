@@ -19,7 +19,7 @@ export async function GET(req, { params }) {
     const cached = getCached(cacheKey, 60_000);
     if (cached) return NextResponse.json(cached);
 
-    const [patientRows, visits] = await Promise.all([
+    const [patientRows, visits, settingsRows] = await Promise.all([
       sql`
         SELECT p.id, p.name, p.phone, p.age, p.sex, p.wa_id, p.created_at,
           p.location, p.allergies, p.chronic_conditions, p.blood_group, p.bp, p.weight, p.medications, p.patient_ratings, p.habits,
@@ -36,8 +36,8 @@ export async function GET(req, { params }) {
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
                a.notes, a.follow_up_date, a.follow_up_instructions,
          a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
-                a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at,
-                a.chief_complaint, a.general_examination, a.extra_oral_examination,
+               a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at,
+               a.chief_complaint, a.general_examination, a.extra_oral_examination,
                a.payment_status, a.paid_amount,
                COALESCE(p.name, a.patient_name) AS patient_name
         FROM appointments a
@@ -45,6 +45,9 @@ export async function GET(req, { params }) {
         WHERE a.patient_id = ${id}
           AND a.status IN ('completed', 'confirmed', 'no_show')
         ORDER BY a.date DESC, a.time DESC
+      `,
+      sql`
+        SELECT value FROM settings WHERE key = 'google_maps'
       `,
     ]);
 
@@ -54,7 +57,8 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Patient not found' }, { status: 404 });
     }
 
-    const responseData = { patient: sanitizeResponse(patient), visits: sanitizeResponse(visits || []) };
+    const reviewUrl = settingsRows[0]?.value?.review_url || '';
+    const responseData = { patient: sanitizeResponse(patient), visits: sanitizeResponse(visits || []), review_url: reviewUrl };
     setCache(cacheKey, responseData, 60_000);
     return NextResponse.json(responseData);
   } catch (error) {

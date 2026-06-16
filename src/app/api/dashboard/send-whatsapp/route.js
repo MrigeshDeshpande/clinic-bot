@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { sendText } from '@/lib/whatsapp';
+import { sendText, sendTemplate } from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError } from '@/lib/apiAuth';
 
@@ -11,15 +11,23 @@ export async function POST(req) {
   const sizeErr = checkBodySize(req);
   if (sizeErr) return sizeErr;
   try {
-    const { to, message } = await req.json();
-    if (!to || !message) {
-      return NextResponse.json({ error: 'to and message are required' }, { status: 400 });
+    const { to, message, template, params } = await req.json();
+    if (!to) {
+      return NextResponse.json({ error: 'to is required' }, { status: 400 });
     }
-    const msgId = await sendText(to, message.trim());
+    let msgId;
+    if (template) {
+      msgId = await sendTemplate(to, template, params || []);
+    } else {
+      if (!message) {
+        return NextResponse.json({ error: 'message is required when not using a template' }, { status: 400 });
+      }
+      msgId = await sendText(to, message.trim());
+    }
     if (!msgId) {
       return NextResponse.json({ error: 'Failed to send WhatsApp message' }, { status: 500 });
     }
-    logger.info('SEND_WHATSAPP_SUCCESS', { to, msgId });
+    logger.info('SEND_WHATSAPP_SUCCESS', { to, msgId, template: !!template });
     return NextResponse.json({ success: true, msgId });
   } catch (error) {
     logger.error('SEND_WHATSAPP_ERROR', { error: error.message });
