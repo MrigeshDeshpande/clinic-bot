@@ -12,6 +12,7 @@ import { formatDate as fmtDate } from '@/lib/date';
 import { fetchCached, invalidateFetchCache } from '@/lib/clientFetchCache';
 import { getTreatmentName } from '@/lib/treatments';
 import { VISIT_MODES } from '@/lib/visitModes';
+import { CLINIC } from '@/config/clinic';
 import { ToastContext } from '../../layout';
 
 const PHONE_PREFIX = '+91';
@@ -158,6 +159,7 @@ export default function PatientDetailPage() {
         setPatient(data.patient);
         setPatientRatings(data.patient?.patient_ratings || {});
         setVisits(data.visits || []);
+        if (data.review_url) setGoogleMapsUrl(data.review_url);
         setEditForm({
           name: data.patient?.name || '',
           age: data.patient?.age?.toString() || '',
@@ -187,14 +189,6 @@ export default function PatientDetailPage() {
         secondaryPromises.push(
           fetchCached(`/api/dashboard/patients/${id}/family`, {}, 30_000)
             .then(famData => setFamily(famData.family || []))
-            .catch(() => {})
-        );
-        secondaryPromises.push(
-          fetch('/api/dashboard/settings')
-            .then(r => r.json())
-            .then(data => {
-              if (data.settings?.google_maps?.review_url) setGoogleMapsUrl(data.settings.google_maps.review_url);
-            })
             .catch(() => {})
         );
         secondaryPromises.push(
@@ -411,17 +405,19 @@ export default function PatientDetailPage() {
   }
 
   async function sendGoogleReview() {
-    if (!googleMapsUrl) { showToast('Set Google Maps review URL in settings first', 'error'); return; }
+    const phone = patient?.phone;
+    if (!phone) { showToast('No phone number on file', 'error'); return; }
     setSendingReviewLink(true);
     try {
-      const phone = patient?.phone;
-      if (!phone) { showToast('No phone number on file', 'error'); setSendingReviewLink(false); return; }
       const waId = phone.startsWith('+') ? phone.slice(1) : phone;
-      const message = `Dear ${patient.name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
       const res = await fetch('/api/dashboard/send-whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: waId, message }),
+        body: JSON.stringify({
+          to: waId,
+          template: 'feedback_request',
+          params: [patient.name, CLINIC.name],
+        }),
       });
       if (res.ok) {
         showToast('Google review link sent on WhatsApp', 'success');

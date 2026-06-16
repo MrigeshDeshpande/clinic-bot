@@ -1,14 +1,8 @@
 'use client';
 
 import { useState, useEffect, useContext } from 'react';
-import { Bell, Clock, CheckCircle, XCircle, Loader2, RefreshCw, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bell, Clock, CheckCircle, XCircle, Loader2, RefreshCw, DollarSign, ChevronDown, ChevronUp, Send, User } from 'lucide-react';
 import { ToastContext } from '../layout';
-
-function StatusIcon({ status }) {
-  if (status === 'success') return <CheckCircle className="w-4 h-4 text-emerald-500" />;
-  if (status === 'error') return <XCircle className="w-4 h-4 text-red-500" />;
-  return <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />;
-}
 
 function formatTime(ts) {
   if (!ts) return '—';
@@ -19,54 +13,63 @@ function formatTime(ts) {
   });
 }
 
-function formatDuration(ms) {
-  if (!ms) return '—';
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}m ${secs}s`;
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export default function DueRemindersPage() {
   const { showToast } = useContext(ToastContext);
   const [logs, setLogs] = useState([]);
+  const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendingIds, setSendingIds] = useState(new Set());
   const [result, setResult] = useState(null);
   const [expandedLog, setExpandedLog] = useState(null);
 
   useEffect(() => {
-    fetchLogs();
+    fetchData();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function fetchLogs() {
+  async function fetchData() {
     setLoading(true);
     try {
       const res = await fetch('/api/dashboard/due-reminders');
       const data = await res.json();
       if (res.ok) {
         setLogs(data.logs || []);
+        setQueue(data.queue || []);
       } else {
-        showToast(data.error || 'Failed to load history', 'error');
+        showToast(data.error || 'Failed to load data', 'error');
       }
     } catch {
-      showToast('Network error loading history', 'error');
+      showToast('Network error loading data', 'error');
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSendReminders() {
-    setSending(true);
+  async function sendReminders(appointmentId) {
+    const isIndividual = !!appointmentId;
+    if (isIndividual) {
+      setSendingIds(prev => new Set(prev).add(appointmentId));
+    } else {
+      setSending(true);
+    }
     setResult(null);
     try {
-      const res = await fetch('/api/dashboard/due-reminders', { method: 'POST' });
+      const res = await fetch('/api/dashboard/due-reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appointmentId ? { appointmentId } : {}),
+      });
       const data = await res.json();
       if (res.ok) {
-        setResult({ type: 'success', data });
+        setResult({ type: 'success', data, individual: isIndividual });
         showToast(`Sent ${data.sent} due reminder(s)`, 'success');
-        fetchLogs();
+        fetchData();
       } else {
         setResult({ type: 'error', error: data.error || 'Failed to send' });
         showToast(data.error || 'Failed to send reminders', 'error');
@@ -76,6 +79,9 @@ export default function DueRemindersPage() {
       showToast('Network error sending reminders', 'error');
     } finally {
       setSending(false);
+      if (isIndividual) {
+        setSendingIds(prev => { const next = new Set(prev); next.delete(appointmentId); return next; });
+      }
     }
   }
 
@@ -89,18 +95,28 @@ export default function DueRemindersPage() {
             Send payment reminders to patients with outstanding dues
           </p>
         </div>
-        <button
-          onClick={handleSendReminders}
-          disabled={sending}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50"
-        >
-          {sending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Bell className="w-4 h-4" />
-          )}
-          {sending ? 'Sending...' : 'Send Due Reminders'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => sendReminders()}
+            disabled={sending || queue.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50"
+          >
+            {sending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Bell className="w-4 h-4" />
+            )}
+            {sending ? 'Sending...' : `Send to All (${queue.length})`}
+          </button>
+        </div>
       </div>
 
       {/* Result Banner */}
@@ -114,9 +130,11 @@ export default function DueRemindersPage() {
             <div className="flex items-center gap-3">
               <CheckCircle className="w-5 h-5 shrink-0" />
               <div>
-                <p className="font-semibold">Reminders sent successfully</p>
+                <p className="font-semibold">
+                  {result.individual ? 'Reminder sent' : 'Reminders sent successfully'}
+                </p>
                 <p className="text-xs mt-0.5 opacity-80">
-                  {result.data.total} appointment(s) with pending dues — {result.data.sent} sent ({result.data.templateSent} via template)
+                  {result.data.sent} of {result.data.total} sent
                 </p>
               </div>
             </div>
@@ -130,12 +148,12 @@ export default function DueRemindersPage() {
       )}
 
       {/* Quick Stats */}
-      {logs.length > 0 && (
+      {queue.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {[
+            { label: 'Patients with Dues', value: queue.length, color: 'orange' },
+            { label: 'Total Outstanding', value: `₹${queue.reduce((s, q) => s + Number(q.due), 0).toLocaleString('en-IN')}`, color: 'red' },
             { label: 'Total Triggers', value: logs.length, color: 'gray' },
-            { label: 'Manual Triggers', value: logs.filter(l => l.triggered_by === 'manual').length, color: 'blue' },
-            { label: 'Total Reminders Sent', value: logs.reduce((s, l) => s + Number(l.sent_count), 0), color: 'emerald' },
           ].map(s => (
             <div key={s.label} className={`bg-${s.color}-50 dark:bg-${s.color}-900/20 border border-${s.color}-100 dark:border-${s.color}-800 rounded-xl p-4`}>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{s.label}</p>
@@ -147,15 +165,83 @@ export default function DueRemindersPage() {
         </div>
       )}
 
+      {/* Queue Table */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm mb-6">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+          <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            <User className="w-4 h-4 text-gray-400" />
+            Patients with Dues
+            {queue.length > 0 && (
+              <span className="text-xs font-normal text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                {queue.length}
+              </span>
+            )}
+          </h2>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center">
+            <Loader2 className="w-6 h-6 animate-spin text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+            <p className="text-sm text-gray-400 dark:text-gray-500">Loading patients...</p>
+          </div>
+        ) : queue.length === 0 ? (
+          <div className="p-8 text-center">
+            <DollarSign className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
+            <p className="text-sm text-gray-400 dark:text-gray-500">No patients with pending dues</p>
+            <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">
+              Complete a visit with partial payment to see it here
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50 dark:divide-gray-800">
+            {queue.map(appt => (
+              <div key={appt.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                    {appt.patientName || 'Unknown'}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                    {formatDate(appt.date)} {appt.time ? `at ${appt.time.slice(0, 5)}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 shrink-0 ml-4">
+                  <span className="text-sm font-semibold text-red-600 dark:text-red-400">
+                    ₹{Number(appt.due).toLocaleString('en-IN')}
+                  </span>
+                  <button
+                    onClick={() => sendReminders(appt.id)}
+                    disabled={sendingIds.has(appt.id) || !appt.waId}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={!appt.waId ? 'No WhatsApp number on file' : 'Send reminder'}
+                  >
+                    {sendingIds.has(appt.id) ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Send className="w-3 h-3" />
+                    )}
+                    Send
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* History Table */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
             <Clock className="w-4 h-4 text-gray-400" />
             Trigger History
+            {logs.length > 0 && (
+              <span className="text-xs font-normal text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                {logs.length}
+              </span>
+            )}
           </h2>
           <button
-            onClick={fetchLogs}
+            onClick={fetchData}
             disabled={loading}
             className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             title="Refresh"
@@ -171,11 +257,8 @@ export default function DueRemindersPage() {
           </div>
         ) : logs.length === 0 ? (
           <div className="p-8 text-center">
-            <DollarSign className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
+            <Clock className="w-8 h-8 text-gray-200 dark:text-gray-700 mx-auto mb-2" />
             <p className="text-sm text-gray-400 dark:text-gray-500">No reminder history yet</p>
-            <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">
-              Click &quot;Send Due Reminders&quot; to trigger the first batch
-            </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -205,7 +288,7 @@ export default function DueRemindersPage() {
                   <div className="flex items-center gap-3 shrink-0">
                     {Number(log.template_sent_count) > 0 && (
                       <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                        {log.template_sent_count} template
+                        {log.template_sent_count} sent
                       </span>
                     )}
                     {expandedLog === log.id ? (
@@ -216,7 +299,6 @@ export default function DueRemindersPage() {
                   </div>
                 </button>
 
-                {/* Expanded details */}
                 {expandedLog === log.id && log.details?.appointments && (
                   <div className="px-5 pb-3 pl-14">
                     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-1.5">

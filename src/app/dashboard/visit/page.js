@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ToastContext, SidebarContext } from '../layout';
 import { Stethoscope, ClipboardCheck, ArrowLeft, Search, X, CheckCircle2, Clock, ChevronDown, ChevronRight, Pencil, Plus } from 'lucide-react';
+import { CLINIC } from '@/config/clinic';
 import { TREATMENTS, TREATMENT_NAMES, getTreatmentName, getDefaultFee, normalizeTreatmentFee, suggestTreatment } from '@/lib/treatments';
 import { COMMON_MEDICINES } from '@/lib/medicines';
 
@@ -592,6 +593,7 @@ function VisitPageInner() {
     const pData = await fetchCached(`/api/dashboard/patients/${id}`);
     if (pData.patient) {
       applyPatientProfile({ ...pData.patient, visits: pData.visits });
+      if (pData.review_url) setGoogleMapsUrl(pData.review_url);
       loadPatientSideData(pData.patient.id);
     }
   }
@@ -605,6 +607,7 @@ function VisitPageInner() {
       .then(pData => {
         if (pData.patient) {
           applyPatientProfile({ ...pData.patient, visits: pData.visits });
+          if (pData.review_url) setGoogleMapsUrl(pData.review_url);
           const mergedTooth = mergeToothDiagnoses(pData.visits);
           setForm(f => ({
             ...f,
@@ -1012,6 +1015,7 @@ function VisitPageInner() {
         if (data.patient) {
           const profile = data.patient;
           setPatientProfile(profile);
+          if (data.review_url) setGoogleMapsUrl(data.review_url);
           if (profile.allergies !== undefined || profile.chronicConditions !== undefined || profile.bloodGroup !== undefined || profile.bp !== undefined || profile.weight !== undefined || profile.medications !== undefined || profile.habits !== undefined || profile.address !== undefined || profile.occupation !== undefined || profile.dental_history !== undefined || profile.family_history !== undefined) {
             setMedicalHistory(mh => ({
               ...mh,
@@ -1307,12 +1311,15 @@ function VisitPageInner() {
       const dueAmount = totalFees - paidAmount;
       const payAmount = dueAmount > 0 ? dueAmount : totalFees;
       const link = upiDeepLink(payAmount, Date.now().toString(36), `${form.patientName} - ${form.diagnosis?.slice(0, 30) || 'Payment'}`);
-      const message = `Dear ${form.patientName},\n\nPlease pay ₹${payAmount.toLocaleString('en-IN')} for your recent visit to Shri Balaji Dental Clinic.\n\nClick to pay: ${link}\n\nThank you!`;
       const waId = phone.startsWith('+') ? phone.slice(1) : phone;
       const res = await fetch('/api/dashboard/send-whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: waId, message }),
+        body: JSON.stringify({
+          to: waId,
+          template: 'payment_reminder',
+          params: [form.patientName || 'Patient', `₹${payAmount.toLocaleString('en-IN')}`, link],
+        }),
       });
       if (res.ok) {
         showToast('Payment link sent on WhatsApp', 'success');
@@ -1842,36 +1849,37 @@ function VisitPageInner() {
               )}
             </button>
             <button onClick={async () => {
-              if (!googleMapsUrl) { showToast('Set Google Maps review URL in settings first', 'error'); return; }
               setSendingReviewLink(true);
               try {
                 const phone = result?.patient_name ? (appointmentMeta?.patient_phone || form.patientPhone) : '';
                 const waId = appointmentMeta?.patient_phone?.startsWith('+') ? appointmentMeta.patient_phone.slice(1) : appointmentMeta?.patient_phone || '';
+                const sendReview = async (id) => {
+                  const res = await fetch('/api/dashboard/send-whatsapp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      to: id,
+                      template: 'feedback_request',
+                      params: [result?.patient_name || 'Patient', CLINIC.name],
+                    }),
+                  });
+                  if (res.ok) showToast('Google review link sent on WhatsApp', 'success');
+                  else {
+                    const err = await res.json();
+                    showToast(err.error || 'Failed to send', 'error');
+                  }
+                };
                 if (!waId && form.patientPhone) {
                   const p = withPhonePrefix(form.patientPhone);
                   const cleanWaId = p.startsWith('+') ? p.slice(1) : p;
                   if (cleanWaId) {
-                    const msg = `Dear ${result.patient_name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
-                    const res = await fetch('/api/dashboard/send-whatsapp', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ to: cleanWaId, message: msg }),
-                    });
-                    if (res.ok) showToast('Google review link sent on WhatsApp', 'success');
-                    else showToast('Failed to send', 'error');
+                    await sendReview(cleanWaId);
                     setSendingReviewLink(false);
                     return;
                   }
                 }
                 if (waId) {
-                  const msg = `Dear ${result.patient_name},\n\nThank you for visiting Shri Balaji Dental Clinic! 🙏\n\nWe would love to hear about your experience. Please take a moment to leave us a Google review:\n\n${googleMapsUrl}\n\nYour feedback helps us serve you better!`;
-                  const res = await fetch('/api/dashboard/send-whatsapp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ to: waId, message: msg }),
-                  });
-                  if (res.ok) showToast('Google review link sent on WhatsApp', 'success');
-                  else showToast('Failed to send', 'error');
+                  await sendReview(waId);
                 } else {
                   showToast('No phone number available', 'error');
                 }

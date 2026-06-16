@@ -1,5 +1,6 @@
 export const CLINIC = {
-  name: 'Shri Balaji Dental Clinic',
+  name: 'Shri Balaji Advanced Dental Care & Implant Center',
+  googleMapsReviewUrl: 'https://g.page/r/CREFemgdjOejEBM/review',
   phone: '+91 91833 74850',
   upiId: process.env.UPI_ID || 'clinic@upi',
   address: 'Ground Floor, MIG-1/321, Amdi Nagar, Hudco Colony, Hudco, Bhilai, Chhattisgarh 490009',

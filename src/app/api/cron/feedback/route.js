@@ -1,6 +1,6 @@
 import { runMigrations } from '@/db/pool';
 import { fetchCompletedAppointmentsForFeedback, markFeedbackSent } from '@/db/repositories/feedbackRepository';
-import { sendTemplate, sendButtons } from '@/lib/whatsapp';
+import { sendTemplate } from '@/lib/whatsapp';
 import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
 import { CRON_LIMITER } from '@/lib/rateLimit';
@@ -31,23 +31,13 @@ export async function GET(req) {
       const name = appt.patient_name ? appt.patient_name.split(' ')[0] : 'Patient';
 
       try {
-        const templateOk = await sendTemplate(appt.wa_id, 'feedback_request', [
+        const ok = await sendTemplate(appt.wa_id, 'feedback_request', [
           name, CLINIC.name,
         ]);
-        if (!templateOk) {
-          // Fallback to interactive buttons (works within 24h window)
-          const body =
-            `Hi ${name}! 👋\n\n` +
-            `How was your visit to ${CLINIC.name}?\n\n` +
-            `Your feedback helps us serve you better.`;
-          await sendButtons(appt.wa_id, body, [
-            { id: 'feedback_great', title: '😊 Great' },
-            { id: 'feedback_okay',  title: '🙂 Okay' },
-            { id: 'feedback_poor',  title: '😞 Poor' },
-          ]);
+        if (ok) {
+          await markFeedbackSent(appt.id);
+          sent++;
         }
-        await markFeedbackSent(appt.id);
-        sent++;
       } catch (err) {
         logger.error('FEEDBACK_SEND_ERROR', { apptId: appt.id, waId: appt.wa_id, error: err.message });
       }

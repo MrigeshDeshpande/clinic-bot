@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { runMigrations } from '@/db/pool';
 import { fetchAppointmentsForDueReminder, markDueReminderSent } from '@/db/repositories/appointmentRepository';
 import { insertDueReminderLog, fetchDueReminderLogs } from '@/db/repositories/dueReminderRepository';
-import { sendTemplate, sendText } from '@/lib/whatsapp';
+import { sendTemplate } from '@/lib/whatsapp';
 import { CLINIC } from '@/config/clinic';
 import { logger } from '@/lib/logger';
 import { requireCsrf, checkRateLimit, checkBodySize, jsonError } from '@/lib/apiAuth';
@@ -12,8 +12,19 @@ export async function GET(req) {
   if (rateErr) return rateErr;
   try {
     await runMigrations();
-    const logs = await fetchDueReminderLogs(100);
-    return NextResponse.json({ logs });
+    const [logs, queue] = await Promise.all([
+      fetchDueReminderLogs(100),
+      fetchAppointmentsForDueReminder(),
+    ]);
+    const queueWithDue = (queue || []).map(a => ({
+      id: a.id,
+      patientName: a.patient_name,
+      waId: a.wa_id,
+      date: a.date,
+      time: a.time,
+      due: Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0) - Number(a.paid_amount || 0),
+    }));
+    return NextResponse.json({ logs, queue: queueWithDue });
   } catch (error) {
     logger.error('DUE_REMINDER_LOGS_ERROR', { error: error.message });
     return jsonError(error);
@@ -30,10 +41,15 @@ export async function POST(req) {
 
   try {
     await runMigrations();
-    const appointments = await fetchAppointmentsForDueReminder();
+    const body = await req.json().catch(() => ({}));
+    const appointmentId = body?.appointmentId || null;
+
+    let appointments = await fetchAppointmentsForDueReminder();
+    if (appointmentId) {
+      appointments = appointments.filter(a => a.id === appointmentId);
+    }
 
     let sent = 0;
-    let templateSent = 0;
     for (const appt of appointments) {
       const total = (appt.consultation_fee || 0) + (appt.treatment_charges || 0) + (appt.medicine_charges || 0);
       const paid = appt.paid_amount || 0;
@@ -43,23 +59,13 @@ export async function POST(req) {
       const firstName = appt.patient_name ? appt.patient_name.split(' ')[0] : 'Patient';
 
       try {
-        const templateOk = await sendTemplate(appt.wa_id, 'due_reminder', [
+        const ok = await sendTemplate(appt.wa_id, 'due_reminder', [
           firstName, CLINIC.name, String(due), CLINIC.upiId,
         ]);
-        if (templateOk) {
-          templateSent++;
-        } else {
-          const body =
-            `Hi ${firstName},\n\n` +
-            `This is a reminder regarding your visit to ${CLINIC.name}.\n\n` +
-            `💰 *Outstanding Amount: ₹${due}*\n\n` +
-            `Please clear the pending dues at your earliest convenience.\n\n` +
-            `Pay via UPI: *${CLINIC.upiId}*\n\n` +
-            `Thank you!`;
-          await sendText(appt.wa_id, body);
+        if (ok) {
+          await markDueReminderSent(appt.id);
+          sent++;
         }
-        await markDueReminderSent(appt.id);
-        sent++;
       } catch (err) {
         logger.error('DUE_REMINDER_SEND_ERROR', { apptId: appt.id, waId: appt.wa_id, error: err.message });
       }
@@ -69,7 +75,7 @@ export async function POST(req) {
       triggeredBy: 'manual',
       totalAppointments: appointments.length,
       sentCount: sent,
-      templateSentCount: templateSent,
+      templateSentCount: sent,
       details: {
         appointments: appointments.map(a => ({
           id: a.id,
@@ -80,7 +86,7 @@ export async function POST(req) {
     });
 
     logger.info('DUE_REMINDERS_MANUAL', { total: appointments.length, sent });
-    return NextResponse.json({ total: appointments.length, sent, templateSent });
+    return NextResponse.json({ total: appointments.length, sent });
   } catch (error) {
     logger.error('DUE_REMINDERS_MANUAL_ERROR', { error: error.message });
     return jsonError(error);
