@@ -228,6 +228,7 @@
 /* 16-column grid — separate @theme so Tailwind generates utility classes */
 @theme {
   --grid-template-columns-16: repeat(16, minmax(0, 1fr));
+  --breakpoint-xs: 480px;
 }
 
 body {
