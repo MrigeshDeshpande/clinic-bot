@@ -22,6 +22,10 @@ export default function QuickCheckoutModal({ appointment, onClose, onSuccess, sh
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [enableFollowup, setEnableFollowup] = useState(false);
+  const defaultFollowupDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [followupDate, setFollowupDate] = useState(defaultFollowupDate);
+  const [followupReason, setFollowupReason] = useState('');
 
   const outstanding = Math.max(0, subtotal - paid);
   const canComplete = subtotal > 0;
@@ -50,6 +54,11 @@ export default function QuickCheckoutModal({ appointment, onClose, onSuccess, sh
       };
       if (paid > 0) {
         payload.paymentMethod = method;
+      }
+      if (enableFollowup) {
+        payload.followUpDate = followupDate || null;
+        payload.followupReason = followupReason || null;
+        payload.followupCreatedBy = 'doctor';
       }
       const res = await fetch('/api/dashboard/visit', {
         method: 'POST',
@@ -169,6 +178,55 @@ export default function QuickCheckoutModal({ appointment, onClose, onSuccess, sh
               ))}
             </div>
             {paid === 0 && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Set paid amount to select payment method</p>}
+          </div>
+
+          {/* Follow-up Section */}
+          <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="enableFollowup"
+                checked={enableFollowup}
+                onChange={e => {
+                  setEnableFollowup(e.target.checked);
+                  if (!e.target.checked) setFollowupDate('');
+                }}
+                className="rounded border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-gray-500 cursor-pointer"
+              />
+              <label htmlFor="enableFollowup" className="text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+                Schedule follow-up
+              </label>
+            </div>
+            {enableFollowup && (
+              <div className="mt-2 space-y-2 pl-5">
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Follow-up date</label>
+                  <input
+                    type="date"
+                    value={followupDate}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={e => setFollowupDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Reason <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span></label>
+                  <select
+                    value={followupReason}
+                    onChange={e => setFollowupReason(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-600 transition-colors appearance-none cursor-pointer"
+                  >
+                    <option value="">Select reason...</option>
+                    <option value="Review">Review</option>
+                    <option value="Extraction Check">Extraction Check</option>
+                    <option value="Crown Fitting">Crown Fitting</option>
+                    <option value="RCT Checkup">RCT Checkup</option>
+                    <option value="Scaling Review">Scaling Review</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>

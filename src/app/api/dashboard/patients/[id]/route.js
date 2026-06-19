@@ -34,7 +34,8 @@ export async function GET(req, { params }) {
       sql`
         SELECT a.id, a.date, a.time, a.treatment, a.treatments, a.diagnosis, a.medicines,
                a.consultation_fee, a.treatment_charges, a.medicine_charges,
-               a.notes, a.follow_up_date, a.follow_up_instructions,
+               a.notes, a.follow_up_date, a.follow_up_instructions, a.follow_up_status, a.follow_up_reason, a.follow_up_created_by,
+         (a.follow_up_date - CURRENT_DATE)::int AS followup_days_remaining,
          a.advice_selected, a.diagnosis_selected, a.tooth_diagnoses,
                a.chit_media, a.prescription_key, a.status, a.created_at, a.updated_at,
                a.chief_complaint, a.general_examination, a.extra_oral_examination,

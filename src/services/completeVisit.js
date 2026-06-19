@@ -59,10 +59,25 @@ export async function completeVisit(sql, body) {
   if (followUpDate !== undefined) {
     setClauses.push(`follow_up_date = $${p++}`);
     params.push(followUpDate || null);
+    if (followUpDate) {
+      setClauses.push(`follow_up_status = $${p++}`);
+      params.push('pending');
+    } else {
+      setClauses.push(`follow_up_status = $${p++}`);
+      params.push('cancelled');
+    }
   }
   if (followUpInstructions !== undefined) {
     setClauses.push(`follow_up_instructions = $${p++}`);
     params.push(followUpInstructions);
+  }
+  if (body.followupReason !== undefined) {
+    setClauses.push(`follow_up_reason = $${p++}`);
+    params.push(body.followupReason);
+  }
+  if (body.followupCreatedBy !== undefined) {
+    setClauses.push(`follow_up_created_by = $${p++}`);
+    params.push(body.followupCreatedBy);
   }
   if (advice_selected !== undefined) {
     setClauses.push(`advice_selected = $${p++}`);

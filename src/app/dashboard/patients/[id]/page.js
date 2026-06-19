@@ -412,7 +412,7 @@ export default function PatientDetailPage() {
   const [expandedImage, setExpandedImage] = useState(null);
   const [expandedTooth, setExpandedTooth] = useState(null);
   const totalDue = useMemo(() => totalRevenue - totalCollected, [totalRevenue, totalCollected]);
-  const upcomingFollowUp = useMemo(() => completedVisits.find(v => v.follow_up_date && v.follow_up_date >= new Date().toISOString().slice(0, 10)), [completedVisits]);
+  const upcomingFollowUp = useMemo(() => completedVisits.find(v => v.follow_up_date && v.follow_up_status === 'pending' && v.follow_up_date >= new Date().toISOString().slice(0, 10)), [completedVisits]);
 
   if (loading) {
     return (
@@ -520,9 +520,15 @@ export default function PatientDetailPage() {
                       </>
                     )}
                   </div>
-                  {upcomingFollowUp && (
+                  {upcomingFollowUp && upcomingFollowUp.follow_up_status !== 'cancelled' && (
                     <div className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
                       Next Follow-up · {formatDate(upcomingFollowUp.follow_up_date)}
+                      {upcomingFollowUp.follow_up_reason && <> · {upcomingFollowUp.follow_up_reason}</>}
+                      {upcomingFollowUp.followup_days_remaining != null && upcomingFollowUp.followup_days_remaining >= 0 && (
+                        <span className="ml-1.5 text-gray-400 dark:text-gray-500">
+                          ({upcomingFollowUp.followup_days_remaining === 0 ? 'Today' : `in ${upcomingFollowUp.followup_days_remaining}d`})
+                        </span>
+                      )}
                     </div>
                   )}
                   {family.length > 0 && (
@@ -751,6 +757,42 @@ export default function PatientDetailPage() {
                                 {med.duration && <><span className="text-purple-400">•</span><span>{med.duration}</span></>}
                               </span>
                             ))}
+                          </div>
+                        )}
+
+                        {visit.follow_up_date && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border ${
+                              visit.follow_up_status === 'pending'
+                                ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-700'
+                                : visit.follow_up_status === 'completed'
+                                  ? 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+                                  : 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700'
+                            }`}>
+                              {visit.follow_up_status === 'pending' ? '🔄' : visit.follow_up_status === 'completed' ? '✓' : '✗'}
+                              {' '}Follow-up: {formatDate(visit.follow_up_date)}
+                              {visit.follow_up_status === 'pending' && visit.followup_days_remaining != null && (
+                                <span className={`
+                                  ml-1 px-1 py-0.5 rounded text-[10px] font-bold
+                                  ${visit.followup_days_remaining < 0 ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                    visit.followup_days_remaining <= 3 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
+                                    'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'}
+                                `}>
+                                  {visit.followup_days_remaining < 0 ? `${Math.abs(visit.followup_days_remaining)}d overdue` :
+                                    visit.followup_days_remaining === 0 ? 'Today' :
+                                    `in ${visit.followup_days_remaining}d`}
+                                </span>
+                              )}
+                              {visit.follow_up_status === 'completed' && (
+                                <span className="ml-1 text-gray-400 dark:text-gray-500 font-normal">(completed)</span>
+                              )}
+                              {visit.follow_up_status === 'cancelled' && (
+                                <span className="ml-1 text-gray-400 dark:text-gray-500 font-normal">(cancelled)</span>
+                              )}
+                            </span>
+                            {visit.follow_up_reason && (
+                              <span className="text-xs text-gray-400 dark:text-gray-500">{visit.follow_up_reason}</span>
+                            )}
                           </div>
                         )}
 

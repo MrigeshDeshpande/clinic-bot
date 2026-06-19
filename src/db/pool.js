@@ -319,7 +319,22 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS diagnosis TEXT DEFAULT '',
         ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]',
         ADD COLUMN IF NOT EXISTS follow_up_date DATE,
-        ADD COLUMN IF NOT EXISTS follow_up_instructions TEXT DEFAULT '';
+        ADD COLUMN IF NOT EXISTS follow_up_instructions TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS follow_up_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ADD COLUMN IF NOT EXISTS follow_up_reason VARCHAR(200),
+        ADD COLUMN IF NOT EXISTS follow_up_created_by VARCHAR(20) NOT NULL DEFAULT 'doctor';
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE appointments ADD CONSTRAINT valid_follow_up_status
+        CHECK (follow_up_status IN ('pending','completed','cancelled'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_appointments_follow_up
+        ON appointments(follow_up_status, follow_up_date)
+        WHERE follow_up_date IS NOT NULL;
     `;
 
     // Patient Reviews table (doctor reviews of patients per visit)

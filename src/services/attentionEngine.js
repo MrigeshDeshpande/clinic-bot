@@ -12,19 +12,23 @@ export async function getOverdueFollowups(sql, limit = 20) {
       WITH last_visit AS (
         SELECT DISTINCT ON (a.patient_id)
           a.patient_id,
-          p.name           AS patient_name,
-          a.followup_date,
-          a.created_at     AS visit_date,
+          p.name              AS patient_name,
+          a.follow_up_date,
+          a.follow_up_reason,
+          a.follow_up_status,
+          a.created_at        AS visit_date,
           COALESCE(a.treatment, a.arrival_complaint, 'Visit') AS treatment_label
         FROM appointments a
         JOIN patients p ON p.id = a.patient_id
         WHERE a.status = 'completed'
-          AND a.followup_date IS NOT NULL
-          AND a.followup_date < CURRENT_DATE
+          AND a.follow_up_date IS NOT NULL
+          AND a.follow_up_date < CURRENT_DATE
+          AND a.follow_up_status = 'pending'
           AND a.patient_id IS NOT NULL
         ORDER BY a.patient_id, a.created_at DESC
       )
-      SELECT *
+      SELECT *,
+        (CURRENT_DATE - lv.follow_up_date)::int AS days_overdue
       FROM last_visit lv
       WHERE NOT EXISTS (
         SELECT 1 FROM appointments a2
@@ -32,7 +36,7 @@ export async function getOverdueFollowups(sql, limit = 20) {
           AND a2.status = 'completed'
           AND a2.created_at > lv.visit_date
       )
-      ORDER BY lv.followup_date ASC
+      ORDER BY lv.follow_up_date ASC
       LIMIT ${limit}
     `;
   } catch (err) {
