@@ -10,6 +10,7 @@ import DayTimeline from '@/components/DayTimeline';
 import AppointmentDetailsModal from '@/components/AppointmentDetailsModal';
 import QuickCheckoutModal from '@/components/QuickCheckoutModal';
 import RapidWalkInModal from '@/components/RapidWalkInModal';
+import AttentionPanel from '@/components/AttentionPanel';
 import { DateContext, ToastContext } from './layout';
 import { TREATMENT_NAMES } from '@/lib/treatments';
 import { parseDateOnly, formatDateLong, formatDateShort } from '@/lib/date';
@@ -736,6 +737,7 @@ export default function DashboardPage() {
   const [showQuickCheckout, setShowQuickCheckout] = useState(null);
   const [showWalkIn, setShowWalkIn] = useState(null);
   const [fabOpen, setFabOpen] = useState(false);
+  const [attentionData, setAttentionData] = useState(null);
   const bookSlotRef = useRef(null);
 
   // Handle ?book=time query param to pop open QuickBook (from WeekView/DayTimeline slot clicks)
@@ -761,12 +763,14 @@ export default function DashboardPage() {
     Promise.all([
       fetchCached(`/api/dashboard/appointments?date=${selectedDate}`),
       fetchCached(`/api/dashboard/calendar?year=${year}&month=${month}`),
+      fetchCached('/api/dashboard/attention'),
     ])
-      .then(([apptData, calData]) => {
+      .then(([apptData, calData, attnData]) => {
         if (cancelled) return;
         setData(apptData);
         setDatesData(calData.dates || {});
         if (calData.slotDefinitions) setSlotDefinitions(calData.slotDefinitions);
+        setAttentionData(attnData);
         setLoading(false);
       })
       .catch(e => {
@@ -935,6 +939,10 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {!loading && attentionData && (
+        <AttentionPanel data={attentionData} />
+      )}
 
       {loading ? (
         <div className="space-y-6 animate-pulse">
