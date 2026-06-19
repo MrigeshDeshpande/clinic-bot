@@ -1,28 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ChevronDown, ChevronRight, CalendarClock, Activity, DollarSign, CheckCircle2, User } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, CalendarClock, Activity, DollarSign, CheckCircle2, User, Check, RotateCcw } from 'lucide-react';
 
 const TABS = [
   { key: 'overdue_followups', label: 'Overdue', icon: CalendarClock },
   { key: 'incomplete_treatments', label: 'Treatments', icon: Activity },
   { key: 'pending_payments', label: 'Payments', icon: DollarSign },
 ];
-
-function AttentionIcon({ type }) {
-  const cls = 'w-3.5 h-3.5 shrink-0';
-  switch (type) {
-    case 'overdue':
-      return <CalendarClock className={`${cls} text-amber-500`} />;
-    case 'treatment':
-      return <Activity className={`${cls} text-blue-500`} />;
-    case 'payment':
-      return <DollarSign className={`${cls} text-emerald-500`} />;
-    default:
-      return <AlertTriangle className={`${cls} text-gray-400`} />;
-  }
-}
 
 function formatDays(days) {
   if (days == null) return '';
@@ -31,21 +17,22 @@ function formatDays(days) {
   return `${days} days`;
 }
 
-function getSeverityBadge(days) {
-  if (days == null) return null;
-  if (days >= 30) return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700';
-  if (days >= 7) return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700';
-  return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700';
-}
-
 export default function AttentionPanel({ data }) {
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('overdue_followups');
+  const [treatmentItems, setTreatmentItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(new Set());
+
+  useEffect(() => {
+    if (data?.incomplete_treatments) {
+      setTreatmentItems(data.incomplete_treatments);
+    }
+  }, [data?.incomplete_treatments]);
 
   if (!data) return null;
 
-  const { overdue_followups = [], incomplete_treatments = [], pending_payments = [] } = data;
-  const total = overdue_followups.length + incomplete_treatments.length + pending_payments.length;
+  const { overdue_followups = [], pending_payments = [] } = data;
+  const total = overdue_followups.length + treatmentItems.length + pending_payments.length;
 
   if (total === 0) {
     return (
@@ -58,9 +45,12 @@ export default function AttentionPanel({ data }) {
     );
   }
 
+  const newTreatmentItems = treatmentItems.filter(i => i.attention_status === 'new');
+  const acknowledgedTreatmentItems = treatmentItems.filter(i => i.attention_status === 'acknowledged');
+
   const activeItems = ({
     overdue_followups,
-    incomplete_treatments,
+    incomplete_treatments: treatmentItems,
     pending_payments,
   })[activeTab] || [];
 
@@ -91,7 +81,8 @@ export default function AttentionPanel({ data }) {
           {/* Tab Bar */}
           <div className="flex gap-1 mb-3 border-b border-gray-100 dark:border-gray-800">
             {TABS.map(({ key, label, icon: Icon }) => {
-              const count = ({ overdue_followups, incomplete_treatments, pending_payments })[key].length;
+              const count = key === 'incomplete_treatments' ? treatmentItems.length
+                : ({ overdue_followups, pending_payments })[key].length;
               return (
                 <button
                   key={key}
@@ -118,47 +109,243 @@ export default function AttentionPanel({ data }) {
             })}
           </div>
 
-          {/* Items */}
-          {activeItems.length === 0 ? (
-            <div className="flex items-center gap-2 py-6 text-sm text-emerald-600 dark:text-emerald-400 justify-center">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>All clear in this category</span>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {activeItems.map((item, i) => (
-                <div
-                  key={item.patient_id || item.appointment_id || i}
-                  className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/40 dark:to-amber-800/40 flex items-center justify-center shrink-0">
-                      <User className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate leading-tight">
-                        {item.patient_id ? (
-                          <Link href={`/dashboard/patients/${item.patient_id}`} className="hover:text-amber-600 dark:hover:text-amber-400 hover:underline">
-                            {item.patient_name || 'Patient'}
-                          </Link>
-                        ) : (
-                          item.patient_name || 'Patient'
-                        )}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate leading-tight mt-0.5">
-                        {renderItemDetail(item, activeTab)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {renderDaysBadge(item, activeTab)}
+          {/* Items — Overdue Followups */}
+          {activeTab === 'overdue_followups' && (
+            <TabItems items={overdue_followups} tab="overdue_followups" />
+          )}
+
+          {/* Items — Incomplete Treatments */}
+          {activeTab === 'incomplete_treatments' && (
+            <div className="space-y-3">
+              {newTreatmentItems.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    New ({newTreatmentItems.length})
+                  </p>
+                  <div className="space-y-1">
+                    {newTreatmentItems.map((item, i) => (
+                      <TreatmentItemRow
+                        key={item.plan_id || i}
+                        item={item}
+                        loading={loadingItems.has(item.plan_id)}
+                        onAcknowledge={(planId) => handleStatusChange(planId, 'acknowledged')}
+                        onResolve={(planId) => handleStatusChange(planId, 'resolved')}
+                      />
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
+              {acknowledgedTreatmentItems.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                    Acknowledged ({acknowledgedTreatmentItems.length})
+                  </p>
+                  <div className="space-y-1">
+                    {acknowledgedTreatmentItems.map((item, i) => (
+                      <TreatmentItemRow
+                        key={item.plan_id || i}
+                        item={item}
+                        acknowledged
+                        loading={loadingItems.has(item.plan_id)}
+                        onAcknowledge={(planId) => handleStatusChange(planId, 'acknowledged')}
+                        onUnacknowledge={(planId) => handleStatusChange(planId, 'new')}
+                        onResolve={(planId) => handleStatusChange(planId, 'resolved')}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {treatmentItems.length === 0 && (
+                <div className="flex items-center gap-2 py-6 text-sm text-emerald-600 dark:text-emerald-400 justify-center">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>All clear — no incomplete treatments</span>
+                </div>
+              )}
             </div>
+          )}
+
+          {/* Items — Pending Payments */}
+          {activeTab === 'pending_payments' && (
+            <TabItems items={pending_payments} tab="pending_payments" />
           )}
         </div>
       )}
+    </div>
+  );
+
+  async function handleStatusChange(planId, status) {
+    setLoadingItems(prev => new Set(prev).add(planId));
+    const prevItems = treatmentItems;
+    setTreatmentItems(prev =>
+      prev.map(item =>
+        item.plan_id === planId ? { ...item, attention_status: status } : item
+      )
+    );
+    try {
+      const res = await fetch(`/api/dashboard/attention/${planId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        setTreatmentItems(prevItems);
+      }
+    } catch {
+      setTreatmentItems(prevItems);
+    } finally {
+      setLoadingItems(prev => { const next = new Set(prev); next.delete(planId); return next; });
+    }
+  }
+}
+
+function TabItems({ items, tab }) {
+  if (items.length === 0) {
+    return (
+      <div className="flex items-center gap-2 py-6 text-sm text-emerald-600 dark:text-emerald-400 justify-center">
+        <CheckCircle2 className="w-4 h-4" />
+        <span>All clear in this category</span>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      {items.map((item, i) => (
+        <div
+          key={item.patient_id || item.appointment_id || i}
+          className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+        >
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/40 dark:to-amber-800/40 flex items-center justify-center shrink-0">
+              <User className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate leading-tight">
+                {item.patient_id ? (
+                  <Link href={`/dashboard/patients/${item.patient_id}`} className="hover:text-amber-600 dark:hover:text-amber-400 hover:underline">
+                    {item.patient_name || 'Patient'}
+                  </Link>
+                ) : (
+                  item.patient_name || 'Patient'
+                )}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate leading-tight mt-0.5">
+                {renderItemDetail(item, tab)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {renderDaysBadge(item, tab)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TreatmentItemRow({ item, acknowledged, loading, onAcknowledge, onUnacknowledge, onResolve }) {
+  const days = item.days_since_activity;
+  const sevClass = !acknowledged && days >= 30
+    ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
+    : !acknowledged && days >= 7
+      ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+      : 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800';
+
+  const rowCls = acknowledged
+    ? 'flex items-center justify-between gap-3 py-2 px-3 rounded-lg opacity-60 hover:opacity-100 transition-opacity hover:bg-gray-50 dark:hover:bg-gray-800/50'
+    : 'flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors';
+
+  return (
+    <div className={rowCls}>
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+          acknowledged
+            ? 'bg-gray-100 dark:bg-gray-800'
+            : 'bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/40 dark:to-amber-800/40'
+        }`}>
+          <User className={`w-3.5 h-3.5 ${acknowledged ? 'text-gray-400' : 'text-amber-600 dark:text-amber-400'}`} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-medium truncate leading-tight ${
+            acknowledged ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'
+          }`}>
+            {item.patient_id ? (
+              <Link href={`/dashboard/patients/${item.patient_id}`} className="hover:underline">
+                {item.patient_name || 'Patient'}
+              </Link>
+            ) : (
+              item.patient_name || 'Patient'
+            )}
+          </p>
+          <p className={`text-xs truncate leading-tight mt-0.5 ${
+            acknowledged ? 'text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'
+          }`}>
+            {item.tooth_number ? `Tooth ${item.tooth_number} · ` : ''}
+            {item.procedure_name || 'Treatment'}
+            {item.next_step ? ` → ${item.next_step}` : ''}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {!acknowledged && days != null && (
+          <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border whitespace-nowrap ${sevClass}`}>
+            {formatDays(days)}
+          </span>
+        )}
+        {acknowledged && (
+          <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full border whitespace-nowrap bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700">
+            Acknowledged
+          </span>
+        )}
+        <div className="flex gap-1">
+          {!acknowledged ? (
+            <button
+              onClick={() => onAcknowledge?.(item.plan_id)}
+              disabled={loading}
+              className={`p-1 rounded-md transition-colors cursor-pointer ${
+                loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-600 dark:text-amber-400'
+              }`}
+              title="Acknowledge"
+            >
+              {loading ? (
+                <div className="w-3.5 h-3.5 border-2 border-amber-300 border-t-amber-600 rounded-full animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5" />
+              )}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => onResolve?.(item.plan_id)}
+                disabled={loading}
+                className={`p-1 rounded-md transition-colors cursor-pointer ${
+                  loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+                }`}
+                title="Mark resolved"
+              >
+                {loading ? (
+                  <div className="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600 rounded-full animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                )}
+              </button>
+              {onUnacknowledge && (
+                <button
+                  onClick={() => onUnacknowledge(item.plan_id)}
+                  disabled={loading}
+                  className={`p-1 rounded-md transition-colors cursor-pointer ${
+                    loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500'
+                  }`}
+                  title="Mark as new"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -170,14 +357,6 @@ function renderItemDetail(item, tab) {
         <>
           Follow-up overdue{item.followup_date ? ` (${item.followup_date})` : ''}
           {item.treatment_label ? ` — ${item.treatment_label}` : ''}
-        </>
-      );
-    case 'incomplete_treatments':
-      return (
-        <>
-          {item.tooth_number ? `Tooth ${item.tooth_number} · ` : ''}
-          {item.procedure_name || 'Treatment'}
-          {item.next_step ? ` → ${item.next_step}` : ''}
         </>
       );
     case 'pending_payments':
@@ -202,12 +381,6 @@ function renderDaysBadge(item, tab) {
         const diff = Math.ceil((Date.now() - new Date(item.followup_date).getTime()) / (1000 * 60 * 60 * 24));
         days = diff;
         label = formatDays(diff);
-      }
-      break;
-    case 'incomplete_treatments':
-      if (item.days_since_activity != null) {
-        days = item.days_since_activity;
-        label = formatDays(item.days_since_activity);
       }
       break;
     case 'pending_payments':

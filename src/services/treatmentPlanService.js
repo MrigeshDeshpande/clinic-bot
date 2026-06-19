@@ -131,6 +131,11 @@ export async function recalculatePlan(planId, sql) {
         THEN 'completed'::treatment_plan_status
         ELSE 'active'::treatment_plan_status
       END,
+      attention_status = CASE
+        WHEN (SELECT cnt FROM completed_count) >= (SELECT expected_steps FROM plan_info)
+        THEN 'resolved'
+        ELSE attention_status
+      END,
       completed_at = CASE
         WHEN (SELECT cnt FROM completed_count) >= (SELECT expected_steps FROM plan_info)
           AND completed_at IS NULL

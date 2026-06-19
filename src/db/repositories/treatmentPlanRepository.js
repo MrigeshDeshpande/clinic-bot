@@ -211,6 +211,43 @@ export async function markPlanCompleted(planId) {
   }
 }
 
+const ALLOWED_ATTENTION_TRANSITIONS = {
+  new: ['acknowledged', 'resolved'],
+  acknowledged: ['new', 'resolved'],
+  resolved: [],
+};
+
+export async function updateAttentionStatus(planId, status, sqlInstance) {
+  const sql = sqlInstance || getSql();
+  if (!sql) return null;
+
+  try {
+    const [current] = await sql`
+      SELECT attention_status FROM treatment_plans WHERE id = ${planId}
+    `;
+    if (!current) return null;
+
+    const allowed = ALLOWED_ATTENTION_TRANSITIONS[current.attention_status] || [];
+    if (!allowed.includes(status)) {
+      logger.warn('ATTENTION_STATUS_INVALID_TRANSITION', {
+        planId, from: current.attention_status, to: status, allowed,
+      });
+      return null;
+    }
+
+    const rows = await sql`
+      UPDATE treatment_plans
+      SET attention_status = ${status}, updated_at = NOW()
+      WHERE id = ${planId}
+      RETURNING id, patient_id, tooth_number, status, attention_status
+    `;
+    return rows[0] || null;
+  } catch (error) {
+    logger.error('ATTENTION_STATUS_UPDATE_ERROR', { planId, status, error: error.message });
+    return null;
+  }
+}
+
 export async function getProcedureCodeById(id) {
   const sql = getSql();
   if (!sql) return null;

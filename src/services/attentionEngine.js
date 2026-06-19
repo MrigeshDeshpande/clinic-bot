@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { updateAttentionStatus } from '@/db/repositories/treatmentPlanRepository';
 
 /**
  * Get patients with overdue follow-ups.
@@ -54,6 +55,7 @@ export async function getIncompleteTreatments(sql, limit = 20) {
         pc.name                AS procedure_name,
         tp.last_activity_at,
         tp.created_at,
+        tp.attention_status,
         (CURRENT_DATE - tp.last_activity_at::date) AS days_since_activity,
         (
           SELECT ts.step_name
@@ -67,7 +69,10 @@ export async function getIncompleteTreatments(sql, limit = 20) {
       JOIN procedure_codes pc ON pc.id = tp.procedure_code_id
       WHERE tp.status = 'active'
         AND tp.last_activity_at < CURRENT_DATE - INTERVAL '7 days'
-      ORDER BY tp.last_activity_at ASC
+        AND tp.attention_status IS DISTINCT FROM 'resolved'
+      ORDER BY
+        CASE tp.attention_status WHEN 'new' THEN 0 ELSE 1 END,
+        tp.last_activity_at ASC
       LIMIT ${limit}
     `;
   } catch (err) {
@@ -111,6 +116,22 @@ export async function getPendingPayments(sql, limit = 20) {
     logger.warn('ATTENTION_PENDING_PAYMENTS_FAILED', { error: err.message });
     return [];
   }
+}
+
+/**
+ * Set attention status on a treatment plan with transition validation.
+ * Allowed: new↔acknowledged, new/acknowledged→resolved.
+ * Not allowed: resolved→anything.
+ */
+export async function setAttentionStatus(planId, status) {
+  if (!['acknowledged', 'resolved', 'new'].includes(status)) {
+    throw Object.assign(new Error(`Invalid attention status: ${status}`), { status: 400 });
+  }
+  const result = await updateAttentionStatus(planId, status);
+  if (!result) {
+    throw Object.assign(new Error('Plan not found or invalid transition'), { status: 404 });
+  }
+  return result;
 }
 
 /**
