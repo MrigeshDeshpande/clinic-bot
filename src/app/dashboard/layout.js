@@ -153,9 +153,10 @@ function GlobalSearch() {
   );
 }
 
-function SidebarContent({ pathname, onNavClick }) {
+function SidebarContent({ pathname, onNavClick, forceExpanded = false }) {
   const router = useRouter();
-  const { sidebarCollapsed: collapsed, setSidebarCollapsed } = useContext(SidebarContext);
+  const { sidebarCollapsed, setSidebarCollapsed } = useContext(SidebarContext);
+  const collapsed = forceExpanded ? false : sidebarCollapsed;
 
   async function handleLogout() {
     await fetch('/api/dashboard/logout', { method: 'POST' });
@@ -254,20 +255,22 @@ function SidebarContent({ pathname, onNavClick }) {
           </svg>
           {!collapsed && 'Logout'}
         </button>
-        <button
-          onClick={() => setSidebarCollapsed(!collapsed)}
-          className={`flex items-center rounded-xl transition-all ${
-            collapsed
-              ? 'w-10 h-10 justify-center text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
-              : 'gap-2 px-3.5 py-2.5 w-full text-sm font-medium text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
-          }`}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <svg className={`w-4 h-4 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          {!collapsed && <span className="text-xs">Collapse</span>}
-        </button>
+        {!forceExpanded && (
+          <button
+            onClick={() => setSidebarCollapsed(!collapsed)}
+            className={`flex items-center rounded-xl transition-all ${
+              collapsed
+                ? 'w-10 h-10 justify-center text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
+                : 'gap-2 px-3.5 py-2.5 w-full text-sm font-medium text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300'
+            }`}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <svg className={`w-4 h-4 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            {!collapsed && <span className="text-xs">Collapse</span>}
+          </button>
+        )}
       </div>
     </>
   );
@@ -399,7 +402,7 @@ export default function DashboardLayout({ children }) {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                <SidebarContent pathname={pathname} onNavClick={() => setSidebarOpen(false)} />
+                <SidebarContent pathname={pathname} onNavClick={() => setSidebarOpen(false)} forceExpanded={true} />
               </div>
             </div>
           </div>
