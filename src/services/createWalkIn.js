@@ -1,5 +1,7 @@
 import { findPatientByPhone, findPatientById, createPatient, updatePatient } from '@/db/repositories/patientRepository';
 import { recordPayment } from './recordPayment';
+import { logger } from '@/lib/logger';
+import { createPlanWithSteps } from './treatmentPlanService';
 
 export async function createWalkIn(sql, body) {
   const {
@@ -11,6 +13,7 @@ export async function createWalkIn(sql, body) {
     tooth_diagnoses, paymentStatus, paymentMethod, paidAmount,
     chiefComplaint, generalExamination, extraOralExamination,
     date, time,
+    procedureCodeId, toothNumber,
   } = body;
 
   if (!patient_name) {
@@ -100,6 +103,24 @@ export async function createWalkIn(sql, body) {
     )
     RETURNING *
   `;
+
+  if (procedureCodeId && appointment.patient_id) {
+    try {
+      await createPlanWithSteps({
+        patientId: appointment.patient_id,
+        procedureCodeId,
+        toothNumber,
+        source: 'reception',
+      }, sql);
+    } catch (planErr) {
+      logger.warn('PLAN_CREATE_FAILED', {
+        patientId: appointment.patient_id,
+        procedureCodeId,
+        error: planErr.message,
+        stack: planErr.stack,
+      });
+    }
+  }
 
   if (paidAmt > 0) {
     await recordPayment(sql, {

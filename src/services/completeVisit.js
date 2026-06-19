@@ -1,5 +1,7 @@
 import { toPgTextArray } from '@/lib/pgArray';
 import { VISIT_MODES } from '@/lib/visitModes';
+import { logger } from '@/lib/logger';
+import { completeVisitSteps } from './treatmentPlanService';
 
 export async function completeVisit(sql, body) {
   const {
@@ -9,6 +11,7 @@ export async function completeVisit(sql, body) {
     status: newStatus, paymentStatus, paymentMethod, transactionId, paidAmount,
     chiefComplaint, generalExamination, extraOralExamination,
     mode,
+    stepIds,
   } = body;
 
   if (!appointmentId) throw new Error('appointmentId required');
@@ -201,5 +204,19 @@ export async function completeVisit(sql, body) {
            created_at, updated_at
     FROM appointments WHERE id = ${appointmentId}
   `;
+
+  if (stepIds?.length) {
+    try {
+      await completeVisitSteps({ appointmentId, stepIds }, sql);
+    } catch (stepErr) {
+      logger.warn('STEP_ADVANCE_FAILED', {
+        appointmentId,
+        stepIds,
+        error: stepErr.message,
+        stack: stepErr.stack,
+      });
+    }
+  }
+
   return appointment;
 }
