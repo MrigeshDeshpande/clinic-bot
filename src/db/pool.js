@@ -650,6 +650,136 @@ export async function runMigrations() {
       )
     `;
 
+    // AI classifications — intent/entity/language logging from Kali gateway
+    await db`
+      CREATE TABLE IF NOT EXISTS ai_classifications (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        session_state     VARCHAR(50),
+        message           TEXT NOT NULL,
+        available_intents TEXT[],
+        intent            VARCHAR(50),
+        entities          JSONB DEFAULT '{}',
+        language          VARCHAR(20),
+        provider          VARCHAR(20),
+        processing_ms     INTEGER,
+        raw_model_response TEXT,
+        rule_intent       VARCHAR(50),
+        matched           BOOLEAN
+      );
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_ai_classifications_created ON ai_classifications(created_at);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_ai_classifications_language ON ai_classifications(language);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_ai_classifications_matched ON ai_classifications(matched);
+    `;
+
+    // ── Treatment Lifecycle Engine ──────────────────────────────────
+
+    await db`DO $$ BEGIN
+      CREATE TYPE treatment_plan_status AS ENUM ('active','completed','abandoned','on_hold');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;`;
+
+    await db`DO $$ BEGIN
+      CREATE TYPE treatment_step_status AS ENUM ('pending','in_progress','completed','skipped');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;`;
+
+    await db`
+      CREATE TABLE IF NOT EXISTS procedure_codes (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        code             VARCHAR(50) UNIQUE NOT NULL,
+        name             VARCHAR(200) NOT NULL,
+        category         VARCHAR(50),
+        expected_steps   JSONB NOT NULL DEFAULT '[]'::jsonb,
+        default_fee      INTEGER DEFAULT 0,
+        active           BOOLEAN DEFAULT TRUE,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`
+      CREATE TABLE IF NOT EXISTS treatment_plans (
+        id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id         UUID NOT NULL REFERENCES patients(id),
+        procedure_code_id  UUID NOT NULL REFERENCES procedure_codes(id),
+        tooth_number       VARCHAR(10),
+        status             treatment_plan_status NOT NULL DEFAULT 'active',
+        source             VARCHAR(20) NOT NULL DEFAULT 'doctor',
+        attention_status   VARCHAR(20) DEFAULT 'new'
+          CHECK (attention_status IN ('new','acknowledged','resolved')),
+        expected_steps     INTEGER NOT NULL DEFAULT 1,
+        completed_steps    INTEGER NOT NULL DEFAULT 0,
+        next_action        VARCHAR(200),
+        started_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at       TIMESTAMPTZ,
+        abandoned_at       TIMESTAMPTZ,
+        last_activity_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        notes              TEXT,
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_patient_status ON treatment_plans(patient_id, status);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_status_activity ON treatment_plans(status, last_activity_at);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_tooth ON treatment_plans(tooth_number);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_source ON treatment_plans(source);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_attention ON treatment_plans(attention_status);
+    `;
+
+    await db`
+      CREATE TABLE IF NOT EXISTS treatment_plan_steps (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        plan_id          UUID NOT NULL REFERENCES treatment_plans(id) ON DELETE CASCADE,
+        step_order       INTEGER NOT NULL,
+        step_name        VARCHAR(200) NOT NULL,
+        status           treatment_step_status NOT NULL DEFAULT 'pending',
+        tooth_number     VARCHAR(10),
+        appointment_id   UUID REFERENCES appointments(id),
+        completed_at     TIMESTAMPTZ,
+        notes            TEXT,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_treatment_plan_steps_order ON treatment_plan_steps(plan_id, step_order);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plan_steps_appointment ON treatment_plan_steps(appointment_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plan_steps_status ON treatment_plan_steps(status);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plan_steps_plan_status ON treatment_plan_steps(plan_id, status);
+    `;
+
+    await db`
+      INSERT INTO procedure_codes (code, name, category, expected_steps, default_fee) VALUES
+        ('rct',       'Root Canal Treatment', 'endodontics',    '["Consultation","RCT Sitting 1","RCT Sitting 2","Crown"]'::jsonb,       5000),
+        ('scaling',   'Teeth Scaling',        'preventive',     '["Scaling Session"]'::jsonb,                                              1500),
+        ('extraction','Tooth Extraction',     'surgery',        '["Consultation","Extraction","Review"]'::jsonb,                           1000),
+        ('crown',     'Dental Crown',         'prosthodontics', '["Consultation","Tooth Preparation","Crown Placement","Review"]'::jsonb, 4000)
+      ON CONFLICT (code) DO NOTHING;
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {
