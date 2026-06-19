@@ -10,6 +10,7 @@ export async function createPlanWithSteps({ patientId, procedureCodeId, toothNum
 
     const stepNames = procedure.expected_steps || [];
 
+    // Timeline Event Candidate: Plan Created
     const [plan] = await tx`
       INSERT INTO treatment_plans (
         patient_id, procedure_code_id, tooth_number, source,
@@ -80,6 +81,7 @@ export async function completeVisitSteps({ appointmentId, stepIds }, sql) {
       }
     }
 
+    // Timeline Event Candidate: Step Completed
     const updatedSteps = await tx`
       UPDATE treatment_plan_steps
       SET status = 'completed', completed_at = NOW(), appointment_id = ${appointmentId}
@@ -126,11 +128,13 @@ export async function recalculatePlan(planId, sql) {
     UPDATE treatment_plans tp SET
       completed_steps = (SELECT cnt FROM completed_count),
       next_action = (SELECT step_name FROM next_step),
+      -- Timeline Event Candidate: Plan Auto-Completed
       status = CASE
         WHEN (SELECT cnt FROM completed_count) >= (SELECT expected_steps FROM plan_info)
         THEN 'completed'::treatment_plan_status
         ELSE 'active'::treatment_plan_status
       END,
+      -- Timeline Event Candidate: Attention Resolved (auto, via plan completion)
       attention_status = CASE
         WHEN (SELECT cnt FROM completed_count) >= (SELECT expected_steps FROM plan_info)
         THEN 'resolved'

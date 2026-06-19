@@ -106,6 +106,7 @@ export async function createWalkIn(sql, body) {
 
   if (procedureCodeId && appointment.patient_id) {
     try {
+      // Timeline Event Candidate: Plan Created (walk-in)
       await createPlanWithSteps({
         patientId: appointment.patient_id,
         procedureCodeId,

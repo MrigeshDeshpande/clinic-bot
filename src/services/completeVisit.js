@@ -57,12 +57,14 @@ export async function completeVisit(sql, body) {
     params.push(notes);
   }
   if (followUpDate !== undefined) {
-    setClauses.push(`follow_up_date = $${p++}`);
+      setClauses.push(`follow_up_date = $${p++}`);
     params.push(followUpDate || null);
     if (followUpDate) {
+      // Timeline Event Candidate: Follow-up Created
       setClauses.push(`follow_up_status = $${p++}`);
       params.push('pending');
     } else {
+      // Timeline Event Candidate: Follow-up Cancelled
       setClauses.push(`follow_up_status = $${p++}`);
       params.push('cancelled');
     }

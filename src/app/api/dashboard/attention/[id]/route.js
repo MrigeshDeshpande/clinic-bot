@@ -11,6 +11,7 @@ export async function PATCH(req, { params }) {
         { status: 400 }
       );
     }
+    // Timeline Event Candidate: Attention Acknowledged / Resolved / Re-opened
     const plan = await setAttentionStatus(params.id, status);
     return NextResponse.json({ plan });
   } catch (e) {

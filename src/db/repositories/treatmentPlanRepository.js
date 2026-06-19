@@ -235,6 +235,7 @@ export async function updateAttentionStatus(planId, status, sqlInstance) {
       return null;
     }
 
+    // Timeline Event Candidate: Attention Status Changed (acknowledged / resolved / new)
     const rows = await sql`
       UPDATE treatment_plans
       SET attention_status = ${status}, updated_at = NOW()

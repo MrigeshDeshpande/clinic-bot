@@ -103,8 +103,9 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 - **API route exists as thin pass-through**: `/api/dashboard/attention` exists only because `dashboard/page.js` is a `'use client'` component. If migrated to server components, remove the route and call `attentionEngine` directly.
 - **Attention uses 7-day inactivity threshold** to avoid "everything is attention" problem.
 - **Overdue follow-ups exclude patients who have returned** (a newer completed appointment after the follow-up date).
-- **`followup_date` column not yet present on `appointments` table**: `getOverdueFollowups` returns `[]` gracefully. Schema addition is pending — tracked as follow-up work after Commit 6.
-- **`attention_status` column on `treatment_plans` is dormant**: Column (`new`/`acknowledged`/`resolved`) and index exist but are unused by any code. Commit 6 will wire this up to allow doctors to dismiss acknowledged items from the attention panel.
+- **`follow_up_status`/`reason`/`created_by` columns on `appointments`**: Added with CHECK constraint and index. `follow_up_status` defaults to `'pending'` on visit completion with a date, `'cancelled'` when cleared. `followup_created_by` stores `'doctor'` (checkout) or `'reception'` (walk-in).
+- **`attention_status` is fully wired**: `new`↔`acknowledged` toggle, `resolved` is terminal. Auto-resolves on full plan completion. Dashboard panel shows New/Acknowledged sub-sections.
+- **Future — Upcoming Followups (next 3 days)**: Currently unsignaled. `getUpcomingFollowups` query in attentionEngine would join `appointments` where `follow_up_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 3` AND `follow_up_status = 'pending'`. Intended as first "Morning Brief" card.
 
 ## Critical Context
 ### Phase 1
@@ -119,12 +120,12 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 - Server running on port 3000
 
 ### Phase 2 (Dhara)
-- `treatment_plans` table has a dormant `attention_status` column (`new`/`acknowledged`/`resolved`) and an index on it — unused by any code; Commit 6 to wire up the acknowledgement flow.
+- `treatment_plans.attention_status` column (`new`/`acknowledged`/`resolved`) with index is now fully wired — queries filter out `resolved`, sort `new` before `acknowledged`.
 - `attention_status` is distinct from `status` (treatment lifecycle: `active`/`completed`/`abandoned`/`on_hold`). The Attention Engine queries raw data to produce attention items; it does not read `attention_status`.
 - Three database enum types exist: `treatment_plan_status` (`active,completed,abandoned,on_hold`), `treatment_step_status` (`pending,in_progress,completed,skipped`), and system-level enums are cast with `::treatment_plan_status` in SQL.
 - Dashboard is a client component (`'use client'`) that loads data via `fetchCached()` from API routes. Attention data is fetched from `/api/dashboard/attention` which wraps `attentionEngine.js`.
 - `getAttentionSummary` runs 3 queries in parallel via `Promise.all()` — each is independently caught, so one failure returns `[]` for that category without crashing the others.
-- The `followup_date` column does not exist on `appointments` yet — `getOverdueFollowups` returns `[]` gracefully. When the column is added, the query will start working automatically.
+- `follow_up_date` exists on `appointments` — `getOverdueFollowups` uses it alongside `follow_up_status = 'pending'`. Follow-up scheduling engine adds `follow_up_status`/`reason`/`created_by` columns with CHECK constraint.
 - Full pipeline: `Clinical Activity → Treatment Plans → Attention Engine → Dashboard Surface`
 
 ## Relevant Files
@@ -145,10 +146,12 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 
 ### Phase 2 (Dhara)
 - `src/db/pool.js`: Migration code (lines 694-781) — `procedure_codes`, `treatment_plans`, `treatment_plan_steps` tables + enums + seed data
-- `src/db/repositories/treatmentPlanRepository.js`: 12 repository functions for CRUD on procedure_codes, treatment_plans, treatment_plan_steps
+- `src/db/repositories/treatmentPlanRepository.js`: 13 repository functions for CRUD on procedure_codes, treatment_plans, treatment_plan_steps (added `updateAttentionStatus` with transition validation)
 - `src/services/treatmentPlanService.js`: 4 service functions — `createPlanWithSteps`, `completeVisitSteps`, `recalculatePlan`, `getNextPendingStep`
 - `src/services/completeVisit.js`: Modified to accept `stepIds`; calls `completeVisitSteps` after appointment update (best-effort)
 - `src/services/createWalkIn.js`: Modified to accept `procedureCodeId`/`toothNumber`; calls `createPlanWithSteps` without auto-complete
 - `src/services/attentionEngine.js`: 3 query functions + `getAttentionSummary` — `getOverdueFollowups`, `getIncompleteTreatments`, `getPendingPayments`
 - `src/app/api/dashboard/attention/route.js`: Thin pass-through — calls `getAttentionSummary(sql)` and returns JSON (exists because dashboard is client component)
-- `src/components/AttentionPanel.js`: Collapsible dashboard widget with 3-tab bar (Overdue / Treatments / Payments), severity badges, patient links, empty states
+- `src/app/api/dashboard/attention/[id]/route.js`: PATCH route for acknowledge/resolve/re-open
+- `src/components/AttentionPanel.js`: Collapsible dashboard widget with 3-tab bar (Overdue/Treatments/Payments), acknowledge/resolve buttons, New/Acknowledged sub-sections, severity badges, empty states
+- `tests/attention/attentionEngine.test.js`: 17 regression tests covering overdue followups, inactive treatments, pending payments, attention status transitions, parallel execution, and graceful failure handling
