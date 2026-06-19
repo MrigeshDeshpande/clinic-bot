@@ -1,4 +1,3 @@
-
 # Clinic Bot
 
 WhatsApp chatbot for Shri Balaji Dental Clinic.
