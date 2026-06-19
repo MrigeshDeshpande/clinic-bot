@@ -389,10 +389,10 @@ export default function ToothGrid({
     return (
       <div className="flex items-start gap-0">
         <div className="flex flex-col items-center pt-6 w-5 shrink-0">
-          <span className="text-sm font-bold text-gray-400 dark:text-gray-500">{labelLeft}</span>
+          <span className="text-xs font-bold text-gray-400 dark:text-gray-500">{labelLeft}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="hidden sm:grid sm:grid-cols-16 gap-0">
+          <div className="grid grid-cols-16 gap-0">
             {teeth.map(num => (
               <ToothButton
                 key={num}
@@ -409,28 +409,9 @@ export default function ToothGrid({
               />
             ))}
           </div>
-          <div className="sm:hidden overflow-x-auto snap-x snap-mandatory scrollbar-thin">
-            <div className="grid grid-cols-16 gap-0 min-w-[1280px]">
-              {teeth.map(num => (
-                <ToothButton
-                  key={num}
-                  num={num}
-                  entry={toothMap[num]}
-                  isActive={selectedTooth === num}
-                  isSelected={selectedTeeth.has(num)}
-                  multiSelect={multiSelect}
-                  onToothSelect={onToothSelect}
-                  onContextMenu={handleContextMenu}
-                  selectedTeeth={selectedTeeth}
-                  setSelectedTeeth={setSelectedTeeth}
-                  onQuickDiagnosis={onQuickDiagnosis}
-                />
-              ))}
-            </div>
-          </div>
         </div>
         <div className="flex flex-col items-center pt-6 w-5 shrink-0">
-          <span className="text-sm font-bold text-gray-400 dark:text-gray-500">{labelRight}</span>
+          <span className="text-xs font-bold text-gray-400 dark:text-gray-500">{labelRight}</span>
         </div>
       </div>
     );
@@ -457,13 +438,23 @@ export default function ToothGrid({
         </div>
       </div>
 
-      {renderRow(UPPER, 'UR', 'UL')}
-
-      <div className="flex items-center justify-center my-1">
-        <div className="w-10 h-px bg-gray-200 dark:bg-gray-700" />
+      {/* Swipe Hint for Mobile */}
+      <div className="flex md:hidden items-center justify-center gap-1.5 mb-2 px-1 py-1 bg-gray-50 dark:bg-gray-800/40 rounded-lg text-[10px] font-medium text-gray-450 dark:text-gray-500">
+        <span>↔ Swipe horizontally to view full chart</span>
       </div>
 
-      {renderRow(LOWER, 'LR', 'LL')}
+      {/* Scrollable grid area wrapping both rows */}
+      <div className="overflow-x-auto scrollbar-thin snap-x snap-mandatory pb-1">
+        <div className="min-w-[880px] md:min-w-0">
+          {renderRow(UPPER, 'UR', 'UL')}
+
+          <div className="flex items-center justify-center my-1.5">
+            <div className="w-16 h-px bg-gray-200 dark:bg-gray-800" />
+          </div>
+
+          {renderRow(LOWER, 'LR', 'LL')}
+        </div>
+      </div>
 
       {/* Bulk action bar */}
       {multiSelect && selectedTeeth.size > 0 && (

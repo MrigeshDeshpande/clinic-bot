@@ -286,6 +286,7 @@ export default function PerToothDiagnosisPanel({
   history = [],
   onSave,
   onClose,
+  inline = false,
 }) {
   const selectedDiagnoses = useMemo(() => currentEntry?.diagnoses || [], [currentEntry?.diagnoses]);
   const selectedSurface = currentEntry?.surface || '';
@@ -388,17 +389,19 @@ export default function PerToothDiagnosisPanel({
   const panelContent = (
     <>
       {/* ── Hero Header ── */}
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">🦷 Tooth {toothNumber}</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{getToothAnatomicalName(toothNumber)}</p>
+      {!inline && (
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">🦷 Tooth {toothNumber}</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{getToothAnatomicalName(toothNumber)}</p>
+            </div>
+            <button type="button" onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
-            <X className="w-4 h-4 text-gray-400" />
-          </button>
         </div>
-      </div>
+      )}
 
       <div className="p-4 space-y-4">
         {/* ── History (prominent, second only to header) ── */}
@@ -543,6 +546,10 @@ export default function PerToothDiagnosisPanel({
       </div>
     </>
   );
+
+  if (inline) {
+    return panelContent;
+  }
 
   if (isMobile) {
     return (

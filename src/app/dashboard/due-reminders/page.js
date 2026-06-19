@@ -86,20 +86,20 @@ export default function DueRemindersPage() {
   }
 
   return (
-    <div className="animate-fade-in max-w-4xl mx-auto">
+    <div className="animate-fade-in max-w-4xl mx-auto px-1 sm:px-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Due Reminders</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Send payment reminders to patients with outstanding dues
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             onClick={fetchData}
             disabled={loading}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center shrink-0"
             title="Refresh"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -107,7 +107,7 @@ export default function DueRemindersPage() {
           <button
             onClick={() => sendReminders()}
             disabled={sending || queue.length === 0}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50 w-full sm:w-auto shrink-0"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-medium rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-all disabled:opacity-50"
           >
             {sending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -154,20 +154,40 @@ export default function DueRemindersPage() {
             { label: 'Patients with Dues', value: queue.length, color: 'orange' },
             { label: 'Total Outstanding', value: `₹${queue.reduce((s, q) => s + Number(q.due), 0).toLocaleString('en-IN')}`, color: 'red' },
             { label: 'Total Triggers', value: logs.length, color: 'gray' },
-          ].map(s => (
-            <div key={s.label} className={`bg-${s.color}-50 dark:bg-${s.color}-900/20 border border-${s.color}-100 dark:border-${s.color}-800 rounded-xl p-4`}>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{s.label}</p>
-              <p className={`text-3xl font-bold leading-tight text-${s.color === 'gray' ? 'gray-900 dark:text-gray-100' : `${s.color}-700 dark:text-${s.color}-400`}`}>
-                {s.value}
-              </p>
-            </div>
-          ))}
+          ].map(s => {
+            const styles = {
+              orange: {
+                bg: 'bg-amber-50 dark:bg-amber-950/20',
+                border: 'border-amber-100 dark:border-amber-900/30',
+                text: 'text-amber-700 dark:text-amber-400'
+              },
+              red: {
+                bg: 'bg-red-50 dark:bg-red-950/20',
+                border: 'border-red-100 dark:border-red-900/30',
+                text: 'text-red-700 dark:text-red-400'
+              },
+              gray: {
+                bg: 'bg-gray-50 dark:bg-gray-800/40',
+                border: 'border-gray-100 dark:border-gray-700',
+                text: 'text-gray-900 dark:text-gray-100'
+              }
+            }[s.color] || { bg: 'bg-gray-50', border: 'border-gray-100', text: 'text-gray-900' };
+
+            return (
+              <div key={s.label} className={`${styles.bg} border ${styles.border} rounded-xl p-4`}>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{s.label}</p>
+                <p className={`text-3xl font-extrabold leading-tight ${styles.text} mt-0.5`}>
+                  {s.value}
+                </p>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Queue Table */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm mb-6">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between px-4 py-3.5 sm:px-5 sm:py-4 border-b border-gray-100 dark:border-gray-800">
           <h2 className="text-base font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
             <User className="w-4 h-4 text-gray-400" />
             Patients with Dues
@@ -195,23 +215,23 @@ export default function DueRemindersPage() {
         ) : (
           <div className="divide-y divide-gray-50 dark:divide-gray-800">
             {queue.map(appt => (
-              <div key={appt.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+              <div key={appt.id} className="flex items-center justify-between px-4 py-3.5 sm:px-5 sm:py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                     {appt.patientName || 'Unknown'}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                     {formatDate(appt.date)} {appt.time ? `at ${appt.time.slice(0, 5)}` : ''}
                   </p>
                 </div>
-                <div className="flex items-center gap-4 shrink-0 ml-4">
-                  <span className="text-sm font-semibold text-red-600 dark:text-red-400">
+                <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
+                  <span className="text-sm font-extrabold text-red-600 dark:text-red-400">
                     ₹{Number(appt.due).toLocaleString('en-IN')}
                   </span>
                   <button
                     onClick={() => sendReminders(appt.id)}
                     disabled={sendingIds.has(appt.id) || !appt.waId}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     title={!appt.waId ? 'No WhatsApp number on file' : 'Send reminder'}
                   >
                     {sendingIds.has(appt.id) ? (
@@ -219,7 +239,7 @@ export default function DueRemindersPage() {
                     ) : (
                       <Send className="w-3 h-3" />
                     )}
-                    Send
+                    <span className="hidden xs:inline">Send</span>
                   </button>
                 </div>
               </div>
@@ -266,28 +286,28 @@ export default function DueRemindersPage() {
               <div key={log.id}>
                 <button
                   onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
-                  className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                  className="w-full flex items-center justify-between px-4 py-3.5 sm:px-5 sm:py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left gap-3"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                    <span className={`inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                       log.triggered_by === 'manual'
                         ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
-                        : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
                     }`}>
                       {log.triggered_by}
                     </span>
-                    <div className="min-w-0">
-                      <p className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
                         {log.total_appointments} appt(s), {log.sent_count} sent
                       </p>
-                      <p className="text-sm text-gray-400 dark:text-gray-500">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                         {formatTime(log.triggered_at)}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     {Number(log.template_sent_count) > 0 && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 px-1.5 py-0.5 rounded">
                         {log.template_sent_count} sent
                       </span>
                     )}

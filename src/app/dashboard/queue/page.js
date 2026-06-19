@@ -14,6 +14,7 @@ export default function QueuePage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
+  const [activeTab, setActiveTab] = useState('waiting');
   const router = useRouter();
 
   const fetchQueue = useCallback(async (isManual) => {
@@ -81,11 +82,10 @@ export default function QueuePage() {
   const today = new Date().toISOString().slice(0, 10);
   const isToday = selectedDate === today;
   const totalRevenue = completed.reduce((sum, a) => sum + Number(a.consultation_fee || 0) + Number(a.treatment_charges || 0) + Number(a.medicine_charges || 0), 0);
-
   return (
-    <div className="animate-fade-in space-y-6">
+    <div className="animate-fade-in space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Queue Board</h1>
@@ -95,17 +95,17 @@ export default function QueuePage() {
             {formatDateLong(selectedDate)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-row items-center gap-2 w-full sm:w-auto">
           <input
             type="date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            className="px-3 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+            className="flex-1 sm:flex-none px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all"
           />
           <button
             onClick={() => fetchQueue(true)}
             disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
             <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -116,7 +116,7 @@ export default function QueuePage() {
       </div>
 
       {/* Summary Bar */}
-      <div className="flex flex-wrap items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2.5 text-xs sm:text-sm">
         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
           <Clock className="w-3.5 h-3.5" /> Waiting {waiting.length}
         </span>
@@ -127,16 +127,53 @@ export default function QueuePage() {
           ✓ Completed {completed.length}
         </span>
         {totalRevenue > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-semibold ml-auto">
-            ₹{totalRevenue.toLocaleString('en-IN')}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-semibold w-full sm:w-auto sm:ml-auto justify-center sm:justify-start">
+            Total Revenue: ₹{totalRevenue.toLocaleString('en-IN')}
           </span>
         )}
+      </div>
+
+      {/* Mobile Column Tabs (Segmented Control) */}
+      <div className="flex md:hidden bg-gray-100 dark:bg-gray-800/80 p-1 rounded-xl gap-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab('waiting')}
+          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+            activeTab === 'waiting'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-50 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          Waiting ({waiting.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('session')}
+          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+            activeTab === 'session'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-50 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          In Session ({arrived.length + inSession.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('completed')}
+          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+            activeTab === 'completed'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-50 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          Completed ({completed.length})
+        </button>
       </div>
 
       {/* Columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Waiting Column */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className={`${activeTab === 'waiting' ? 'block' : 'hidden'} md:block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm`}>
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-500" />
@@ -172,7 +209,7 @@ export default function QueuePage() {
         </div>
 
         {/* In Session Column */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className={`${activeTab === 'session' ? 'block' : 'hidden'} md:block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm`}>
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <UserCheck className="w-4 h-4 text-blue-500" />
@@ -195,12 +232,12 @@ export default function QueuePage() {
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
-                    onClick={() => handleArrival(a.id, 'called')}
-                    disabled={actionLoading === a.id}
-                    className="w-full py-3 text-sm font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
-                  >
-                    <Phone className="w-4 h-4" /> Call Patient
-                  </button>
+                      onClick={() => handleArrival(a.id, 'called')}
+                      disabled={actionLoading === a.id}
+                      className="w-full py-3 text-sm font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                    >
+                      <Phone className="w-4 h-4" /> Call Patient
+                    </button>
                   </div>
                 ))}
                 {inSession.map(a => (
@@ -211,10 +248,10 @@ export default function QueuePage() {
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{a.treatment || 'Visit'}</p>
                     <button
-                    onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=queue&mode=completeAppointment`)}
-                    className="w-full py-3 text-sm font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all flex items-center justify-center gap-1"
-                  >
-                    <ArrowRight className="w-4 h-4" /> Start Visit
+                      onClick={() => router.push(`/dashboard/visit?appointmentId=${a.id}&name=${encodeURIComponent(a.patient_name || '')}&treatment=${encodeURIComponent(a.treatment || '')}&returnTo=queue&mode=completeAppointment`)}
+                      className="w-full py-3 text-sm font-medium rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800 transition-all flex items-center justify-center gap-1"
+                    >
+                      <ArrowRight className="w-4 h-4" /> Start Visit
                     </button>
                   </div>
                 ))}
@@ -224,7 +261,7 @@ export default function QueuePage() {
         </div>
 
         {/* Completed Column */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className={`${activeTab === 'completed' ? 'block' : 'hidden'} md:block bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm`}>
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <UserCheck className="w-4 h-4 text-green-500" />

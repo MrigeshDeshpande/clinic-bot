@@ -19,6 +19,7 @@ import CameraViewfinder from '@/components/CameraViewfinder';
 import PerToothDiagnosisPanel from '@/components/PerToothDiagnosisPanel';
 import ToothGridLegend from '@/components/ToothGridLegend';
 import ToothChartCard from '@/components/visit/ToothChartCard';
+import { getToothTypeLabel } from '@/lib/dental/fdi';
 import AttachmentsPanel from '@/components/visit/AttachmentsPanel';
 import PrescriptionCard from '@/components/visit/PrescriptionCard';
 import AdviceCard from '@/components/visit/AdviceCard';
@@ -2577,19 +2578,35 @@ function VisitPageInner() {
 
         {/* ── Per-Tooth Side Panel ── */}
         {selectedTooth && (
-          <div className="fixed inset-0 z-50 flex justify-end">
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={handleToothClose} />
-            <div className="relative w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
-              <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between z-10">
-                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                  Tooth #{selectedTooth} — {toothQuadrant(selectedTooth)}
-                </span>
+          <div className="fixed inset-0 z-50 flex items-end md:items-stretch md:justify-end">
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] cursor-pointer animate-in fade-in duration-200" onClick={handleToothClose} />
+            
+            {/* Panel container */}
+            <div className="relative w-full max-h-[85vh] md:max-h-none md:h-full md:max-w-md bg-white dark:bg-gray-900 rounded-t-3xl md:rounded-t-none border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-800 shadow-2xl overflow-y-auto animate-in slide-in-from-bottom md:slide-in-from-right duration-300 flex flex-col">
+              {/* Mobile handle indicator */}
+              <div className="flex justify-center pt-2.5 pb-1.5 shrink-0 md:hidden">
+                <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
+              </div>
+              
+              {/* Sticky header */}
+              <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-150 dark:border-gray-800 px-4 py-3.5 flex items-center justify-between z-10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                    🦷 Tooth #{selectedTooth}
+                  </span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    · {toothQuadrant(selectedTooth)} · {getToothTypeLabel(selectedTooth)}
+                  </span>
+                </div>
                 <button type="button" onClick={handleToothClose}
                   className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                   <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
-              <div className="p-4">
+              
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto">
                 <PerToothDiagnosisPanel
                   toothNumber={selectedTooth}
                   currentEntry={selectedToothEntry}
@@ -2599,6 +2616,7 @@ function VisitPageInner() {
                   history={selectedToothHistory}
                   onSave={handleToothSave}
                   onClose={handleToothClose}
+                  inline={true}
                 />
               </div>
             </div>
