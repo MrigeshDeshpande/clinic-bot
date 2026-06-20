@@ -894,6 +894,68 @@ export async function runMigrations() {
         ON media_assets(created_at DESC);
     `;
 
+    // ── Interpretation: prescription_extractions ─────────────────────
+    // Stores what DHARA understood from evidence.
+    // Processing state (queued/processing) lives in media_processing_jobs, not here.
+    // invariants:
+    //   completed -> interpreted_at NOT NULL
+    //   failed    -> interpreted_at NOT NULL
+    //   pending   -> interpreted_at NULL
+
+    await db`
+      CREATE TABLE IF NOT EXISTS prescription_extractions (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        media_asset_id    UUID NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
+
+        extractor_type    VARCHAR(50) NOT NULL,
+        extractor_version VARCHAR(50) NOT NULL,
+
+        status            VARCHAR(20) NOT NULL DEFAULT 'pending',
+        raw_text          TEXT,
+        structured_json   JSONB,
+        confidence        DOUBLE PRECISION,
+        idempotency_key   TEXT NOT NULL UNIQUE,
+        error_message     TEXT,
+
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        interpreted_at    TIMESTAMPTZ
+      );
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE prescription_extractions ADD CONSTRAINT valid_extraction_status
+        CHECK (status IN ('pending', 'completed', 'failed'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE prescription_extractions ADD CONSTRAINT valid_confidence_range
+        CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1.0));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_extractions_media_version_type
+        ON prescription_extractions(media_asset_id, extractor_type, extractor_version);
+    `;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_media_asset
+        ON prescription_extractions(media_asset_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_media_version
+        ON prescription_extractions(media_asset_id, extractor_version);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_status
+        ON prescription_extractions(status);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_version
+        ON prescription_extractions(extractor_version);
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {
