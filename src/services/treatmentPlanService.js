@@ -1,3 +1,5 @@
+import { recordEvent } from './timelineService';
+
 export async function createPlanWithSteps({ patientId, procedureCodeId, toothNumber, source }, sql) {
   if (!patientId) throw Object.assign(new Error('patientId is required'), { status: 400 });
   if (!procedureCodeId) throw Object.assign(new Error('procedureCodeId is required'), { status: 400 });
@@ -10,7 +12,6 @@ export async function createPlanWithSteps({ patientId, procedureCodeId, toothNum
 
     const stepNames = procedure.expected_steps || [];
 
-    // Timeline Event Candidate: Plan Created
     const [plan] = await tx`
       INSERT INTO treatment_plans (
         patient_id, procedure_code_id, tooth_number, source,
@@ -38,6 +39,15 @@ export async function createPlanWithSteps({ patientId, procedureCodeId, toothNum
         RETURNING *
       `, params);
     }
+
+    await recordEvent(tx, {
+      patient_id: plan.patient_id,
+      event_type: 'PLAN_CREATED',
+      actor_type: source || 'doctor',
+      source_type: 'treatment_plan',
+      source_id: plan.id,
+      metadata: { version: 1, procedure_code: procedure.code, procedure_name: procedure.name, tooth_number: toothNumber, expected_steps: stepNames.length, source: source || 'doctor' },
+    });
 
     return { plan, steps };
   });
@@ -81,7 +91,6 @@ export async function completeVisitSteps({ appointmentId, stepIds }, sql) {
       }
     }
 
-    // Timeline Event Candidate: Step Completed
     const updatedSteps = await tx`
       UPDATE treatment_plan_steps
       SET status = 'completed', completed_at = NOW(), appointment_id = ${appointmentId}
@@ -102,6 +111,30 @@ export async function completeVisitSteps({ appointmentId, stepIds }, sql) {
     for (const planId of planIds) {
       const plan = await recalculatePlan(planId, tx);
       if (plan) plans.push(plan);
+    }
+
+    for (const plan of plans) {
+      const completedForPlan = updatedSteps.filter(s => s.plan_id === plan.id);
+      if (completedForPlan.length > 0) {
+        await recordEvent(tx, {
+          patient_id: plan.patient_id,
+          event_type: 'STEP_COMPLETED',
+          actor_type: 'doctor',
+          source_type: 'treatment_plan',
+          source_id: plan.id,
+          metadata: { version: 1, step_names: completedForPlan.map(s => s.step_name), step_ids: completedForPlan.map(s => s.id), step_count: completedForPlan.length, appointment_id: appointmentId },
+        });
+      }
+      if (plan.status === 'completed') {
+        await recordEvent(tx, {
+          patient_id: plan.patient_id,
+          event_type: 'PLAN_COMPLETED',
+          actor_type: 'doctor',
+          source_type: 'treatment_plan',
+          source_id: plan.id,
+          metadata: { version: 1, plan_id: plan.id, tooth_number: plan.tooth_number, total_steps: plan.expected_steps, completed_steps: plan.completed_steps },
+        });
+      }
     }
 
     return { steps: updatedSteps, plans };
@@ -128,13 +161,11 @@ export async function recalculatePlan(planId, sql) {
     UPDATE treatment_plans tp SET
       completed_steps = (SELECT cnt FROM completed_count),
       next_action = (SELECT step_name FROM next_step),
-      -- Timeline Event Candidate: Plan Auto-Completed
       status = CASE
         WHEN (SELECT cnt FROM completed_count) >= (SELECT expected_steps FROM plan_info)
         THEN 'completed'::treatment_plan_status
         ELSE 'active'::treatment_plan_status
       END,
-      -- Timeline Event Candidate: Attention Resolved (auto, via plan completion)
       attention_status = CASE
         WHEN (SELECT cnt FROM completed_count) >= (SELECT expected_steps FROM plan_info)
         THEN 'resolved'

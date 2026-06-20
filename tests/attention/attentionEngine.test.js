@@ -194,33 +194,38 @@ describe('Attention Engine', () => {
   // Attention Status Transitions
   // ──────────────────────────────────────────────
   describe('setAttentionStatus', () => {
+    function mockTx() {
+      const fn = vi.fn().mockResolvedValue([{ id: 'evt-1', event_type: 'ATTENTION_ACKNOWLEDGED', event_time: new Date() }]);
+      return Object.assign(fn, { begin: vi.fn(cb => cb(fn)) });
+    }
+
     it('acknowledge a plan → succeeds', async () => {
-      updateAttentionStatus.mockResolvedValue({ id: 1, attention_status: 'acknowledged' });
-      const result = await setAttentionStatus(1, 'acknowledged');
+      updateAttentionStatus.mockResolvedValue({ id: 1, patient_id: 1, tooth_number: 16, attention_status: 'acknowledged' });
+      const result = await setAttentionStatus(mockTx(), 1, 'acknowledged');
       expect(result.attention_status).toBe('acknowledged');
-      expect(updateAttentionStatus).toHaveBeenCalledWith(1, 'acknowledged');
+      expect(updateAttentionStatus).toHaveBeenCalledWith(1, 'acknowledged', expect.any(Function));
     });
 
     it('resolve a plan → succeeds', async () => {
-      updateAttentionStatus.mockResolvedValue({ id: 1, attention_status: 'resolved' });
-      const result = await setAttentionStatus(1, 'resolved');
+      updateAttentionStatus.mockResolvedValue({ id: 1, patient_id: 1, attention_status: 'resolved' });
+      const result = await setAttentionStatus(mockTx(), 1, 'resolved');
       expect(result.attention_status).toBe('resolved');
     });
 
     it('un-acknowledge (mark new) → succeeds', async () => {
-      updateAttentionStatus.mockResolvedValue({ id: 1, attention_status: 'new' });
-      const result = await setAttentionStatus(1, 'new');
+      updateAttentionStatus.mockResolvedValue({ id: 1, patient_id: 1, attention_status: 'new' });
+      const result = await setAttentionStatus(mockTx(), 1, 'new');
       expect(result.attention_status).toBe('new');
     });
 
     it('invalid status → throws 400', async () => {
-      await expect(setAttentionStatus(1, 'invalid')).rejects.toMatchObject({ status: 400 });
+      await expect(setAttentionStatus(mockTx(), 1, 'invalid')).rejects.toMatchObject({ status: 400 });
       expect(updateAttentionStatus).not.toHaveBeenCalled();
     });
 
     it('repository returns null (not found / invalid transition) → throws 404', async () => {
       updateAttentionStatus.mockResolvedValue(null);
-      await expect(setAttentionStatus(999, 'acknowledged')).rejects.toMatchObject({ status: 404 });
+      await expect(setAttentionStatus(mockTx(), 999, 'acknowledged')).rejects.toMatchObject({ status: 404 });
     });
   });
 });

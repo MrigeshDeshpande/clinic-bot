@@ -1,5 +1,6 @@
 import { logger } from '@/lib/logger';
 import { updateAttentionStatus } from '@/db/repositories/treatmentPlanRepository';
+import { recordEvent } from './timelineService';
 
 /**
  * Get patients with overdue follow-ups.
@@ -127,15 +128,29 @@ export async function getPendingPayments(sql, limit = 20) {
  * Allowed: new↔acknowledged, new/acknowledged→resolved.
  * Not allowed: resolved→anything.
  */
-export async function setAttentionStatus(planId, status) {
+export async function setAttentionStatus(sql, planId, status, actorType = 'doctor') {
   if (!['acknowledged', 'resolved', 'new'].includes(status)) {
     throw Object.assign(new Error(`Invalid attention status: ${status}`), { status: 400 });
   }
-  const result = await updateAttentionStatus(planId, status);
-  if (!result) {
-    throw Object.assign(new Error('Plan not found or invalid transition'), { status: 404 });
-  }
-  return result;
+
+  return sql.begin(async (tx) => {
+    const result = await updateAttentionStatus(planId, status, tx);
+    if (!result) {
+      throw Object.assign(new Error('Plan not found or invalid transition'), { status: 404 });
+    }
+
+    await recordEvent(tx, {
+      patient_id: result.patient_id,
+      event_type: status === 'acknowledged' ? 'ATTENTION_ACKNOWLEDGED' :
+                  status === 'resolved' ? 'ATTENTION_RESOLVED' : 'ATTENTION_REOPENED',
+      actor_type: actorType,
+      source_type: 'treatment_plan',
+      source_id: planId,
+      metadata: { version: 1, plan_id: planId, tooth_number: result.tooth_number, previous_status: result.attention_status },
+    });
+
+    return result;
+  });
 }
 
 /**

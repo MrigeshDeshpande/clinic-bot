@@ -795,6 +795,30 @@ export async function runMigrations() {
       ON CONFLICT (code) DO NOTHING;
     `;
 
+    await db`
+      CREATE TABLE IF NOT EXISTS patient_timeline_events (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id  UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        event_type  VARCHAR(50) NOT NULL,
+        event_time  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        actor_type  VARCHAR(20) NOT NULL,
+        actor_id    VARCHAR(255),
+        source_type VARCHAR(50),
+        source_id   VARCHAR(255),
+        metadata    JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_timeline_patient_event ON patient_timeline_events(patient_id, event_time DESC);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_timeline_type ON patient_timeline_events(event_type);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_timeline_source ON patient_timeline_events(source_type, source_id);
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {

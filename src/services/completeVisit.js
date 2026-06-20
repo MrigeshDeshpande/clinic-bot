@@ -2,6 +2,7 @@ import { toPgTextArray } from '@/lib/pgArray';
 import { VISIT_MODES } from '@/lib/visitModes';
 import { logger } from '@/lib/logger';
 import { completeVisitSteps } from './treatmentPlanService';
+import { recordEvent } from './timelineService';
 
 export async function completeVisit(sql, body) {
   const {
@@ -152,75 +153,128 @@ export async function completeVisit(sql, body) {
       ? `WHERE id = $${p} AND status NOT IN ('cancelled', 'no_show', 'superseded')`
       : `WHERE id = $${p} AND status NOT IN ('cancelled', 'no_show', 'superseded')`;
 
-  let updateResult;
+  let appointment;
 
-  if (isCompletion && paidAmount !== undefined && (parseInt(paidAmount, 10) || 0) > 0) {
-    const paidAmt = parseInt(paidAmount, 10) || 0;
-    const paymentMethodParam = paymentMethod || null;
-    
-    // We add two more parameters for the CTE
-    const amtIndex = p + 1;
-    const methodIndex = p + 2;
-    params.push(paidAmt, paymentMethodParam);
+  await sql.begin(async (tx) => {
+    let updateResult;
 
-    const combinedQuery = `
-      WITH upd AS (
-        UPDATE appointments SET ${setClauses.join(', ')} ${whereClause}
-        RETURNING id, patient_id, consultation_fee, treatment_charges, medicine_charges, paid_amount, payment_status, paid_at, payment_method
-      ),
-      inserted AS (
-        INSERT INTO payments (appointment_id, patient_id, amount, direction, kind, method, notes, recorded_by)
-        SELECT upd.id, upd.patient_id, $${amtIndex}, 'credit', 'payment', $${methodIndex}, NULL, 'reception'
-        FROM upd
-        ON CONFLICT (idempotency_key) DO NOTHING
-        RETURNING *
-      ),
-      net AS (
-        SELECT COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0) AS amount
-        FROM payments WHERE appointment_id = $${p}
-      ),
-      sync AS (
-        UPDATE appointments a SET
-          paid_amount = net.amount,
-          payment_status = CASE
-            WHEN net.amount >= a.consultation_fee + a.treatment_charges + a.medicine_charges THEN 'paid'
-            WHEN net.amount > 0 THEN 'partial' ELSE 'pending'
-          END,
-          paid_at = CASE WHEN net.amount > 0 THEN COALESCE(a.paid_at, NOW()) ELSE NULL END,
-          payment_method = $${methodIndex}
-        FROM net
-        WHERE a.id = $${p}
-        RETURNING a.id
-      )
-      SELECT (SELECT row_to_json(inserted.*) FROM inserted) AS payment, (SELECT row_to_json(upd.*) FROM upd) AS upd
+    if (isCompletion && paidAmount !== undefined && (parseInt(paidAmount, 10) || 0) > 0) {
+      const paidAmt = parseInt(paidAmount, 10) || 0;
+      const paymentMethodParam = paymentMethod || null;
+
+      const amtIndex = p + 1;
+      const methodIndex = p + 2;
+      params.push(paidAmt, paymentMethodParam);
+
+      const combinedQuery = `
+        WITH upd AS (
+          UPDATE appointments SET ${setClauses.join(', ')} ${whereClause}
+          RETURNING id, patient_id, consultation_fee, treatment_charges, medicine_charges, paid_amount, payment_status, paid_at, payment_method
+        ),
+        inserted AS (
+          INSERT INTO payments (appointment_id, patient_id, amount, direction, kind, method, notes, recorded_by)
+          SELECT upd.id, upd.patient_id, $${amtIndex}, 'credit', 'payment', $${methodIndex}, NULL, 'reception'
+          FROM upd
+          ON CONFLICT (idempotency_key) DO NOTHING
+          RETURNING *
+        ),
+        net AS (
+          SELECT COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0) AS amount
+          FROM payments WHERE appointment_id = $${p}
+        ),
+        sync AS (
+          UPDATE appointments a SET
+            paid_amount = net.amount,
+            payment_status = CASE
+              WHEN net.amount >= a.consultation_fee + a.treatment_charges + a.medicine_charges THEN 'paid'
+              WHEN net.amount > 0 THEN 'partial' ELSE 'pending'
+            END,
+            paid_at = CASE WHEN net.amount > 0 THEN COALESCE(a.paid_at, NOW()) ELSE NULL END,
+            payment_method = $${methodIndex}
+          FROM net
+          WHERE a.id = $${p}
+          RETURNING a.id
+        )
+        SELECT (SELECT row_to_json(inserted.*) FROM inserted) AS payment, (SELECT row_to_json(upd.*) FROM upd) AS upd
+      `;
+
+      const result = await tx.unsafe(combinedQuery, params);
+      updateResult = result;
+    } else {
+      const query = `UPDATE appointments SET ${setClauses.join(', ')} ${whereClause} RETURNING id, patient_id`;
+      updateResult = await tx.unsafe(query, params);
+    }
+
+    if (updateResult.count === 0) {
+      const errorMsg = isCompletion
+        ? 'Appointment not found or already completed. Only confirmed appointments can be completed.'
+        : isEdit
+          ? 'Appointment not found or cannot be edited. Cancelled, no-show, and superseded appointments cannot be edited.'
+          : 'Appointment not found or cannot be updated.';
+      throw Object.assign(new Error(errorMsg), { status: 400 });
+    }
+
+    const [appt] = await tx`
+      SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,
+             treatments, diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
+             notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected, tooth_diagnoses, prescription_key,
+             chief_complaint, general_examination, extra_oral_examination,
+             status, arrival_status, arrived_at, payment_status, payment_method, transaction_id, paid_amount, paid_at,
+             created_at, updated_at
+      FROM appointments WHERE id = ${appointmentId}
     `;
-    
-    const result = await sql.unsafe(combinedQuery, params);
-    updateResult = result;
-  } else {
-    // Standard update without payment logic
-    const query = `UPDATE appointments SET ${setClauses.join(', ')} ${whereClause} RETURNING id, patient_id`;
-    updateResult = await sql.unsafe(query, params);
-  }
 
-  if (updateResult.count === 0) {
-    const errorMsg = isCompletion
-      ? 'Appointment not found or already completed. Only confirmed appointments can be completed.'
-      : isEdit
-        ? 'Appointment not found or cannot be edited. Cancelled, no-show, and superseded appointments cannot be edited.'
-        : 'Appointment not found or cannot be updated.';
-    throw Object.assign(new Error(errorMsg), { status: 400 });
-  }
+    const events = [];
 
-  const [appointment] = await sql`
-    SELECT id, logical_id, wa_id, patient_name, patient_id, date, time, treatment,
-           treatments, diagnosis, medicines, consultation_fee, treatment_charges, medicine_charges,
-           notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected, tooth_diagnoses, prescription_key,
-           chief_complaint, general_examination, extra_oral_examination,
-           status, arrival_status, arrived_at, payment_status, payment_method, transaction_id, paid_amount, paid_at,
-           created_at, updated_at
-    FROM appointments WHERE id = ${appointmentId}
-  `;
+    if (isCompletion) {
+      events.push(recordEvent(tx, {
+        patient_id: appt.patient_id,
+        event_type: 'VISIT_COMPLETED',
+        actor_type: body.followupCreatedBy || 'doctor',
+        source_type: 'appointment',
+        source_id: appointmentId,
+        metadata: { version: 1, treatment: appt.treatment, mode },
+      }));
+    }
+
+    if (followUpDate !== undefined) {
+      if (followUpDate) {
+        events.push(recordEvent(tx, {
+          patient_id: appt.patient_id,
+          event_type: 'FOLLOWUP_CREATED',
+          actor_type: body.followupCreatedBy || 'doctor',
+          source_type: 'appointment',
+          source_id: appointmentId,
+          metadata: { version: 1, follow_up_date: followUpDate, reason: body.followupReason || null, created_by: body.followupCreatedBy || 'doctor' },
+        }));
+      } else {
+        events.push(recordEvent(tx, {
+          patient_id: appt.patient_id,
+          event_type: 'FOLLOWUP_CANCELLED',
+          actor_type: body.followupCreatedBy || 'doctor',
+          source_type: 'appointment',
+          source_id: appointmentId,
+          metadata: { version: 1 },
+        }));
+      }
+    }
+
+    if (isCompletion && paidAmount !== undefined && (parseInt(paidAmount, 10) || 0) > 0) {
+      const totalFees = (parseInt(appt.consultation_fee, 10) || 0) + (parseInt(appt.treatment_charges, 10) || 0) + (parseInt(appt.medicine_charges, 10) || 0);
+      const newPaid = (parseInt(appt.paid_amount, 10) || 0);
+      events.push(recordEvent(tx, {
+        patient_id: appt.patient_id,
+        event_type: 'PAYMENT_RECEIVED',
+        actor_type: 'doctor',
+        source_type: 'appointment',
+        source_id: appointmentId,
+        metadata: { version: 1, amount: parseInt(paidAmount, 10), method: paymentMethod || null, outstanding_after: Math.max(0, totalFees - newPaid) },
+      }));
+    }
+
+    await Promise.all(events);
+    appointment = appt;
+  });
 
   if (stepIds?.length) {
     try {

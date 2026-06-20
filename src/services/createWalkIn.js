@@ -2,6 +2,7 @@ import { findPatientByPhone, findPatientById, createPatient, updatePatient } fro
 import { recordPayment } from './recordPayment';
 import { logger } from '@/lib/logger';
 import { createPlanWithSteps } from './treatmentPlanService';
+import { recordEvent } from './timelineService';
 
 export async function createWalkIn(sql, body) {
   const {
@@ -77,36 +78,69 @@ export async function createWalkIn(sql, body) {
   const pMethod = pStatus === 'paid' || pStatus === 'partial' ? (paymentMethod || 'cash') : null;
   const paidAt = pStatus === 'paid' || pStatus === 'partial' ? new Date() : null;
 
-  const [appointment] = await sql`
-    INSERT INTO appointments (
-      logical_id, version, wa_id, patient_name, patient_phone, patient_id,
-      date, time, treatment, treatments, status,
-      consultation_fee, treatment_charges, medicine_charges,
-      treatment_fees,
-      diagnosis, medicines, notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected,
-      tooth_diagnoses,
-      arrival_status,
-      payment_status, payment_method, paid_at, paid_amount,
-      chief_complaint, general_examination, extra_oral_examination
-    ) VALUES (
-      gen_random_uuid(), 1, ${resolvedPhone}, ${patient_name}, ${resolvedPhone}, ${patientId},
-      ${date || today}, ${time || null}, ${treatment || 'Walk-in'}, ${treatments || []}, 'completed',
-      ${consFee}, ${treatFee}, ${medFee},
-      ${treatmentFees || {}},
-      ${diagnosis || ''}, ${medicines || []}, ${notes || ''},
-      ${followUpDate || null}, ${followUpInstructions || ''},
-      ${advice_selected || []}, ${diagnosis_selected || []},
-      ${tooth_diagnoses || []},
-      'arrived',
-      ${pStatus}, ${pMethod}, ${paidAt}, ${paidAmt},
-      ${chiefComplaint || ''}, ${generalExamination || ''}, ${extraOralExamination || ''}
-    )
-    RETURNING *
-  `;
+  let appointment;
+
+  await sql.begin(async (tx) => {
+    const [appt] = await tx`
+      INSERT INTO appointments (
+        logical_id, version, wa_id, patient_name, patient_phone, patient_id,
+        date, time, treatment, treatments, status,
+        consultation_fee, treatment_charges, medicine_charges,
+        treatment_fees,
+        diagnosis, medicines, notes, follow_up_date, follow_up_instructions, advice_selected, diagnosis_selected,
+        tooth_diagnoses,
+        arrival_status,
+        payment_status, payment_method, paid_at, paid_amount,
+        chief_complaint, general_examination, extra_oral_examination
+      ) VALUES (
+        gen_random_uuid(), 1, ${resolvedPhone}, ${patient_name}, ${resolvedPhone}, ${patientId},
+        ${date || today}, ${time || null}, ${treatment || 'Walk-in'}, ${treatments || []}, 'completed',
+        ${consFee}, ${treatFee}, ${medFee},
+        ${treatmentFees || {}},
+        ${diagnosis || ''}, ${medicines || []}, ${notes || ''},
+        ${followUpDate || null}, ${followUpInstructions || ''},
+        ${advice_selected || []}, ${diagnosis_selected || []},
+        ${tooth_diagnoses || []},
+        'arrived',
+        ${pStatus}, ${pMethod}, ${paidAt}, ${paidAmt},
+        ${chiefComplaint || ''}, ${generalExamination || ''}, ${extraOralExamination || ''}
+      )
+      RETURNING *
+    `;
+
+    const events = [];
+
+    events.push(recordEvent(tx, {
+      patient_id: appt.patient_id,
+      event_type: 'VISIT_COMPLETED',
+      actor_type: 'reception',
+      source_type: 'appointment',
+      source_id: appt.id,
+      metadata: { version: 1, treatment: body.treatment || 'Walk-in', mode: 'create_walk_in' },
+    }));
+
+    if (paidAmt > 0) {
+      await recordPayment(tx, {
+        appointmentId: appt.id,
+        paidAmount: paidAmt,
+        method: pMethod,
+      });
+      events.push(recordEvent(tx, {
+        patient_id: appt.patient_id,
+        event_type: 'PAYMENT_RECEIVED',
+        actor_type: 'reception',
+        source_type: 'appointment',
+        source_id: appt.id,
+        metadata: { version: 1, amount: paidAmt, method: pMethod, outstanding_after: Math.max(0, totalFees - paidAmt) },
+      }));
+    }
+
+    await Promise.all(events);
+    appointment = appt;
+  });
 
   if (procedureCodeId && appointment.patient_id) {
     try {
-      // Timeline Event Candidate: Plan Created (walk-in)
       await createPlanWithSteps({
         patientId: appointment.patient_id,
         procedureCodeId,
@@ -121,14 +155,6 @@ export async function createWalkIn(sql, body) {
         stack: planErr.stack,
       });
     }
-  }
-
-  if (paidAmt > 0) {
-    await recordPayment(sql, {
-      appointmentId: appointment.id,
-      paidAmount: paidAmt,
-      method: pMethod,
-    });
   }
 
   return { appointment, patient_name, treatment: treatment || 'Walk-in', fees: consFee + treatFee + medFee };

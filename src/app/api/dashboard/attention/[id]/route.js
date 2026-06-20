@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getSql } from '@/db/pool';
 import { setAttentionStatus } from '@/services/attentionEngine';
 
 export async function PATCH(req, { params }) {
@@ -11,8 +12,9 @@ export async function PATCH(req, { params }) {
         { status: 400 }
       );
     }
-    // Timeline Event Candidate: Attention Acknowledged / Resolved / Re-opened
-    const plan = await setAttentionStatus(params.id, status);
+    const sql = getSql();
+    if (!sql) return NextResponse.json({ error: 'Database not ready' }, { status: 503 });
+    const plan = await setAttentionStatus(sql, params.id, status);
     return NextResponse.json({ plan });
   } catch (e) {
     const httpStatus = e.status || 500;
