@@ -1,6 +1,6 @@
 import { logger } from '@/lib/logger';
 import { updateAttentionStatus } from '@/db/repositories/treatmentPlanRepository';
-import { recordEvent } from './timelineService';
+import { recordAttentionAcknowledged, recordAttentionResolved, recordAttentionReopened } from './timelineService';
 
 /**
  * Get patients with overdue follow-ups.
@@ -142,15 +142,23 @@ export async function setAttentionStatus(sql, planId, status, actorType = 'docto
       throw Object.assign(new Error('Plan not found or invalid transition'), { status: 404 });
     }
 
-    await recordEvent(tx, {
+    const common = {
       patient_id: result.patient_id,
-      event_type: status === 'acknowledged' ? 'ATTENTION_ACKNOWLEDGED' :
-                  status === 'resolved' ? 'ATTENTION_RESOLVED' : 'ATTENTION_REOPENED',
       actor_type: actorType,
       source_type: 'treatment_plan',
       source_id: planId,
-      metadata: { version: 1, plan_id: planId, tooth_number: result.tooth_number, previous_status: result.attention_status },
-    });
+      plan_id: planId,
+      tooth_number: result.tooth_number,
+      previous_status: result.attention_status,
+    };
+
+    if (status === 'acknowledged') {
+      await recordAttentionAcknowledged(tx, common);
+    } else if (status === 'resolved') {
+      await recordAttentionResolved(tx, { ...common, auto: undefined });
+    } else {
+      await recordAttentionReopened(tx, common);
+    }
 
     return result;
   });

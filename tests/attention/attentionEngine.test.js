@@ -156,13 +156,13 @@ describe('Attention Engine', () => {
         // Each of the 3 functions calls sql once, in order:
         // 1 = getOverdueFollowups, 2 = getIncompleteTreatments, 3 = getPendingPayments
         if (callCount === 1) return Promise.resolve([
-          { patient_name: 'Ravi', days_overdue: 5 },
+          { patient_id: 'pat-1', patient_name: 'Ravi', days_overdue: 5 },
         ]);
         if (callCount === 2) return Promise.resolve([
-          { patient_name: 'Priya', days_since_activity: 10 },
+          { plan_id: 'plan-1', patient_name: 'Priya', days_since_activity: 10 },
         ]);
         return Promise.resolve([
-          { patient_name: 'Sunita', outstanding: 500 },
+          { appointment_id: 'appt-1', patient_name: 'Sunita', outstanding: 500 },
         ]);
       });
 

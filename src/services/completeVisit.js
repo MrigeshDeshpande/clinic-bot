@@ -2,7 +2,8 @@ import { toPgTextArray } from '@/lib/pgArray';
 import { VISIT_MODES } from '@/lib/visitModes';
 import { logger } from '@/lib/logger';
 import { completeVisitSteps } from './treatmentPlanService';
-import { recordEvent } from './timelineService';
+import { recordVisitCompleted, recordFollowupCreated, recordFollowupCancelled, recordPaymentReceived } from './timelineService';
+import { ACTOR_TYPES } from '@/lib/timelineEvents';
 
 export async function completeVisit(sql, body) {
   const {
@@ -227,34 +228,33 @@ export async function completeVisit(sql, body) {
     const events = [];
 
     if (isCompletion) {
-      events.push(recordEvent(tx, {
+      events.push(recordVisitCompleted(tx, {
         patient_id: appt.patient_id,
-        event_type: 'VISIT_COMPLETED',
-        actor_type: body.followupCreatedBy || 'doctor',
+        actor_type: body.followupCreatedBy || ACTOR_TYPES.DOCTOR,
         source_type: 'appointment',
         source_id: appointmentId,
-        metadata: { version: 1, treatment: appt.treatment, mode },
+        treatment: appt.treatment,
+        mode,
       }));
     }
 
     if (followUpDate !== undefined) {
       if (followUpDate) {
-        events.push(recordEvent(tx, {
+        events.push(recordFollowupCreated(tx, {
           patient_id: appt.patient_id,
-          event_type: 'FOLLOWUP_CREATED',
-          actor_type: body.followupCreatedBy || 'doctor',
+          actor_type: body.followupCreatedBy || ACTOR_TYPES.DOCTOR,
           source_type: 'appointment',
           source_id: appointmentId,
-          metadata: { version: 1, follow_up_date: followUpDate, reason: body.followupReason || null, created_by: body.followupCreatedBy || 'doctor' },
+          follow_up_date: followUpDate,
+          reason: body.followupReason || null,
+          created_by: body.followupCreatedBy || ACTOR_TYPES.DOCTOR,
         }));
       } else {
-        events.push(recordEvent(tx, {
+        events.push(recordFollowupCancelled(tx, {
           patient_id: appt.patient_id,
-          event_type: 'FOLLOWUP_CANCELLED',
-          actor_type: body.followupCreatedBy || 'doctor',
+          actor_type: body.followupCreatedBy || ACTOR_TYPES.DOCTOR,
           source_type: 'appointment',
           source_id: appointmentId,
-          metadata: { version: 1 },
         }));
       }
     }
@@ -262,13 +262,14 @@ export async function completeVisit(sql, body) {
     if (isCompletion && paidAmount !== undefined && (parseInt(paidAmount, 10) || 0) > 0) {
       const totalFees = (parseInt(appt.consultation_fee, 10) || 0) + (parseInt(appt.treatment_charges, 10) || 0) + (parseInt(appt.medicine_charges, 10) || 0);
       const newPaid = (parseInt(appt.paid_amount, 10) || 0);
-      events.push(recordEvent(tx, {
+      events.push(recordPaymentReceived(tx, {
         patient_id: appt.patient_id,
-        event_type: 'PAYMENT_RECEIVED',
-        actor_type: 'doctor',
+        actor_type: ACTOR_TYPES.DOCTOR,
         source_type: 'appointment',
         source_id: appointmentId,
-        metadata: { version: 1, amount: parseInt(paidAmount, 10), method: paymentMethod || null, outstanding_after: Math.max(0, totalFees - newPaid) },
+        amount: parseInt(paidAmount, 10),
+        method: paymentMethod || null,
+        outstanding_after: Math.max(0, totalFees - newPaid),
       }));
     }
 

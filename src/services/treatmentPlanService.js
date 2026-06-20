@@ -1,4 +1,5 @@
-import { recordEvent } from './timelineService';
+import { recordPlanCreated, recordStepCompleted, recordPlanCompleted } from './timelineService';
+import { ACTOR_TYPES } from '@/lib/timelineEvents';
 
 export async function createPlanWithSteps({ patientId, procedureCodeId, toothNumber, source }, sql) {
   if (!patientId) throw Object.assign(new Error('patientId is required'), { status: 400 });
@@ -40,13 +41,16 @@ export async function createPlanWithSteps({ patientId, procedureCodeId, toothNum
       `, params);
     }
 
-    await recordEvent(tx, {
+    await recordPlanCreated(tx, {
       patient_id: plan.patient_id,
-      event_type: 'PLAN_CREATED',
-      actor_type: source || 'doctor',
+      actor_type: source || ACTOR_TYPES.DOCTOR,
       source_type: 'treatment_plan',
       source_id: plan.id,
-      metadata: { version: 1, procedure_code: procedure.code, procedure_name: procedure.name, tooth_number: toothNumber, expected_steps: stepNames.length, source: source || 'doctor' },
+      procedure_code: procedure.code,
+      procedure_name: procedure.name,
+      tooth_number: toothNumber,
+      expected_steps: stepNames.length,
+      source: source || ACTOR_TYPES.DOCTOR,
     });
 
     return { plan, steps };
@@ -116,23 +120,27 @@ export async function completeVisitSteps({ appointmentId, stepIds }, sql) {
     for (const plan of plans) {
       const completedForPlan = updatedSteps.filter(s => s.plan_id === plan.id);
       if (completedForPlan.length > 0) {
-        await recordEvent(tx, {
+        await recordStepCompleted(tx, {
           patient_id: plan.patient_id,
-          event_type: 'STEP_COMPLETED',
-          actor_type: 'doctor',
+          actor_type: ACTOR_TYPES.DOCTOR,
           source_type: 'treatment_plan',
           source_id: plan.id,
-          metadata: { version: 1, step_names: completedForPlan.map(s => s.step_name), step_ids: completedForPlan.map(s => s.id), step_count: completedForPlan.length, appointment_id: appointmentId },
+          step_names: completedForPlan.map(s => s.step_name),
+          step_ids: completedForPlan.map(s => s.id),
+          step_count: completedForPlan.length,
+          appointment_id: appointmentId,
         });
       }
       if (plan.status === 'completed') {
-        await recordEvent(tx, {
+        await recordPlanCompleted(tx, {
           patient_id: plan.patient_id,
-          event_type: 'PLAN_COMPLETED',
-          actor_type: 'doctor',
+          actor_type: ACTOR_TYPES.DOCTOR,
           source_type: 'treatment_plan',
           source_id: plan.id,
-          metadata: { version: 1, plan_id: plan.id, tooth_number: plan.tooth_number, total_steps: plan.expected_steps, completed_steps: plan.completed_steps },
+          plan_id: plan.id,
+          tooth_number: plan.tooth_number,
+          total_steps: plan.expected_steps,
+          completed_steps: plan.completed_steps,
         });
       }
     }

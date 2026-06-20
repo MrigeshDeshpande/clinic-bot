@@ -2,7 +2,8 @@ import { findPatientByPhone, findPatientById, createPatient, updatePatient } fro
 import { recordPayment } from './recordPayment';
 import { logger } from '@/lib/logger';
 import { createPlanWithSteps } from './treatmentPlanService';
-import { recordEvent } from './timelineService';
+import { recordVisitCompleted, recordPaymentReceived } from './timelineService';
+import { ACTOR_TYPES } from '@/lib/timelineEvents';
 
 export async function createWalkIn(sql, body) {
   const {
@@ -110,13 +111,13 @@ export async function createWalkIn(sql, body) {
 
     const events = [];
 
-    events.push(recordEvent(tx, {
+    events.push(recordVisitCompleted(tx, {
       patient_id: appt.patient_id,
-      event_type: 'VISIT_COMPLETED',
-      actor_type: 'reception',
+      actor_type: ACTOR_TYPES.RECEPTION,
       source_type: 'appointment',
       source_id: appt.id,
-      metadata: { version: 1, treatment: body.treatment || 'Walk-in', mode: 'create_walk_in' },
+      treatment: body.treatment || 'Walk-in',
+      mode: 'create_walk_in',
     }));
 
     if (paidAmt > 0) {
@@ -125,13 +126,14 @@ export async function createWalkIn(sql, body) {
         paidAmount: paidAmt,
         method: pMethod,
       });
-      events.push(recordEvent(tx, {
+      events.push(recordPaymentReceived(tx, {
         patient_id: appt.patient_id,
-        event_type: 'PAYMENT_RECEIVED',
-        actor_type: 'reception',
+        actor_type: ACTOR_TYPES.RECEPTION,
         source_type: 'appointment',
         source_id: appt.id,
-        metadata: { version: 1, amount: paidAmt, method: pMethod, outstanding_after: Math.max(0, totalFees - paidAmt) },
+        amount: paidAmt,
+        method: pMethod,
+        outstanding_after: Math.max(0, totalFees - paidAmt),
       }));
     }
 
