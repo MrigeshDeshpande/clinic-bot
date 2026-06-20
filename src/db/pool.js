@@ -956,6 +956,67 @@ export async function runMigrations() {
         ON prescription_extractions(extractor_version);
     `;
 
+    // ── Async job queue: media_processing_jobs ──────────────────────
+    // DB-as-queue for background workloads (OCR, voice, lab, brief).
+    // Worker polls via SELECT ... FOR UPDATE SKIP LOCKED.
+    // Idempotency key prevents duplicate queueing.
+
+    await db`
+      CREATE TABLE IF NOT EXISTS media_processing_jobs (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        media_asset_id    UUID NOT NULL
+          REFERENCES media_assets(id)
+          ON DELETE CASCADE,
+
+        job_type          VARCHAR(50) NOT NULL,
+
+        status            VARCHAR(20) NOT NULL DEFAULT 'queued',
+
+        payload           JSONB,
+
+        attempt_count     INTEGER NOT NULL DEFAULT 0,
+
+        error_message     TEXT,
+
+        started_at        TIMESTAMPTZ,
+        completed_at      TIMESTAMPTZ,
+
+        idempotency_key   TEXT NOT NULL UNIQUE,
+
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE media_processing_jobs ADD CONSTRAINT valid_job_status
+        CHECK (status IN ('queued', 'processing', 'completed', 'failed'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE media_processing_jobs ADD CONSTRAINT valid_attempt_count
+        CHECK (attempt_count >= 0);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_jobs_status
+        ON media_processing_jobs(status);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_jobs_media_asset
+        ON media_processing_jobs(media_asset_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_jobs_created
+        ON media_processing_jobs(created_at);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_jobs_status_created
+        ON media_processing_jobs(status, created_at);
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {
