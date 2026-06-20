@@ -852,6 +852,48 @@ export async function runMigrations() {
         ON patient_timeline_events(event_type, actor_type);
     `;
 
+    // ── Evidence: media_assets ──────────────────────────────────────
+    // Immutable evidence store. Processing state lives in
+    // media_processing_jobs (PR-7), not here.
+
+    await db`
+      CREATE TABLE IF NOT EXISTS media_assets (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id    UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id        UUID REFERENCES patients(id),
+        uploaded_by_type  VARCHAR(20) NOT NULL,
+        uploaded_by_id    VARCHAR(255),
+        media_type        VARCHAR(50) NOT NULL,
+        mime_type         VARCHAR(100) NOT NULL,
+        r2_key            TEXT NOT NULL UNIQUE,
+        size_bytes        BIGINT,
+        -- Evidence acquisition source.
+        -- Examples: whatsapp, dashboard, mobile_app, api, migration
+        -- Keep unconstrained until vocabulary stabilizes.
+        source            VARCHAR(50) NOT NULL DEFAULT 'unknown',
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE media_assets ADD CONSTRAINT valid_uploaded_by
+        CHECK (uploaded_by_type IN ('doctor', 'reception', 'patient', 'system', 'dhara'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_appointment
+        ON media_assets(appointment_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_patient
+        ON media_assets(patient_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_created
+        ON media_assets(created_at DESC);
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {
