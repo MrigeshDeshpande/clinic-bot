@@ -111,6 +111,7 @@ export default function PatientDetailPage() {
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [sendingReviewLink, setSendingReviewLink] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [patientRatings, setPatientRatings] = useState({});
   const moreRef = useRef(null);
   const visitsRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -132,6 +133,7 @@ export default function PatientDetailPage() {
         }
         setPatient(data.patient);
         setVisits(data.visits || []);
+        if (data.patient?.patient_ratings) setPatientRatings(data.patient.patient_ratings);
         if (data.review_url) setGoogleMapsUrl(data.review_url);
         setEditForm({
           name: data.patient?.name || '',
@@ -1183,7 +1185,15 @@ export default function PatientDetailPage() {
                             <button
                               key={star}
                               type="button"
-                              onClick={() => setPatientRatings(prev => ({ ...prev, [cat.key]: (prev[cat.key] || 0) === star ? 0 : star }))}
+                              onClick={() => {
+                                const next = { ...patientRatings, [cat.key]: (patientRatings[cat.key] || 0) === star ? 0 : star };
+                                setPatientRatings(next);
+                                fetch(`/api/dashboard/patients/${id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ patient_ratings: next }),
+                                }).catch(() => {});
+                              }}
                               className={`w-5 h-5 flex items-center justify-center rounded transition-all hover:scale-110 active:scale-90 ${
                                 (patientRatings[cat.key] || 0) >= star
                                   ? 'text-amber-400'

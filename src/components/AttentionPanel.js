@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ChevronDown, ChevronRight, CalendarClock, Activity, DollarSign, CheckCircle2, User, Check, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, CalendarClock, Activity, DollarSign, CheckCircle2, User, Check, RotateCcw, MessageCircle, ExternalLink } from 'lucide-react';
 
 const TABS = [
   { key: 'overdue_followups', label: 'Overdue', icon: CalendarClock },
@@ -22,6 +22,7 @@ export default function AttentionPanel({ data }) {
   const [activeTab, setActiveTab] = useState('overdue_followups');
   const [treatmentItems, setTreatmentItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(new Set());
+  const [actionLoading, setActionLoading] = useState(new Set());
 
   useEffect(() => {
     if (data?.incomplete_treatments) {
@@ -111,7 +112,7 @@ export default function AttentionPanel({ data }) {
 
           {/* Items — Overdue Followups */}
           {activeTab === 'overdue_followups' && (
-            <TabItems items={overdue_followups} tab="overdue_followups" />
+            <TabItems items={overdue_followups} tab="overdue_followups" onWhatsApp={handleWhatsApp} actionLoading={actionLoading} />
           )}
 
           {/* Items — Incomplete Treatments */}
@@ -131,6 +132,8 @@ export default function AttentionPanel({ data }) {
                         loading={loadingItems.has(item.plan_id)}
                         onAcknowledge={(planId) => handleStatusChange(planId, 'acknowledged')}
                         onResolve={(planId) => handleStatusChange(planId, 'resolved')}
+                        onWhatsApp={handleWhatsApp}
+                        actionLoading={actionLoading}
                       />
                     ))}
                   </div>
@@ -152,6 +155,8 @@ export default function AttentionPanel({ data }) {
                         onAcknowledge={(planId) => handleStatusChange(planId, 'acknowledged')}
                         onUnacknowledge={(planId) => handleStatusChange(planId, 'new')}
                         onResolve={(planId) => handleStatusChange(planId, 'resolved')}
+                        onWhatsApp={handleWhatsApp}
+                        actionLoading={actionLoading}
                       />
                     ))}
                   </div>
@@ -168,12 +173,43 @@ export default function AttentionPanel({ data }) {
 
           {/* Items — Pending Payments */}
           {activeTab === 'pending_payments' && (
-            <TabItems items={pending_payments} tab="pending_payments" />
+            <TabItems items={pending_payments} tab="pending_payments" onWhatsApp={handleWhatsApp} onCollect={handleCollect} actionLoading={actionLoading} />
           )}
         </div>
       )}
     </div>
   );
+
+  async function handleWhatsApp(item, tab) {
+    const key = `wa-${item.patient_id}`;
+    setActionLoading(prev => new Set(prev).add(key));
+    try {
+      const messages = {
+        overdue_followups: `Hi ${item.patient_name}, this is a friendly reminder about your follow-up appointment at Shri Balaji Dental Clinic. Please call us to reschedule.`,
+        incomplete_treatments: `Hi ${item.patient_name}, this is a reminder to continue your dental treatment at Shri Balaji Dental Clinic. Please schedule your next appointment.`,
+        pending_payments: `Hi ${item.patient_name}, this is a gentle reminder about your outstanding balance of ₹${Number(item.outstanding).toLocaleString('en-IN')} at Shri Balaji Dental Clinic. Please clear it at your earliest convenience.`,
+      };
+      await fetch('/api/dashboard/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: item.patient_phone, message: messages[tab] || messages.pending_payments }),
+      });
+    } catch {}
+    setActionLoading(prev => { const n = new Set(prev); n.delete(key); return n; });
+  }
+
+  async function handleCollect(item) {
+    const key = `collect-${item.appointment_id}`;
+    setActionLoading(prev => new Set(prev).add(key));
+    try {
+      await fetch(`/api/dashboard/appointments/${item.appointment_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paid_amount: item.outstanding, payment_status: 'paid' }),
+      });
+    } catch {}
+    setActionLoading(prev => { const n = new Set(prev); n.delete(key); return n; });
+  }
 
   async function handleStatusChange(planId, status) {
     setLoadingItems(prev => new Set(prev).add(planId));
@@ -200,7 +236,7 @@ export default function AttentionPanel({ data }) {
   }
 }
 
-function TabItems({ items, tab }) {
+function TabItems({ items, tab, onWhatsApp, onCollect, actionLoading = new Set() }) {
   if (items.length === 0) {
     return (
       <div className="flex items-center gap-2 py-6 text-sm text-emerald-600 dark:text-emerald-400 justify-center">
@@ -213,7 +249,7 @@ function TabItems({ items, tab }) {
     <div className="space-y-1">
       {items.map((item, i) => (
         <div
-          key={item.patient_id || item.appointment_id || i}
+          key={item.appointment_id || item.patient_id || i}
           className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
         >
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -235,8 +271,44 @@ function TabItems({ items, tab }) {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {renderDaysBadge(item, tab)}
+            {item.patient_phone && onWhatsApp && (
+              <button
+                onClick={() => onWhatsApp(item, tab)}
+                disabled={actionLoading.has(`wa-${item.patient_id}`)}
+                className={`p-1 rounded-md transition-colors ${
+                  actionLoading.has(`wa-${item.patient_id}`)
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-teal-50 dark:hover:bg-teal-900/20 text-teal-600 dark:text-teal-400'
+                }`}
+                title="Send WhatsApp message"
+              >
+                {actionLoading.has(`wa-${item.patient_id}`) ? (
+                  <div className="w-3.5 h-3.5 border-2 border-teal-300 border-t-teal-600 rounded-full animate-spin" />
+                ) : (
+                  <MessageCircle className="w-3.5 h-3.5" />
+                )}
+              </button>
+            )}
+            {onCollect && tab === 'pending_payments' && (
+              <button
+                onClick={() => onCollect(item)}
+                disabled={actionLoading.has(`collect-${item.appointment_id}`)}
+                className={`p-1 rounded-md transition-colors ${
+                  actionLoading.has(`collect-${item.appointment_id}`)
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+                }`}
+                title="Collect payment"
+              >
+                {actionLoading.has(`collect-${item.appointment_id}`) ? (
+                  <div className="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-600 rounded-full animate-spin" />
+                ) : (
+                  <DollarSign className="w-3.5 h-3.5" />
+                )}
+              </button>
+            )}
           </div>
         </div>
       ))}
@@ -244,7 +316,7 @@ function TabItems({ items, tab }) {
   );
 }
 
-function TreatmentItemRow({ item, acknowledged, loading, onAcknowledge, onUnacknowledge, onResolve }) {
+function TreatmentItemRow({ item, acknowledged, loading, onAcknowledge, onUnacknowledge, onResolve, onWhatsApp, actionLoading }) {
   const days = item.days_since_activity;
   const sevClass = !acknowledged && days >= 30
     ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
@@ -299,6 +371,24 @@ function TreatmentItemRow({ item, acknowledged, loading, onAcknowledge, onUnackn
           </span>
         )}
         <div className="flex gap-1">
+          {item.patient_phone && onWhatsApp && (
+            <button
+              onClick={() => onWhatsApp(item, 'incomplete_treatments')}
+              disabled={actionLoading?.has(`wa-${item.patient_id}`)}
+              className={`p-1 rounded-md transition-colors ${
+                actionLoading?.has(`wa-${item.patient_id}`)
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:bg-teal-50 dark:hover:bg-teal-900/20 text-teal-600 dark:text-teal-400'
+              }`}
+              title="Send WhatsApp message"
+            >
+              {actionLoading?.has(`wa-${item.patient_id}`) ? (
+                <div className="w-3.5 h-3.5 border-2 border-teal-300 border-t-teal-600 rounded-full animate-spin" />
+              ) : (
+                <MessageCircle className="w-3.5 h-3.5" />
+              )}
+            </button>
+          )}
           {!acknowledged ? (
             <button
               onClick={() => onAcknowledge?.(item.plan_id)}

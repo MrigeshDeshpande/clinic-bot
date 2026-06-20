@@ -639,12 +639,14 @@ export async function runMigrations() {
           AND jsonb_typeof(value) = 'number'
           AND value::text::numeric BETWEEN 1 AND 5
       )
-      WHERE EXISTS (
-        SELECT 1 FROM jsonb_each(ratings)
-        WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
-           OR jsonb_typeof(value) != 'number'
-           OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
-      )
+      WHERE ratings IS NOT NULL
+        AND jsonb_typeof(ratings) = 'object'
+        AND EXISTS (
+          SELECT 1 FROM jsonb_each(ratings)
+          WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
+             OR jsonb_typeof(value) != 'number'
+             OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
+        )
     `;
 
     // Clean corrupted patient_ratings on patients table
@@ -657,12 +659,14 @@ export async function runMigrations() {
           AND jsonb_typeof(value) = 'number'
           AND value::text::numeric BETWEEN 1 AND 5
       )
-      WHERE EXISTS (
-        SELECT 1 FROM jsonb_each(patient_ratings)
-        WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
-           OR jsonb_typeof(value) != 'number'
-           OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
-      )
+      WHERE patient_ratings IS NOT NULL
+        AND jsonb_typeof(patient_ratings) = 'object'
+        AND EXISTS (
+          SELECT 1 FROM jsonb_each(patient_ratings)
+          WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
+             OR jsonb_typeof(value) != 'number'
+             OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
+        )
     `;
 
     // AI classifications — intent/entity/language logging from Kali gateway

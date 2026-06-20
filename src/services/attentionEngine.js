@@ -14,11 +14,12 @@ export async function getOverdueFollowups(sql, limit = 20) {
         SELECT DISTINCT ON (a.patient_id)
           a.patient_id,
           p.name              AS patient_name,
+          p.phone             AS patient_phone,
           a.follow_up_date,
           a.follow_up_reason,
           a.follow_up_status,
           a.created_at        AS visit_date,
-          COALESCE(a.treatment, a.arrival_complaint, 'Visit') AS treatment_label
+          COALESCE(a.treatment, a.chief_complaint, 'Visit') AS treatment_label
         FROM appointments a
         JOIN patients p ON p.id = a.patient_id
         WHERE a.status = 'completed'
@@ -56,6 +57,7 @@ export async function getIncompleteTreatments(sql, limit = 20) {
         tp.id                  AS plan_id,
         tp.patient_id,
         p.name                 AS patient_name,
+        p.phone                AS patient_phone,
         tp.tooth_number,
         pc.name                AS procedure_name,
         tp.last_activity_at,
@@ -96,6 +98,7 @@ export async function getPendingPayments(sql, limit = 20) {
         a.id                  AS appointment_id,
         a.patient_id,
         p.name                AS patient_name,
+        p.phone               AS patient_phone,
         a.created_at          AS visit_date,
         (
           COALESCE(a.consultation_fee, 0)
@@ -103,7 +106,7 @@ export async function getPendingPayments(sql, limit = 20) {
           + COALESCE(a.medicine_charges, 0)
           - COALESCE(a.paid_amount, 0)
         ) AS outstanding,
-        COALESCE(a.treatment, a.arrival_complaint, 'Visit') AS treatment_label
+        COALESCE(a.treatment, a.chief_complaint, 'Visit') AS treatment_label
       FROM appointments a
       JOIN patients p ON p.id = a.patient_id
       WHERE a.status = 'completed'
@@ -153,6 +156,16 @@ export async function setAttentionStatus(sql, planId, status, actorType = 'docto
   });
 }
 
+function filterUnique(arr, key) {
+  const seen = new Set();
+  return arr.filter(item => {
+    const k = item[key];
+    if (k == null || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 /**
  * Run all 3 attention queries in parallel and return a summary.
  * Each query is independent; one failure returns [] for that category.
@@ -164,5 +177,9 @@ export async function getAttentionSummary(sql) {
     getPendingPayments(sql),
   ]);
 
-  return { overdue_followups, incomplete_treatments, pending_payments };
+  return {
+    overdue_followups: filterUnique(overdue_followups, 'patient_id'),
+    incomplete_treatments: filterUnique(incomplete_treatments, 'plan_id'),
+    pending_payments: filterUnique(pending_payments, 'appointment_id'),
+  };
 }

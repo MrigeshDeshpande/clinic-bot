@@ -50,4 +50,19 @@ export const TEMPLATES = {
     category: 'utility',
     description: 'Payment reminder with UPI link for outstanding balance',
   },
+
+  // Attention panel reminders. Register in Meta Business Manager before use.
+  follow_up_reminder: {
+    name: 'follow_up_reminder',
+    params: ['patient_name', 'clinic_name'],
+    category: 'utility',
+    description: 'Follow-up overdue reminder sent from attention panel Overdue tab',
+  },
+
+  treatment_reminder: {
+    name: 'treatment_reminder',
+    params: ['patient_name', 'procedure_name', 'clinic_name'],
+    category: 'utility',
+    description: 'Incomplete treatment reminder sent from attention panel Treatments tab',
+  },
 };

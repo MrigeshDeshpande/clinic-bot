@@ -82,6 +82,30 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 ### Next Up
 - **Morning Brief**: Dashboard cards showing high/medium/low priority patients on login. Uses `getAttentionSummary()` + `getReason()` per patient. Group by priority. No modal needed — the evidence array from Dhara Reason maps directly to cards.
 - **Dhara Reason Modal**: Only after validating reasoning output against 20-30 real patients. `DharaReasonModal.js` on attention panel "Why?" button.
+- **Meta WhatsApp Templates for Attention Panel**: The Attention Panel has WhatsApp buttons on all 3 tabs (Overdue, Treatments, Payments) that currently send plain text messages. For reliable delivery outside the 24-hour conversation window, register these 3 templates in Meta Business Manager:
+
+  **Required Setup** (do this before the next session):
+  Go to https://business.facebook.com/wa/manage/message-templates/ and create 3 new templates:
+
+  | # | Template Name | Category | Body Variables | Purpose |
+  |---|---|---|---|---|
+  | 1 | `follow_up_reminder` | Utility | `{{1}}` = patient_name, `{{2}}` = clinic_name | Sent from Overdue tab |
+  | 2 | `treatment_reminder` | Utility | `{{1}}` = patient_name, `{{2}}` = procedure_name, `{{3}}` = clinic_name | Sent from Treatments tab |
+  | 3 | `payment_reminder` | Utility | `{{1}}` = patient_name, `{{2}}` = amount, `{{3}}` = payment_link | Already registered if payment reminders work. Sent from Payments tab |
+
+  **Suggested body text for each template:**
+  - `follow_up_reminder`: `"Hi {{1}}, this is a friendly reminder about your follow-up appointment at {{2}}. Please call us to reschedule at your earliest convenience."`
+  - `treatment_reminder`: `"Hi {{1}}, this is a reminder to continue your {{2}} treatment at {{3}}. Please schedule your next appointment."`
+  - `payment_reminder`: `"Hi {{1}}, this is a gentle reminder about your outstanding balance of ₹{{2}}. Please clear it at your earliest convenience. Pay here: {{3}}"`
+
+  **After Meta approval**: The `handleWhatsApp` function in `AttentionPanel.js` must be updated to use template sends:
+  ```js
+  // Change from text-only:
+  fetch('/api/dashboard/send-whatsapp', { body: JSON.stringify({ to, message }) })
+  // To template-based (with text fallback in route):
+  fetch('/api/dashboard/send-whatsapp', { body: JSON.stringify({ to, template: 'follow_up_reminder', params: [name, clinic] }) })
+  ```
+  The route `send-whatsapp/route.js` already supports both formats — it tries `sendTemplate()` when `template` is provided, falling back to `sendText()` if the template fails.
 
 ## Key Decisions
 ### Phase 1 (UI)

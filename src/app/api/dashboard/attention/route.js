@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSql } from '@/db/pool';
+import { getSql, runMigrations } from '@/db/pool';
 import { getAttentionSummary } from '@/services/attentionEngine';
 
 // TODO: If dashboard is ever migrated to server components,
@@ -9,6 +9,7 @@ import { getAttentionSummary } from '@/services/attentionEngine';
 
 export async function GET() {
   try {
+    await runMigrations();
     const sql = getSql();
     const attention = await getAttentionSummary(sql);
     return NextResponse.json(attention);

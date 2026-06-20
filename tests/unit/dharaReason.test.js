@@ -259,6 +259,43 @@ describe('Dhara Reason', () => {
     expect(result.recommendation).toBe('Discuss outstanding balance at next visit');
   });
 
+  it('MEDIUM priority — recent treatment + outstanding balance (no active plan)', async () => {
+    let callCount = 0;
+    const sql = vi.fn(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve([]);  // plansPromise
+      if (callCount === 2) return Promise.resolve([basePatient]);  // patient
+      if (callCount === 3) return Promise.resolve([visitOutstandingOnly]);  // visit
+      if (callCount === 4) return Promise.resolve([]);  // timeline
+      if (callCount === 5) return Promise.resolve([{ has_recent_treatment: true }]);  // recent treatment
+      return Promise.resolve([]);
+    });
+    const result = await getReason(sql, 'pat-1');
+    expect(result.priority).toBe('medium');
+    expect(result.confidence).toBe(0.8);
+    expect(result.analysis.has_recent_treatment).toBe(true);
+    expect(result.evidence.some(e => e.includes('Recent clinical activity'))).toBe(true);
+    expect(result.evidence.some(e => e.includes('Outstanding balance'))).toBe(true);
+    expect(result.reason).toContain('Patient has recent clinical activity');
+  });
+
+  it('LOW priority — recent treatment alone (no other signals)', async () => {
+    let callCount = 0;
+    const sql = vi.fn(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve([]);  // plansPromise
+      if (callCount === 2) return Promise.resolve([basePatient]);  // patient
+      if (callCount === 3) return Promise.resolve([visitNoFollowup]);  // visit
+      if (callCount === 4) return Promise.resolve([]);  // timeline
+      if (callCount === 5) return Promise.resolve([{ has_recent_treatment: true }]);  // recent treatment
+      return Promise.resolve([]);
+    });
+    const result = await getReason(sql, 'pat-1');
+    expect(result.priority).toBe('low');
+    expect(result.confidence).toBe(0.6);
+    expect(result.reason).toBe('No immediate concerns detected');
+  });
+
   it('SQL error on timeline query does not crash — other data still used', async () => {
     let callCount = 0;
     const sql = vi.fn(() => {

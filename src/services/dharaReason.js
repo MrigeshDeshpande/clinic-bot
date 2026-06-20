@@ -26,7 +26,7 @@ export async function getReason(sql, patientId, { planId } = {}) {
       `.catch(() => []);
     }
 
-    const [patientRows, planRows, visitRows, timelineRows] = await Promise.all([
+    const [patientRows, planRows, visitRows, timelineRows, recentTxRows] = await Promise.all([
       sql`SELECT id, name FROM patients WHERE id = ${patientId} LIMIT 1`.catch(() => []),
       plansPromise,
       sql`
@@ -45,18 +45,27 @@ export async function getReason(sql, patientId, { planId } = {}) {
         ORDER BY event_time DESC
         LIMIT 20
       `.catch(() => []),
+      sql`
+        SELECT EXISTS (
+          SELECT 1 FROM appointments
+          WHERE patient_id = ${patientId}
+            AND status = 'completed'
+            AND date >= CURRENT_DATE - 30
+        ) AS has_recent_treatment
+      `.catch(() => [{ has_recent_treatment: false }]),
     ]);
 
     const patient = patientRows[0] || null;
     const plans = planRows || [];
     const lastVisit = visitRows[0] || null;
     const timeline = timelineRows || [];
+    const hasRecentTreatment = recentTxRows[0]?.has_recent_treatment ?? false;
 
     if (!patient) {
       throw Object.assign(new Error('Patient not found'), { status: 404 });
     }
 
-    const analysis = analyzeData({ plans, lastVisit, timeline });
+    const analysis = analyzeData({ plans, lastVisit, timeline, hasRecentTreatment });
     const evidence = buildEvidence({ plans, lastVisit, analysis });
     const priority = determinePriority(analysis);
     const confidence = computeConfidence(analysis);
@@ -80,7 +89,7 @@ export async function getReason(sql, patientId, { planId } = {}) {
   }
 }
 
-function analyzeData({ plans, lastVisit, timeline }) {
+function analyzeData({ plans, lastVisit, timeline, hasRecentTreatment }) {
   const activePlans = plans.filter(p => p.status === 'active');
   const completedPlans = plans.filter(p => p.status === 'completed');
 
@@ -118,6 +127,7 @@ function analyzeData({ plans, lastVisit, timeline }) {
     days_overdue: followUpOverdue ? Math.abs(lastVisit.followup_days_remaining) : 0,
     follow_up_reason: lastVisit ? lastVisit.follow_up_reason : null,
     follow_up_date: lastVisit ? lastVisit.follow_up_date : null,
+    has_recent_treatment: hasRecentTreatment,
     outstanding: lastVisit ? Math.max(0, Number(lastVisit.outstanding) || 0) : 0,
     timeline_event_count: timeline.length,
     last_event_type: timeline.length > 0 ? timeline[0].event_type : null,
@@ -127,6 +137,10 @@ function analyzeData({ plans, lastVisit, timeline }) {
 
 function buildEvidence({ plans, lastVisit, analysis }) {
   const evidence = [];
+
+  if (analysis.has_recent_treatment && !analysis.has_active_plan) {
+    evidence.push('Recent clinical activity (tooth diagnoses within 30 days)');
+  }
 
   if (analysis.has_active_plan) {
     const plan = plans.find(p => p.status === 'active');
@@ -182,6 +196,7 @@ function determinePriority(analysis) {
 function computeConfidence(analysis) {
   let signalCount = 0;
   if (analysis.has_active_plan) signalCount++;
+  if (analysis.has_recent_treatment && !analysis.has_active_plan) signalCount++;
   if (analysis.follow_up_overdue || analysis.follow_up_upcoming) signalCount++;
   if (analysis.outstanding > 0) signalCount++;
 
@@ -196,6 +211,9 @@ function buildReason(priority, analysis, evidence) {
   if (evidence.length === 0) return 'No immediate concerns detected';
 
   const parts = [];
+  if (analysis.has_recent_treatment && !analysis.has_active_plan) {
+    parts.push('Patient has recent clinical activity');
+  }
   if (analysis.has_active_plan && analysis.procedure_name) {
     let s = `Treatment plan for ${analysis.procedure_name}${analysis.tooth_number ? ` (tooth ${analysis.tooth_number})` : ''} is active`;
     if (analysis.days_since_last_activity !== null && analysis.days_since_last_activity >= 7) {

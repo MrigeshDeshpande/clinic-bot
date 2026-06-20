@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getSql } from '@/db/pool';
+import { getSql, runMigrations } from '@/db/pool';
 import { getReason } from '@/services/dharaReason';
 
 export async function GET(req, { params }) {
   try {
+    await runMigrations();
     const sql = getSql();
     if (!sql) return NextResponse.json({ error: 'Database not ready' }, { status: 503 });
 
