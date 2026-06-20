@@ -823,6 +823,35 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_timeline_source ON patient_timeline_events(source_type, source_id);
     `;
 
+    // ── Timeline vocabulary contract ────────────────────────────────
+    // New event types must be added here AND in:
+    //   src/lib/eventTypes.js
+    // before they are emitted.
+
+    await db`DO $$ BEGIN
+      ALTER TABLE patient_timeline_events ADD CONSTRAINT valid_event_type
+        CHECK (event_type IN (
+          'PLAN_CREATED', 'STEP_COMPLETED', 'PLAN_COMPLETED',
+          'FOLLOWUP_CREATED', 'FOLLOWUP_CANCELLED',
+          'PAYMENT_RECEIVED',
+          'VISIT_COMPLETED',
+          'ATTENTION_ACKNOWLEDGED', 'ATTENTION_RESOLVED', 'ATTENTION_REOPENED',
+          'MEDIA_UPLOADED', 'OCR_ATTEMPTED', 'OCR_COMPLETED', 'OCR_FAILED'
+        ));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE patient_timeline_events ADD CONSTRAINT valid_actor_type
+        CHECK (actor_type IN ('doctor', 'reception', 'patient', 'system', 'dhara'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_timeline_event_actor
+        ON patient_timeline_events(event_type, actor_type);
+    `;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {
