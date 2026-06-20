@@ -66,6 +66,10 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 - **Commit 3 (Service Layer)**: Created `src/services/treatmentPlanService.js` with 4 functions: `createPlanWithSteps()` (transactional, derives steps from procedure code), `completeVisitSteps()` (handles multi-plan stepIds, validates all exist/are pending, groups by plan), `recalculatePlan()` (CTE-based: counts completed, derives next_action via SQL subquery, auto-completes if all done), `getNextPendingStep()`.
 - **Commit 4 (Workflow Integration)**: Modified `src/services/completeVisit.js` (added `stepIds` support, calls `completeVisitSteps` inside `try/catch` with `logger.warn('STEP_ADVANCE_FAILED', ...)`), modified `src/services/createWalkIn.js` (added `procedureCodeId` support, calls `createPlanWithSteps` only — no auto-complete, uses `appointment.patient_id` for safety).
 - **Commit 5 (Attention Engine)**: Created `src/services/attentionEngine.js` (3 query functions + `getAttentionSummary` running all in parallel), `src/app/api/dashboard/attention/route.js` (thin pass-through — necessary because dashboard is `'use client'`), `src/components/AttentionPanel.js` (collapsible dashboard widget with 3-tab bar: Overdue / Treatments / Payments, severity badges, empty states), updated `src/app/dashboard/page.js` (added `attentionData` state, third `fetchCached` in `Promise.all`, `<AttentionPanel>` between KPI strip and calendar).
+- **Commit 6 (Acknowledgement Flow)**: `updateAttentionStatus` with transition validation (`new↔acknowledged`, →`resolved` terminal), `PATCH /api/dashboard/attention/[id]` route, auto-resolve on full plan completion.
+- **Commit 7 (Follow-up Engine)**: Schema migration adds `follow_up_status`/`reason`/`created_by` columns + CHECK constraint + index. `completeVisit.js` sets status atomically. QuickCheckoutModal has follow-up UI (checkbox default OFF). Patient profile shows follow-up chips on visit cards + header badge.
+- **Commit 8 (Patient Timeline)**: `patient_timeline_events` table (idempotent migration in `pool.js`). `timelineService.js` — `recordEvent()`/`getPatientTimeline()`. `timelineRenderer.js` — `describeEvent()`/`getEventSeverity()`/`getEventColor()`/`getEventIcon()`. Integrated into `treatmentPlanService.js`, `completeVisit.js` (wrapped in `sql.begin()`), `createWalkIn.js` (wrapped in `sql.begin()`), `attentionEngine.js` (`setAttentionStatus` takes `(sql, planId, status, actorType)`, wrapped in `sql.begin()`). `attention/[id]/route.js` updated to import `getSql`. 29 timeline tests.
+- **Commit 9 (Dhara Reason v1)**: `src/services/dharaReason.js` — `getReason(sql, patientId, { planId })` runs 4 parallel queries (patient, plans, last visit, timeline), analyzes 3 signals (active plan, follow-up concern, outstanding balance), produces deterministic priority (HIGH/MEDIUM/LOW), confidence (1.0/0.8/0.6/0.4), human-readable reason, actionable recommendation, and machine-readable `evidence[]`. `src/app/api/dashboard/patients/[id]/reason/route.js` — GET route with optional `?planId=xxx`. 15 dedicated tests. 91 total passing tests across 9 files.
 
 ### Fixed
 - **`column a.tooth_diagnoses does not exist`** — Added missing `tooth_diagnoses JSONB` column to `appointments` table via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (was already in pool.js:391-395 migration but needed a server restart to apply, or the DB was created before the migration was added). Ran manually via psql and verified API returns 401 instead of 500.
@@ -76,7 +80,8 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 - (none)
 
 ### Next Up
-- **Commit 6 — Attention Acknowledgement Flow**: Wire up `attention_status` (`new`/`acknowledged`/`resolved`) on attention items. Currently the schema column exists but is unused. Add API route `PATCH /api/dashboard/attention/[id]/acknowledge` (or status toggle), update `AttentionPanel` to allow acknowledging items, and filter acknowledged items out of the default dashboard view (keep them accessible in a collapsed "Acknowledged" section).
+- **Morning Brief**: Dashboard cards showing high/medium/low priority patients on login. Uses `getAttentionSummary()` + `getReason()` per patient. Group by priority. No modal needed — the evidence array from Dhara Reason maps directly to cards.
+- **Dhara Reason Modal**: Only after validating reasoning output against 20-30 real patients. `DharaReasonModal.js` on attention panel "Why?" button.
 
 ## Key Decisions
 ### Phase 1 (UI)
@@ -106,6 +111,12 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 - **`follow_up_status`/`reason`/`created_by` columns on `appointments`**: Added with CHECK constraint and index. `follow_up_status` defaults to `'pending'` on visit completion with a date, `'cancelled'` when cleared. `followup_created_by` stores `'doctor'` (checkout) or `'reception'` (walk-in).
 - **`attention_status` is fully wired**: `new`↔`acknowledged` toggle, `resolved` is terminal. Auto-resolves on full plan completion. Dashboard panel shows New/Acknowledged sub-sections.
 - **Future — Upcoming Followups (next 3 days)**: Currently unsignaled. `getUpcomingFollowups` query in attentionEngine would join `appointments` where `follow_up_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 3` AND `follow_up_status = 'pending'`. Intended as first "Morning Brief" card.
+- **Timeline events are canonical facts**: `event_type` + `metadata` stored in DB; titles/descriptions derived at render time via `timelineRenderer.js`. Payment events store both `amount` (delta) and `outstanding_after` (post-payment balance) for historical reconstructability.
+- **Timeline recording is atomic**: Same `sql.begin()` transaction as business operation. `setAttentionStatus` now takes `sql` as first param. `completeVisit.js` and `createWalkIn.js` wrapped in `sql.begin()`.
+- **Dhara Reason is deterministic**: No LLM. Uses 4 parallel DB queries, rule-based priority (HIGH/MEDIUM/LOW), 4-tier confidence. Outputs separate `reason` (human-readable narrative) and `evidence[]` (machine-readable strings).
+- **Dhara Reason confidence**: 1.0 = 3 signals present, 0.8 = 2 signals (inc. active plan), 0.6 = 1 signal, 0.4 = sparse data.
+- **Dhara Reason queries never mutate state**: Read-only. Each query has `.catch(() => [])` for per-query graceful degradation.
+- **`evidence[]` is the shared structure**: Every future Dhara feature (Morning Brief, Reason Modal, WhatsApp summary, admin reports) consumes `evidence[]` without reparsing narrative text.
 
 ## Critical Context
 ### Phase 1
@@ -127,6 +138,11 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 - `getAttentionSummary` runs 3 queries in parallel via `Promise.all()` — each is independently caught, so one failure returns `[]` for that category without crashing the others.
 - `follow_up_date` exists on `appointments` — `getOverdueFollowups` uses it alongside `follow_up_status = 'pending'`. Follow-up scheduling engine adds `follow_up_status`/`reason`/`created_by` columns with CHECK constraint.
 - Full pipeline: `Clinical Activity → Treatment Plans → Attention Engine → Dashboard Surface`
+- Timeline events are stored with `actor_type` (`doctor`/`reception`/`system`/`dhara`) — mandatory field, no default.
+- Timeline events use `sql.begin()` for atomicity — a failed event INSERT rolls back the entire business operation.
+- `setAttentionStatus` now requires `sql` as first parameter — `updateAttentionStatus(planId, status, tx)` passes transaction context.
+- Dhara Reason queries use `.catch(() => [])` per-query for graceful degradation — a failed timeline query doesn't crash the entire reason endpoint.
+- Dhara Reason outputs `evidence[]` as machine-readable strings — every downstream feature (Morning Brief, modal, reports) consumes this structure without parsing narrative text.
 
 ## Relevant Files
 ### Phase 1 (UI)
@@ -155,3 +171,9 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 - `src/app/api/dashboard/attention/[id]/route.js`: PATCH route for acknowledge/resolve/re-open
 - `src/components/AttentionPanel.js`: Collapsible dashboard widget with 3-tab bar (Overdue/Treatments/Payments), acknowledge/resolve buttons, New/Acknowledged sub-sections, severity badges, empty states
 - `tests/attention/attentionEngine.test.js`: 17 regression tests covering overdue followups, inactive treatments, pending payments, attention status transitions, parallel execution, and graceful failure handling
+- `src/services/timelineService.js`: `recordEvent()`, `getPatientTimeline()` — atomic timeline recording
+- `src/lib/timelineRenderer.js`: `describeEvent()`, `getEventSeverity()`, `getEventColor()`, `getEventIcon()` — presentation layer for timeline events
+- `src/services/dharaReason.js`: `getReason(sql, patientId, { planId })` — deterministic reason engine with 4 parallel queries, 3 signals, priority/confidence/evidence output
+- `src/app/api/dashboard/patients/[id]/reason/route.js`: GET route for Dhara Reason output
+- `tests/unit/dharaReason.test.js`: 15 tests covering all priority tiers, confidence, evidence, and graceful degradation
+- `tests/unit/timeline.test.js`: 29 tests covering service layer + renderer
