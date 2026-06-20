@@ -7,7 +7,7 @@ export async function recordEvent(sql, { patient_id, event_type, actor_type, act
   }
   const [row] = await sql`
     INSERT INTO patient_timeline_events (patient_id, event_type, actor_type, actor_id, source_type, source_id, metadata)
-    VALUES (${patient_id}, ${event_type}, ${actor_type || 'system'}, ${actor_id || null}, ${source_type || null}, ${source_id || null}, ${JSON.stringify(metadata || { version: 1 })})
+    VALUES (${patient_id}, ${event_type}, ${actor_type || 'system'}, ${actor_id || null}, ${source_type || null}, ${source_id || null}, ${metadata || { version: 1 }})
     RETURNING id, event_type, event_time
   `;
   return row || null;
