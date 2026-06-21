@@ -156,6 +156,92 @@ async function progressiveFieldFill(session, justSetField, entities) {
   return session;
 }
 
+async function handleDoctorMediaPatientLookup(session, query) {
+  const pm = session.context?.pendingMedia;
+  if (!pm) {
+    return handleDoctorMainMenu(session);
+  }
+
+  const patients = await searchPatients(query);
+
+  if (patients.length === 0) {
+    session = {
+      ...session,
+      state: 'DOCTOR_MAIN_MENU',
+      context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
+    };
+    return {
+      session,
+      reply: { body: `No patient found matching "${query}". Image not saved. Tap Register New Patient to add them first.`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  // Single match — ask which visit to save to
+  if (patients.length === 1) {
+    const patient = patients[0];
+    const visits = await getVisitsByPatientPhone(patient.phone);
+    if (visits.length === 0) {
+      // No visits — create a new appointment row for the image
+      await processAndStoreMedia({
+        mediaId: pm.mediaId,
+        mimeType: pm.mimeType,
+        appointmentId: null,
+        waId: null,
+        patientId: patient.id,
+      });
+      session = {
+        ...session,
+        state: 'DOCTOR_MAIN_MENU',
+        context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
+      };
+      return {
+        session,
+        reply: { body: `*✅ Media saved for ${patient.name}.*`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+        replyType: 'list',
+      };
+    }
+    // Save to most recent visit
+    const latestVisit = visits[0];
+    await processAndStoreMedia({
+      mediaId: pm.mediaId,
+      mimeType: pm.mimeType,
+      appointmentId: latestVisit.id,
+      waId: null,
+      patientId: patient.id,
+    });
+    session = {
+      ...session,
+      state: 'DOCTOR_MAIN_MENU',
+      context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
+    };
+    return {
+      session,
+      reply: { body: `*✅ Media saved to ${patient.name}'s visit on ${latestVisit.date}.*`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  // Multiple matches — show list
+  const rows = patients.map(p => ({
+    id: `patient_${p.id}`,
+    title: p.name,
+    description: p.phone ? '📞 ' + p.phone.slice(-8) : '',
+  }));
+
+  session = {
+    ...session,
+    state: 'DOCTOR_SEARCH_PATIENT',
+    context: { ...session.context, searchResults: patients.map(p => p.id) },
+  };
+
+  return {
+    session,
+    reply: { body: `Found ${patients.length} patients matching "${query}". Select one to save the image:`, buttonLabel: 'Patients', sections: [{ title: 'Matching Patients', rows }] },
+    replyType: 'list',
+  };
+}
+
 // ───────────────────────────────────────────────
 // Main dispatch
 // ───────────────────────────────────────────────
@@ -308,92 +394,6 @@ export async function handle(state, { session, normalized, entities, intent }) {
       session,
       reply: tr(session, 'treatment_help_prompt'),
     replyType: 'text',
-  };
-}
-
-async function handleDoctorMediaPatientLookup(session, query) {
-  const pm = session.context?.pendingMedia;
-  if (!pm) {
-    return handleDoctorMainMenu(session);
-  }
-
-  const patients = await searchPatients(query);
-
-  if (patients.length === 0) {
-    session = {
-      ...session,
-      state: 'DOCTOR_MAIN_MENU',
-      context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
-    };
-    return {
-      session,
-      reply: { body: `No patient found matching "${query}". Image not saved. Tap Register New Patient to add them first.`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
-      replyType: 'list',
-    };
-  }
-
-  // Single match — ask which visit to save to
-  if (patients.length === 1) {
-    const patient = patients[0];
-    const visits = await getVisitsByPatientPhone(patient.phone);
-    if (visits.length === 0) {
-      // No visits — create a new appointment row for the image
-      await processAndStoreMedia({
-        mediaId: pm.mediaId,
-        mimeType: pm.mimeType,
-        appointmentId: null,
-        waId: null,
-        patientId: patient.id,
-      });
-      session = {
-        ...session,
-        state: 'DOCTOR_MAIN_MENU',
-        context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
-      };
-      return {
-        session,
-        reply: { body: `*✅ Media saved for ${patient.name}.*`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
-        replyType: 'list',
-      };
-    }
-    // Save to most recent visit
-    const latestVisit = visits[0];
-    await processAndStoreMedia({
-      mediaId: pm.mediaId,
-      mimeType: pm.mimeType,
-      appointmentId: latestVisit.id,
-      waId: null,
-      patientId: patient.id,
-    });
-    session = {
-      ...session,
-      state: 'DOCTOR_MAIN_MENU',
-      context: { ...session.context, pendingMedia: undefined, pendingMediaQuery: undefined },
-    };
-    return {
-      session,
-      reply: { body: `*✅ Media saved to ${patient.name}'s visit on ${latestVisit.date}.*`, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
-      replyType: 'list',
-    };
-  }
-
-  // Multiple matches — show list
-  const rows = patients.map(p => ({
-    id: `patient_${p.id}`,
-    title: p.name,
-    description: p.phone ? '📞 ' + p.phone.slice(-8) : '',
-  }));
-
-  session = {
-    ...session,
-    state: 'DOCTOR_SEARCH_PATIENT',
-    context: { ...session.context, searchResults: patients.map(p => p.id) },
-  };
-
-  return {
-    session,
-    reply: { body: `Found ${patients.length} patients matching "${query}". Select one to save the image:`, buttonLabel: 'Patients', sections: [{ title: 'Matching Patients', rows }] },
-    replyType: 'list',
   };
 }
 
