@@ -1,0 +1,19 @@
+[Unit]
+Description=DHARA Worker — async job processor
+Documentation=https://github.com/anomalyco/clinic-bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mrigesh/Desktop/Khazana/clinic-bot
+ExecStart=/usr/bin/node scripts/dhara-worker.mjs
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Environment=NODE_ENV=production
+Environment=LOG_LEVEL=info
+EnvironmentFile=-/home/mrigesh/Desktop/Khazana/clinic-bot/.env.local
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { uploadToR2, r2Configured } from '@/lib/r2';
 import { logger } from '@/lib/logger';
 import { getSql } from '@/db/pool';
@@ -97,18 +98,43 @@ export async function processAndStoreMedia({ mediaId, mimeType, appointmentId, w
     return null;
   }
 
-  // Store URL in appointment's chit_media[]
+  // Dual-write: chit_media + media_assets in same transaction
   if (appointmentId) {
     const sql = getSql();
     if (sql) {
       try {
-        await sql`
-          UPDATE appointments
-          SET chit_media = array_append(coalesce(chit_media, '{}'), ${key}),
-              updated_at = NOW()
-          WHERE id = ${appointmentId}
-        `;
-        logger.info('MEDIA_STORED_IN_DB', { appointmentId, key });
+        await sql.begin(async (tx) => {
+          await tx`
+            UPDATE appointments
+            SET chit_media = array_append(coalesce(chit_media, '{}'), ${key}),
+                updated_at = NOW()
+            WHERE id = ${appointmentId}
+          `;
+          const [asset] = await tx`
+            INSERT INTO media_assets (appointment_id, patient_id, uploaded_by_type, media_type, mime_type, r2_key, size_bytes, source)
+            VALUES (${appointmentId}, ${patientId || null}, 'doctor', ${mediaType}, ${download.mimeType}, ${key}, ${download.fileSize || null}, 'whatsapp')
+            ON CONFLICT (r2_key) DO NOTHING
+            RETURNING id
+          `;
+
+          if (asset?.id) {
+            const ocrKey = createHash('sha256').update(`${asset.id}:ocr-v1`).digest('hex');
+            await tx`
+              INSERT INTO media_processing_jobs (media_asset_id, job_type, status, idempotency_key)
+              VALUES (${asset.id}, 'ocr', 'queued', ${ocrKey})
+              ON CONFLICT (idempotency_key) DO NOTHING
+            `;
+            logger.info('OCR_JOB_ENQUEUED', { mediaAssetId: asset.id, jobType: 'ocr' });
+          }
+
+          logger.info('MEDIA_ASSET_CREATED', {
+            appointmentId,
+            mediaAssetId: asset?.id ?? null,
+            source: 'whatsapp',
+            r2Key: key,
+            inserted: !!asset,
+          });
+        });
       } catch (dbError) {
         logger.error('MEDIA_DB_STORE_ERROR', { appointmentId, key, error: dbError.message });
       }

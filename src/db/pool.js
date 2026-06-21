@@ -319,7 +319,22 @@ export async function runMigrations() {
         ADD COLUMN IF NOT EXISTS diagnosis TEXT DEFAULT '',
         ADD COLUMN IF NOT EXISTS medicines JSONB DEFAULT '[]',
         ADD COLUMN IF NOT EXISTS follow_up_date DATE,
-        ADD COLUMN IF NOT EXISTS follow_up_instructions TEXT DEFAULT '';
+        ADD COLUMN IF NOT EXISTS follow_up_instructions TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS follow_up_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        ADD COLUMN IF NOT EXISTS follow_up_reason VARCHAR(200),
+        ADD COLUMN IF NOT EXISTS follow_up_created_by VARCHAR(20) NOT NULL DEFAULT 'doctor';
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE appointments ADD CONSTRAINT valid_follow_up_status
+        CHECK (follow_up_status IN ('pending','completed','cancelled'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_appointments_follow_up
+        ON appointments(follow_up_status, follow_up_date)
+        WHERE follow_up_date IS NOT NULL;
     `;
 
     // Patient Reviews table (doctor reviews of patients per visit)
@@ -624,12 +639,14 @@ export async function runMigrations() {
           AND jsonb_typeof(value) = 'number'
           AND value::text::numeric BETWEEN 1 AND 5
       )
-      WHERE EXISTS (
-        SELECT 1 FROM jsonb_each(ratings)
-        WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
-           OR jsonb_typeof(value) != 'number'
-           OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
-      )
+      WHERE ratings IS NOT NULL
+        AND jsonb_typeof(ratings) = 'object'
+        AND EXISTS (
+          SELECT 1 FROM jsonb_each(ratings)
+          WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
+             OR jsonb_typeof(value) != 'number'
+             OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
+        )
     `;
 
     // Clean corrupted patient_ratings on patients table
@@ -642,12 +659,404 @@ export async function runMigrations() {
           AND jsonb_typeof(value) = 'number'
           AND value::text::numeric BETWEEN 1 AND 5
       )
-      WHERE EXISTS (
-        SELECT 1 FROM jsonb_each(patient_ratings)
-        WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
-           OR jsonb_typeof(value) != 'number'
-           OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
-      )
+      WHERE patient_ratings IS NOT NULL
+        AND jsonb_typeof(patient_ratings) = 'object'
+        AND EXISTS (
+          SELECT 1 FROM jsonb_each(patient_ratings)
+          WHERE key NOT IN ('behaviour','cooperative_treatment','timely_appointment','payment_time','oral_hygiene','pain_tolerance','treatment_compliance')
+             OR jsonb_typeof(value) != 'number'
+             OR (jsonb_typeof(value) = 'number' AND value::text::numeric NOT BETWEEN 1 AND 5)
+        )
+    `;
+
+    // AI classifications — intent/entity/language logging from Kali gateway
+    await db`
+      CREATE TABLE IF NOT EXISTS ai_classifications (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        session_state     VARCHAR(50),
+        message           TEXT NOT NULL,
+        available_intents TEXT[],
+        intent            VARCHAR(50),
+        entities          JSONB DEFAULT '{}',
+        language          VARCHAR(20),
+        provider          VARCHAR(20),
+        processing_ms     INTEGER,
+        raw_model_response TEXT,
+        rule_intent       VARCHAR(50),
+        matched           BOOLEAN
+      );
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_ai_classifications_created ON ai_classifications(created_at);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_ai_classifications_language ON ai_classifications(language);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_ai_classifications_matched ON ai_classifications(matched);
+    `;
+
+    // ── Treatment Lifecycle Engine ──────────────────────────────────
+
+    await db`DO $$ BEGIN
+      CREATE TYPE treatment_plan_status AS ENUM ('active','completed','abandoned','on_hold');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;`;
+
+    await db`DO $$ BEGIN
+      CREATE TYPE treatment_step_status AS ENUM ('pending','in_progress','completed','skipped');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;`;
+
+    await db`
+      CREATE TABLE IF NOT EXISTS procedure_codes (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        code             VARCHAR(50) UNIQUE NOT NULL,
+        name             VARCHAR(200) NOT NULL,
+        category         VARCHAR(50),
+        expected_steps   JSONB NOT NULL DEFAULT '[]'::jsonb,
+        default_fee      INTEGER DEFAULT 0,
+        active           BOOLEAN DEFAULT TRUE,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`
+      CREATE TABLE IF NOT EXISTS treatment_plans (
+        id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id         UUID NOT NULL REFERENCES patients(id),
+        procedure_code_id  UUID NOT NULL REFERENCES procedure_codes(id),
+        tooth_number       VARCHAR(10),
+        status             treatment_plan_status NOT NULL DEFAULT 'active',
+        source             VARCHAR(20) NOT NULL DEFAULT 'doctor',
+        attention_status   VARCHAR(20) DEFAULT 'new'
+          CHECK (attention_status IN ('new','acknowledged','resolved')),
+        expected_steps     INTEGER NOT NULL DEFAULT 1,
+        completed_steps    INTEGER NOT NULL DEFAULT 0,
+        next_action        VARCHAR(200),
+        started_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at       TIMESTAMPTZ,
+        abandoned_at       TIMESTAMPTZ,
+        last_activity_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        notes              TEXT,
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_patient_status ON treatment_plans(patient_id, status);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_status_activity ON treatment_plans(status, last_activity_at);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_tooth ON treatment_plans(tooth_number);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_source ON treatment_plans(source);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plans_attention ON treatment_plans(attention_status);
+    `;
+
+    await db`
+      CREATE TABLE IF NOT EXISTS treatment_plan_steps (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        plan_id          UUID NOT NULL REFERENCES treatment_plans(id) ON DELETE CASCADE,
+        step_order       INTEGER NOT NULL,
+        step_name        VARCHAR(200) NOT NULL,
+        status           treatment_step_status NOT NULL DEFAULT 'pending',
+        tooth_number     VARCHAR(10),
+        appointment_id   UUID REFERENCES appointments(id),
+        completed_at     TIMESTAMPTZ,
+        notes            TEXT,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_treatment_plan_steps_order ON treatment_plan_steps(plan_id, step_order);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plan_steps_appointment ON treatment_plan_steps(appointment_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plan_steps_status ON treatment_plan_steps(status);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_treatment_plan_steps_plan_status ON treatment_plan_steps(plan_id, status);
+    `;
+
+    await db`
+      INSERT INTO procedure_codes (code, name, category, expected_steps, default_fee) VALUES
+        ('rct',       'Root Canal Treatment', 'endodontics',    '["Consultation","RCT Sitting 1","RCT Sitting 2","Crown"]'::jsonb,       5000),
+        ('scaling',   'Teeth Scaling',        'preventive',     '["Scaling Session"]'::jsonb,                                              1500),
+        ('extraction','Tooth Extraction',     'surgery',        '["Consultation","Extraction","Review"]'::jsonb,                           1000),
+        ('crown',     'Dental Crown',         'prosthodontics', '["Consultation","Tooth Preparation","Crown Placement","Review"]'::jsonb, 4000)
+      ON CONFLICT (code) DO NOTHING;
+    `;
+
+    await db`
+      CREATE TABLE IF NOT EXISTS patient_timeline_events (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id  UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        event_type  VARCHAR(50) NOT NULL,
+        event_time  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        actor_type  VARCHAR(20) NOT NULL,
+        actor_id    VARCHAR(255),
+        source_type VARCHAR(50),
+        source_id   VARCHAR(255),
+        metadata    JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_timeline_patient_event ON patient_timeline_events(patient_id, event_time DESC);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_timeline_type ON patient_timeline_events(event_type);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_timeline_source ON patient_timeline_events(source_type, source_id);
+    `;
+
+    // ── Timeline vocabulary contract ────────────────────────────────
+    // New event types must be added here AND in:
+    //   src/lib/eventTypes.js
+    // before they are emitted.
+
+    await db`DO $$ BEGIN
+      ALTER TABLE patient_timeline_events ADD CONSTRAINT valid_event_type
+        CHECK (event_type IN (
+          'PLAN_CREATED', 'STEP_COMPLETED', 'PLAN_COMPLETED',
+          'FOLLOWUP_CREATED', 'FOLLOWUP_CANCELLED',
+          'PAYMENT_RECEIVED',
+          'VISIT_COMPLETED',
+          'ATTENTION_ACKNOWLEDGED', 'ATTENTION_RESOLVED', 'ATTENTION_REOPENED',
+          'MEDIA_UPLOADED', 'OCR_ATTEMPTED', 'OCR_COMPLETED', 'OCR_FAILED',
+          'EXTRACTION_APPROVED', 'DIAGNOSIS_RECORDED', 'TREATMENT_RECOMMENDED', 'TREATMENT_ESTIMATED'
+        ));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE patient_timeline_events ADD CONSTRAINT valid_actor_type
+        CHECK (actor_type IN ('doctor', 'reception', 'patient', 'system', 'dhara'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_timeline_event_actor
+        ON patient_timeline_events(event_type, actor_type);
+    `;
+
+    // ── Evidence: media_assets ──────────────────────────────────────
+    // Immutable evidence store. Processing state lives in
+    // media_processing_jobs (PR-7), not here.
+
+    await db`
+      CREATE TABLE IF NOT EXISTS media_assets (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id    UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id        UUID REFERENCES patients(id),
+        uploaded_by_type  VARCHAR(20) NOT NULL,
+        uploaded_by_id    VARCHAR(255),
+        media_type        VARCHAR(50) NOT NULL,
+        mime_type         VARCHAR(100) NOT NULL,
+        r2_key            TEXT NOT NULL UNIQUE,
+        size_bytes        BIGINT,
+        -- Evidence acquisition source.
+        -- Examples: whatsapp, dashboard, mobile_app, api, migration
+        -- Keep unconstrained until vocabulary stabilizes.
+        source            VARCHAR(50) NOT NULL DEFAULT 'unknown',
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE media_assets ADD CONSTRAINT valid_uploaded_by
+        CHECK (uploaded_by_type IN ('doctor', 'reception', 'patient', 'system', 'dhara'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_appointment
+        ON media_assets(appointment_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_patient
+        ON media_assets(patient_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_media_assets_created
+        ON media_assets(created_at DESC);
+    `;
+
+    // ── Interpretation: prescription_extractions ─────────────────────
+    // Stores what DHARA understood from evidence.
+    // Processing state (queued/processing) lives in media_processing_jobs, not here.
+    // invariants:
+    //   completed -> interpreted_at NOT NULL
+    //   failed    -> interpreted_at NOT NULL
+    //   pending   -> interpreted_at NULL
+
+    await db`
+      CREATE TABLE IF NOT EXISTS prescription_extractions (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        media_asset_id    UUID NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
+
+        extractor_type    VARCHAR(50) NOT NULL,
+        extractor_version VARCHAR(50) NOT NULL,
+
+        status            VARCHAR(20) NOT NULL DEFAULT 'pending',
+        raw_text          TEXT,
+        structured_json   JSONB,
+        confidence        DOUBLE PRECISION,
+        idempotency_key   TEXT NOT NULL UNIQUE,
+        error_message     TEXT,
+
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        interpreted_at    TIMESTAMPTZ
+      );
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE prescription_extractions ADD CONSTRAINT valid_extraction_status
+        CHECK (status IN ('pending', 'completed', 'failed'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE prescription_extractions ADD CONSTRAINT valid_confidence_range
+        CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1.0));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_extractions_media_version_type
+        ON prescription_extractions(media_asset_id, extractor_type, extractor_version);
+    `;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_media_asset
+        ON prescription_extractions(media_asset_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_media_version
+        ON prescription_extractions(media_asset_id, extractor_version);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_status
+        ON prescription_extractions(status);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_version
+        ON prescription_extractions(extractor_version);
+    `;
+
+    // ── PR-7E: Extraction pipeline columns ──────────────────────────
+    // Adds second-stage extraction tracking to prescription_extractions.
+    // extraction_status tracks the extraction pipeline lifecycle:
+    //   pending       — awaiting extraction
+    //   ocr_completed — OCR done, raw_text available
+    //   extraction_completed — Qwen extraction done, structured_json populated
+    //   review_pending — flagged for dentist review
+    //   approved      — reviewed and approved
+    //   rejected      — reviewed and rejected
+
+    await db`
+      ALTER TABLE prescription_extractions
+        ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+    `;
+
+    await db`
+      ALTER TABLE prescription_extractions
+        ADD COLUMN IF NOT EXISTS extraction_model VARCHAR(50)
+    `;
+
+    await db`
+      ALTER TABLE prescription_extractions
+        ADD COLUMN IF NOT EXISTS extraction_version VARCHAR(20)
+    `;
+
+    await db`
+      ALTER TABLE prescription_extractions
+        ADD COLUMN IF NOT EXISTS extraction_completed_at TIMESTAMPTZ
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE prescription_extractions ADD CONSTRAINT valid_extraction_pipeline_status
+        CHECK (extraction_status IN ('pending', 'ocr_completed', 'extraction_completed', 'review_pending', 'approved', 'rejected'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_extraction_status
+        ON prescription_extractions(extraction_status);
+    `;
+
+    // ── Async job queue: media_processing_jobs ──────────────────────
+    // DB-as-queue for background workloads (OCR, voice, lab, brief).
+    // Worker polls via SELECT ... FOR UPDATE SKIP LOCKED.
+    // Idempotency key prevents duplicate queueing.
+
+    await db`
+      CREATE TABLE IF NOT EXISTS media_processing_jobs (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        media_asset_id    UUID NOT NULL
+          REFERENCES media_assets(id)
+          ON DELETE CASCADE,
+
+        job_type          VARCHAR(50) NOT NULL,
+
+        status            VARCHAR(20) NOT NULL DEFAULT 'queued',
+
+        payload           JSONB,
+
+        attempt_count     INTEGER NOT NULL DEFAULT 0,
+
+        error_message     TEXT,
+
+        started_at        TIMESTAMPTZ,
+        completed_at      TIMESTAMPTZ,
+
+        idempotency_key   TEXT NOT NULL UNIQUE,
+
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE media_processing_jobs ADD CONSTRAINT valid_job_status
+        CHECK (status IN ('queued', 'processing', 'completed', 'failed'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE media_processing_jobs ADD CONSTRAINT valid_attempt_count
+        CHECK (attempt_count >= 0);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_jobs_status
+        ON media_processing_jobs(status);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_jobs_media_asset
+        ON media_processing_jobs(media_asset_id);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_jobs_created
+        ON media_processing_jobs(created_at);
+    `;
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_jobs_status_created
+        ON media_processing_jobs(status, created_at);
     `;
 
       logger.info('DB_MIGRATIONS_COMPLETE');

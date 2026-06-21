@@ -54,14 +54,35 @@ export async function POST(req) {
 
     const sql = getSql();
     if (sql) {
-      await sql`
-        UPDATE appointments
-        SET chit_media = array_append(coalesce(chit_media, '{}'), ${key}),
-            compiled_document_key = NULL,
-            updated_at = NOW()
-        WHERE id = ${appointmentId}
-      `;
-      console.log('[MEDIA_API] DB updated for appointment:', appointmentId);
+      await sql.begin(async (tx) => {
+        const [appt] = await tx`
+          SELECT patient_id FROM appointments WHERE id = ${appointmentId}
+        `;
+
+        await tx`
+          UPDATE appointments
+          SET chit_media = array_append(coalesce(chit_media, '{}'), ${key}),
+              compiled_document_key = NULL,
+              updated_at = NOW()
+          WHERE id = ${appointmentId}
+        `;
+
+        const [asset] = await tx`
+          INSERT INTO media_assets (appointment_id, patient_id, uploaded_by_type, media_type, mime_type, r2_key, size_bytes, source)
+          VALUES (${appointmentId}, ${appt?.patient_id || null}, 'system', ${mediaType}, ${mimeType}, ${key}, ${buffer.length}, 'dashboard')
+          ON CONFLICT (r2_key) DO NOTHING
+          RETURNING id
+        `;
+
+        console.log('[MEDIA_API] DB updated for appointment:', appointmentId);
+        logger.info('MEDIA_ASSET_CREATED', {
+          appointmentId,
+          mediaAssetId: asset?.id ?? null,
+          source: 'dashboard',
+          r2Key: key,
+          inserted: !!asset,
+        });
+      });
     } else {
       console.log('[MEDIA_API] No DB — skipped chit_media update');
     }

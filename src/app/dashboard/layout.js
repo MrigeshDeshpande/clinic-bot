@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import dynamic from 'next/dynamic';
-import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Bell, Settings, Sun, Moon, X, Menu } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Users, BarChart3, PenSquare, ClipboardList, Star, CalendarOff, Bell, Settings, Sun, Moon, X, Menu, FileSearch } from 'lucide-react';
 
 const NotificationPanel = dynamic(() => import('@/components/NotificationPanel'), { ssr: false });
 
@@ -32,6 +32,7 @@ const NAV_GROUPS = [
       { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarOff },
       { href: '/dashboard/feedback', label: 'Patient Reviews', icon: Star },
       { href: '/dashboard/due-reminders', label: 'Due Reminders', icon: Bell },
+      { href: '/dashboard/extractions', label: 'Extractions', icon: FileSearch },
     ],
   },
   {
