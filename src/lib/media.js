@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { uploadToR2, r2Configured } from '@/lib/r2';
 import { logger } from '@/lib/logger';
 import { getSql } from '@/db/pool';
@@ -115,6 +116,17 @@ export async function processAndStoreMedia({ mediaId, mimeType, appointmentId, w
             ON CONFLICT (r2_key) DO NOTHING
             RETURNING id
           `;
+
+          if (asset?.id) {
+            const ocrKey = createHash('sha256').update(`${asset.id}:ocr-v1`).digest('hex');
+            await tx`
+              INSERT INTO media_processing_jobs (media_asset_id, job_type, status, idempotency_key)
+              VALUES (${asset.id}, 'ocr', 'queued', ${ocrKey})
+              ON CONFLICT (idempotency_key) DO NOTHING
+            `;
+            logger.info('OCR_JOB_ENQUEUED', { mediaAssetId: asset.id, jobType: 'ocr' });
+          }
+
           logger.info('MEDIA_ASSET_CREATED', {
             appointmentId,
             mediaAssetId: asset?.id ?? null,

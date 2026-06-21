@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { logger } from '@/lib/logger';
-import { approveExtraction, rejectExtraction } from '@/services/prescriptionExtractionService';
+import { rejectExtraction } from '@/services/prescriptionExtractionService';
+import { approveExtractionAndCreateTimeline } from '@/services/extractionApprovalService';
 
 export async function PATCH(req, { params: paramsPromise }) {
   try {
@@ -72,7 +73,10 @@ export async function PATCH(req, { params: paramsPromise }) {
           WHERE id = ${params.id}
         `;
       }
-      await approveExtraction(sql, params.id);
+      await approveExtractionAndCreateTimeline(sql, params.id, {
+        actor_id: body.approved_by || null,
+        review_method: 'dashboard',
+      });
     } else {
       await rejectExtraction(sql, params.id, reason);
     }

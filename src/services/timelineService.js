@@ -224,6 +224,103 @@ export async function recordAttentionReopened(tx, {
   });
 }
 
+export async function recordExtractionApproved(tx, {
+  patient_id, actor_type, actor_id,
+  extraction_id, media_asset_id, source, review_method,
+}) {
+  if (!patient_id) throw new Error('recordExtractionApproved: patient_id is required');
+  return recordEvent(tx, {
+    patient_id,
+    event_type: EVENT_TYPES.EXTRACTION_APPROVED,
+    actor_type,
+    actor_id,
+    source_type: 'prescription_extraction',
+    source_id: extraction_id,
+    metadata: {
+      version: TIMELINE_EVENT_METADATA_VERSION,
+      extraction_id,
+      media_asset_id,
+      source,
+      review_method,
+    },
+  });
+}
+
+export async function recordDiagnosisRecorded(tx, {
+  patient_id, actor_type, actor_id,
+  diagnosis, tooth_numbers, surface, notes,
+  source, extraction_id,
+}) {
+  if (!patient_id) throw new Error('recordDiagnosisRecorded: patient_id is required');
+  return recordEvent(tx, {
+    patient_id,
+    event_type: EVENT_TYPES.DIAGNOSIS_RECORDED,
+    actor_type,
+    actor_id,
+    source_type: 'prescription_extraction',
+    source_id: extraction_id,
+    metadata: {
+      version: TIMELINE_EVENT_METADATA_VERSION,
+      diagnosis,
+      tooth_numbers,
+      surface,
+      notes,
+      source,
+      extraction_id,
+    },
+  });
+}
+
+export async function recordTreatmentRecommended(tx, {
+  patient_id, actor_type, actor_id,
+  procedure, tooth_numbers, cost_estimate, notes,
+  source, extraction_id,
+}) {
+  if (!patient_id) throw new Error('recordTreatmentRecommended: patient_id is required');
+  return recordEvent(tx, {
+    patient_id,
+    event_type: EVENT_TYPES.TREATMENT_RECOMMENDED,
+    actor_type,
+    actor_id,
+    source_type: 'prescription_extraction',
+    source_id: extraction_id,
+    metadata: {
+      version: TIMELINE_EVENT_METADATA_VERSION,
+      procedure,
+      tooth_numbers,
+      cost_estimate,
+      notes,
+      source,
+      extraction_id,
+    },
+  });
+}
+
+export async function recordTreatmentEstimated(tx, {
+  patient_id, actor_type, actor_id,
+  item, amount, currency, notes,
+  source, extraction_id,
+}) {
+  if (!patient_id) throw new Error('recordTreatmentEstimated: patient_id is required');
+  return recordEvent(tx, {
+    patient_id,
+    event_type: EVENT_TYPES.TREATMENT_ESTIMATED,
+    actor_type,
+    actor_id,
+    source_type: 'prescription_extraction',
+    source_id: extraction_id,
+    metadata: {
+      version: TIMELINE_EVENT_METADATA_VERSION,
+      item,
+      amount,
+      currency,
+      notes,
+      source,
+      extraction_id,
+    },
+  });
+}
+
 export async function getPatientTimeline(sql, patientId, limit = 50) {
   return await sql`
     SELECT * FROM patient_timeline_events

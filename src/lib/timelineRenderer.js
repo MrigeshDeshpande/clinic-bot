@@ -26,6 +26,14 @@ export function describeEvent(event) {
       return m.auto ? `Attention auto-resolved (plan completed)` : `Attention resolved`;
     case 'ATTENTION_REOPENED':
       return `Attention re-opened for review`;
+    case 'EXTRACTION_APPROVED':
+      return `Prescription extraction approved${m.source ? ` (${m.source})` : ''}`;
+    case 'DIAGNOSIS_RECORDED':
+      return `Diagnosis: ${m.diagnosis || 'Unknown'}${m.tooth_numbers?.length ? ` (tooth ${m.tooth_numbers.join(', ')})` : ''}`;
+    case 'TREATMENT_RECOMMENDED':
+      return `Recommended: ${m.procedure || 'Unknown treatment'}${m.tooth_numbers?.length ? ` (tooth ${m.tooth_numbers.join(', ')})` : ''}`;
+    case 'TREATMENT_ESTIMATED':
+      return `Treatment estimate${m.amount ? `: ${m.amount}` : ''}`;
     default:
       return event.event_type ? `${event.event_type.replace(/_/g, ' ').toLowerCase()}` : 'Unknown event';
   }
@@ -45,6 +53,10 @@ export function getEventSeverity(event) {
     case 'VISIT_COMPLETED':
     case 'FOLLOWUP_CREATED':
     case 'ATTENTION_REOPENED':
+    case 'EXTRACTION_APPROVED':
+    case 'DIAGNOSIS_RECORDED':
+    case 'TREATMENT_RECOMMENDED':
+    case 'TREATMENT_ESTIMATED':
       return 'info';
     default:
       return 'neutral';
@@ -72,6 +84,10 @@ export function getEventIcon(event) {
     case 'ATTENTION_ACKNOWLEDGED': return 'eye';
     case 'ATTENTION_RESOLVED':  return 'check-double';
     case 'ATTENTION_REOPENED':  return 'refresh';
+    case 'EXTRACTION_APPROVED': return 'file-check';
+    case 'DIAGNOSIS_RECORDED':  return 'stethoscope';
+    case 'TREATMENT_RECOMMENDED': return 'syringe';
+    case 'TREATMENT_ESTIMATED': return 'indian-rupee';
     default:                    return 'circle';
   }
 }
