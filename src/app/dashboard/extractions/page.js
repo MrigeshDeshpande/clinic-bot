@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect, useContext } from 'react';
 import { fetchCached } from '@/lib/clientFetchCache';
 import { ToastContext } from '../layout';
-import { FileSearch, ArrowUpRight, Clock, CheckCircle, AlertCircle, Calendar, User, Phone, Cpu, FileText } from 'lucide-react';
+import { FileSearch, ArrowUpRight, Clock, CheckCircle, AlertCircle, Calendar, User, Phone, Cpu, FileText, XCircle } from 'lucide-react';
 
 function StatusBadge({ status }) {
   const styles = {
@@ -50,9 +50,17 @@ function Skeleton() {
   );
 }
 
+const TABS = [
+  { key: 'pending', label: 'To Review', icon: Clock },
+  { key: 'approved', label: 'Approved', icon: CheckCircle },
+  { key: 'rejected', label: 'Rejected', icon: XCircle },
+  { key: 'all', label: 'All', icon: FileSearch },
+];
+
 export default function ExtractionsPage() {
   const { showToast } = useContext(ToastContext);
   const [extractions, setExtractions] = useState(null);
+  const [activeTab, setActiveTab] = useState('pending');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -62,7 +70,7 @@ export default function ExtractionsPage() {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchCached('/api/dashboard/extractions');
+        const data = await fetchCached(`/api/dashboard/extractions?status=${activeTab}`);
         if (cancelled) return;
         setExtractions(data.extractions || []);
       } catch (e) {
@@ -73,7 +81,7 @@ export default function ExtractionsPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [activeTab]);
 
   function formatDate(dateStr) {
     if (!dateStr) return '—';
@@ -114,19 +122,27 @@ export default function ExtractionsPage() {
     );
   }
 
-  const pendingCount = extractions.filter(e => e.extraction_status === 'review_pending').length;
-  const newCount = extractions.filter(e => e.extraction_status === 'extraction_completed').length;
-
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Extraction Review</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {extractions.length === 0
-            ? 'No extractions pending review'
-            : `${extractions.length} pending — ${pendingCount} flagged for review, ${newCount} awaiting review`
-          }
-        </p>
+      </div>
+
+      <div className="flex gap-1 mb-6 border-b border-gray-100 dark:border-gray-800">
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab.key
+                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <tab.icon className="w-3.5 h-3.5" />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {extractions.length === 0 ? (
@@ -134,8 +150,16 @@ export default function ExtractionsPage() {
           <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <FileSearch className="w-8 h-8 text-gray-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">No extractions to review</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Prescriptions that have been OCR-processed and extracted will appear here for your review.</p>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+            {activeTab === 'pending' && 'No extractions to review'}
+            {activeTab === 'approved' && 'No approved extractions'}
+            {activeTab === 'rejected' && 'No rejected extractions'}
+            {activeTab === 'all' && 'No extractions found'}
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {activeTab === 'pending' && 'Prescriptions that have been OCR-processed and extracted will appear here for your review.'}
+            {activeTab === 'all' && 'Run an OCR pipeline to see extraction results here.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">

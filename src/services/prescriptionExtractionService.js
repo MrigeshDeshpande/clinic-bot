@@ -77,6 +77,38 @@ export async function getPendingExtractions(sql, limit = 20) {
   `;
 }
 
+export async function getExtractionsByStatus(sql, status = 'pending', limit = 50) {
+  const where = {
+    pending: sql`pe.extraction_status IN ('extraction_completed', 'review_pending')`,
+    approved: sql`pe.extraction_status = 'approved'`,
+    rejected: sql`pe.extraction_status = 'rejected'`,
+    all: sql`1=1`,
+  };
+  return sql`
+    SELECT
+      pe.id,
+      pe.media_asset_id,
+      pe.raw_text,
+      pe.structured_json,
+      pe.extraction_status,
+      pe.extraction_model,
+      pe.extraction_version,
+      pe.extraction_completed_at,
+      pe.created_at,
+      pe.error_message,
+      p.name AS patient_name,
+      p.phone AS patient_phone,
+      a.date AS appointment_date
+    FROM prescription_extractions pe
+    LEFT JOIN media_assets ma ON ma.id = pe.media_asset_id
+    LEFT JOIN patients p ON p.id = ma.patient_id
+    LEFT JOIN appointments a ON a.id = ma.appointment_id
+    WHERE ${where[status] || where.pending}
+    ORDER BY pe.created_at DESC
+    LIMIT ${limit}
+  `;
+}
+
 export async function approveExtraction(sql, extractionId) {
   if (!extractionId) {
     throw Object.assign(new Error('extractionId is required'), { status: 400 });
