@@ -67,6 +67,7 @@ const ID_TO_INTENT = {
   'doc_view_queue': 'doctor_view_queue',
   'doc_call_next': 'doctor_call_next',
   'doc_log_visit': 'doctor_log_visit',
+  'quick_update_visit': 'doctor_quick_visit_update',
   // Receptionist queue actions
   'queue_call_now': 'queue_mark_called',
   'queue_toggle_priority': 'queue_toggle_priority',
