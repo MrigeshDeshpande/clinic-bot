@@ -26,6 +26,8 @@ import { readFileSync, existsSync } from 'fs';
 import postgres from 'postgres';
 import { randomUUID, createHash } from 'crypto';
 import { extractPrescription } from '../src/lib/ai/extractionClient.js';
+import { performOcr } from '../src/lib/ai/ocrClient.js';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 // Load .env.local if present (systemd's EnvironmentFile handles it in production).
 if (existsSync('.env.local')) {
@@ -94,25 +96,66 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const extractionIdempotencyKey = (mediaAssetId, extractorVersion) =>
   createHash('sha256').update(`${mediaAssetId}:${extractorVersion}`).digest('hex');
 
+function createR2Client() {
+  return new S3Client({
+    region: 'auto',
+    endpoint: process.env.R2_ENDPOINT,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY,
+      secretAccessKey: process.env.R2_SECRET_KEY,
+    },
+  });
+}
+
+async function downloadFromR2(key) {
+  logger.info('R2_DOWNLOAD_START', { key });
+  const response = await createR2Client().send(new GetObjectCommand({
+    Bucket: process.env.R2_BUCKET || 'clinic-bot',
+    Key: key,
+  }));
+  const chunks = [];
+  for await (const chunk of response.Body) chunks.push(chunk);
+  const buffer = Buffer.concat(chunks);
+  logger.info('R2_DOWNLOAD_COMPLETE', { key, sizeBytes: buffer.length });
+  return buffer;
+}
+
 // ── Job handlers ─────────────────────────────────────────────
 
 async function handleOcrJob(job) {
-  // Simulate OCR work (staggered).
-  await sleep(500 + Math.random() * 1000);
-
   const extIdKey = extractionIdempotencyKey(job.media_asset_id, EXTRACTION_EXTRACTOR_VERSION);
 
-  const rawText = 'RCT advised for tooth 46. Caries detected.';
-  const structuredJson = {
-    procedure: 'rct',
-    tooth: '46',
-    diagnosis: 'caries',
-    findings: [
-      { tooth: '46', procedure: 'RCT', surface: 'O', severity: 'moderate' },
-    ],
-  };
-  const confidence = 0.95;
+  // 1. Query media_asset for R2 key and mime type.
+  const [asset] = await sql`
+    SELECT r2_key, mime_type FROM media_assets WHERE id = ${job.media_asset_id}
+  `;
 
+  if (!asset || !asset.r2_key) {
+    throw new Error(`media_asset ${job.media_asset_id} not found or missing r2_key`);
+  }
+
+  logger.info('OCR_ASSET_FOUND', {
+    jobId: job.id,
+    mediaAssetId: job.media_asset_id,
+    r2Key: asset.r2_key,
+    mimeType: asset.mime_type,
+  });
+
+  // 2. Download image from R2.
+  const imageBuffer = await downloadFromR2(asset.r2_key);
+
+  // 3. Run OCR via MiniCPM-V.
+  const { rawText, model, processingMs } = await performOcr(imageBuffer);
+
+  logger.info('OCR_RESULT', {
+    jobId: job.id,
+    mediaAssetId: job.media_asset_id,
+    ocrModel: model,
+    ocrProcessingMs: processingMs,
+    rawTextLength: rawText.length,
+  });
+
+  // 4. Store raw_text in prescription_extractions.
   const [extraction] = await sql`
     INSERT INTO prescription_extractions (
       media_asset_id,
@@ -120,8 +163,6 @@ async function handleOcrJob(job) {
       extractor_version,
       status,
       raw_text,
-      structured_json,
-      confidence,
       idempotency_key,
       interpreted_at,
       extraction_status
@@ -131,29 +172,29 @@ async function handleOcrJob(job) {
       ${EXTRACTION_EXTRACTOR_VERSION},
       'completed',
       ${rawText},
-      ${sql.json(structuredJson)},
-      ${confidence},
       ${extIdKey},
       NOW(),
       'ocr_completed'
     )
     ON CONFLICT (idempotency_key) DO UPDATE
-      SET extraction_status = CASE
-        WHEN prescription_extractions.extraction_status = 'pending' THEN 'ocr_completed'
-        ELSE prescription_extractions.extraction_status
-      END
+      SET
+        raw_text = COALESCE(prescription_extractions.raw_text, ${rawText}),
+        extraction_status = CASE
+          WHEN prescription_extractions.extraction_status = 'pending' THEN 'ocr_completed'
+          ELSE prescription_extractions.extraction_status
+        END
     RETURNING id
   `;
 
   logger.info('EXTRACTION_CREATED', {
     jobId: job.id,
     mediaAssetId: job.media_asset_id,
-    extractorType: EXTRACTION_EXTRACTOR_TYPE,
-    extractorVersion: EXTRACTION_EXTRACTOR_VERSION,
     extractionId: extraction.id,
+    ocrModel: model,
+    ocrProcessingMs: processingMs,
   });
 
-  // Enqueue extraction job (deferred — worker will pick it up next poll).
+  // 5. Enqueue extraction job (deferred — worker will pick it up next poll).
   const extJobIdempotencyKey = extractionIdempotencyKey(job.media_asset_id, EXTRACTION_JOB_VERSION);
 
   await sql`
@@ -179,6 +220,7 @@ async function handleOcrJob(job) {
     extractionId: extraction.id,
   });
 
+  // 6. Mark OCR job as completed.
   await sql`
     UPDATE media_processing_jobs
     SET status = 'completed', completed_at = NOW()
@@ -189,8 +231,9 @@ async function handleOcrJob(job) {
     jobId: job.id,
     jobType: job.job_type,
     mediaAssetId: job.media_asset_id,
-    extractionCreated: true,
-    extractionJobEnqueued: true,
+    ocrModel: model,
+    ocrProcessingMs: processingMs,
+    rawTextLength: rawText.length,
   });
 }
 

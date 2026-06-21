@@ -61,8 +61,14 @@ export async function getPendingExtractions(sql, limit = 20) {
       pe.extraction_version,
       pe.extraction_completed_at,
       pe.created_at,
-      pe.error_message
+      pe.error_message,
+      p.name AS patient_name,
+      p.phone AS patient_phone,
+      a.date AS appointment_date
     FROM prescription_extractions pe
+    LEFT JOIN media_assets ma ON ma.id = pe.media_asset_id
+    LEFT JOIN patients p ON p.id = ma.patient_id
+    LEFT JOIN appointments a ON a.id = ma.appointment_id
     WHERE pe.extraction_status IN ('extraction_completed', 'review_pending')
     ORDER BY
       CASE WHEN pe.extraction_status = 'review_pending' THEN 0 ELSE 1 END,

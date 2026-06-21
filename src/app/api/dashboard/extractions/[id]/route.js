@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/db/pool';
 import { approveExtraction, rejectExtraction } from '@/services/prescriptionExtractionService';
 
-export async function PATCH(req, { params }) {
+export async function PATCH(req, { params: paramsPromise }) {
   try {
+    const params = await paramsPromise;
     const body = await req.json();
     const { action, reason } = body;
 
@@ -37,8 +38,9 @@ export async function PATCH(req, { params }) {
   }
 }
 
-export async function GET(req, { params }) {
+export async function GET(req, { params: paramsPromise }) {
   try {
+    const params = await paramsPromise;
     const sql = getSql();
     if (!sql) return NextResponse.json({ error: 'Database not ready' }, { status: 503 });
 
