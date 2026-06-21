@@ -106,6 +106,8 @@ export function getNextState(state, intent, entities) {
       return 'DOCTOR_VIEW_QUEUE';
     case 'doctor_log_visit':
       return 'DOCTOR_LOG_VISIT_NAME';
+    case 'doctor_quick_visit_update':
+      return 'WAITING_FOR_VISIT_SUMMARY';
 
     // Receptionist transitions
     case 'receptionist_view_queue':

@@ -14,6 +14,7 @@ export const STATES = [
   'BOOKING_PATIENT_AGE','BOOKING_PATIENT_SEX','BOOKING_PATIENT_LOCATION',
   'FAMILY_SELECTION',
   'RECEPTIONIST_MAIN_MENU','RECEPTIONIST_VIEW_QUEUE','RECEPTIONIST_QUEUE_DETAIL','DOCTOR_VIEW_QUEUE',
+  'WAITING_FOR_VISIT_SUMMARY',
 ];
 
 export const TRANSITIONS = {
@@ -36,6 +37,7 @@ export const TRANSITIONS = {
   DOCTOR_MAIN_MENU:     ['doctor_view_today','doctor_view_by_date','doctor_manage_schedule',
                           'doctor_view_stats','doctor_register_patient','doctor_search_patient',
                           'doctor_view_queue','doctor_call_next',
+                          'doctor_log_visit','doctor_quick_visit_update',
                           'emergency','escalate','back','greeting'],
   DOCTOR_VIEW_DATE:     ['provide_date','date_custom','back','emergency','escalate'],
   DOCTOR_APPOINTMENT_LIST: ['doctor_appt_detail','back','emergency','escalate'],
@@ -76,4 +78,5 @@ export const TRANSITIONS = {
   WALKIN_AGE:         ['back','emergency','escalate'],
   WALKIN_SEX:         ['back','emergency','escalate'],
   WALKIN_TREATMENT:   ['provide_treatment','treatment_help','back','emergency','escalate'],
+  WAITING_FOR_VISIT_SUMMARY: ['provide_visit_summary','back','emergency','escalate'],
 };

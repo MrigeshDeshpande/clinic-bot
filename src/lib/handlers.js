@@ -3205,6 +3205,8 @@ async function handleDoctorDispatch(session, normalized, entities, intent) {
     }
     case 'DOCTOR_EDIT_PATIENT':
       return handleDoctorEditPatient(session, normalized, intent, entities);
+    case 'WAITING_FOR_VISIT_SUMMARY':
+      return handleVisitSummary(session, normalized, intent, entities);
     default:
       return handleDoctorGreeting(session);
   }
@@ -3407,6 +3409,7 @@ function getDoctorMenuSections() {
       title: 'Quick Actions',
       rows: [
         { id: 'doc_log_visit', title: '📝 Log Visit for Walk-in' },
+        { id: 'quick_update_visit', title: '📝 Quick Visit Update' },
       ],
     },
     {
@@ -3495,6 +3498,9 @@ async function handleDoctorMainMenu(session, intent) {
     session = { ...session, state: 'DOCTOR_FEEDBACK' };
     return handleDoctorFeedback(session);
   }
+  if (intent === 'doctor_quick_visit_update') {
+    return handlePatientDone(session);
+  }
 
   const body = await buildDoctorMainMenuBody(session, false);
   return {
@@ -3502,6 +3508,174 @@ async function handleDoctorMainMenu(session, intent) {
     reply: { body, buttonLabel: 'Menu', sections: getDoctorMenuSections() },
     replyType: 'list',
   };
+}
+
+// ───────────────────────────────────────────────
+// Quick Visit Update — single-line patient done summary
+// ───────────────────────────────────────────────
+async function handlePatientDone(session) {
+  const today = new Date().toISOString().slice(0, 10);
+  const appointments = await fetchAppointmentsByDate(today);
+
+  const active = appointments.filter(a =>
+    !['completed', 'cancelled', 'no_show', 'superseded'].includes(a.status)
+  );
+
+  if (active.length === 0) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU' },
+      reply: { body: '*No active patients today.*\n\nNo pending appointments to update.', buttonLabel: 'Back', sections: singleRowSection([{ id: 'back', title: '🔙 Back to Menu' }]) },
+      replyType: 'list',
+    };
+  }
+
+  // Auto-pick the latest appointment (last in the sorted list)
+  const appt = active[active.length - 1];
+  session = {
+    ...session,
+    state: 'WAITING_FOR_VISIT_SUMMARY',
+    context: {
+      ...session.context,
+      quickVisitApptId: appt.id,
+      quickVisitPatient: appt.patient_name || 'Patient',
+    },
+  };
+
+  logger.info('QUICK_VISIT_UPDATE_STARTED', {
+    waId: session.waId,
+    appointmentId: appt.id,
+    patientName: appt.patient_name,
+  });
+
+  return {
+    session,
+    reply: `*Patient:* ${appt.patient_name || 'Unknown'}\n*Treatment:* ${appt.treatment || '—'}\n\nSend a single line with:\nTreatment, Estimate, Paid, Follow-up\n\n*Example:*\nRCT 3000 1000 7d`,
+    replyType: 'text',
+  };
+}
+
+async function handleVisitSummary(session, normalized, intent, entities) {
+  if (intent === 'back') return handleDoctorBack(session);
+
+  const apptId = session.context?.quickVisitApptId;
+  if (!apptId) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, quickVisitApptId: undefined, quickVisitPatient: undefined } },
+      reply: { body: 'Session expired. Please try again.', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  const text = (normalized?.textClean || '').trim();
+  // Normalize commas to spaces
+  const normalizedText = text.replace(/,/g, ' ');
+  const parts = normalizedText.split(/\s+/).filter(Boolean);
+
+  // Need at least 4 parts: treatment, estimate, paid, follow-up
+  if (parts.length < 4 || isNaN(parseInt(parts[1], 10)) || isNaN(parseInt(parts[2], 10))) {
+    session = { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, quickVisitApptId: undefined, quickVisitPatient: undefined } };
+    return {
+      session,
+      reply: {
+        body: 'Could not understand.\n\n*Example:*\nRCT,3000,1000,7d',
+        buttonLabel: 'Menu',
+        sections: getDoctorMenuSections(),
+      },
+      replyType: 'list',
+    };
+  }
+
+  const treatment = parts[0];
+  const estimate = parseInt(parts[1], 10);
+  const paid = parseInt(parts[2], 10);
+  const followUpRaw = parts.slice(3).join(' ');
+
+  // Parse follow-up: if it's a number, treat as days from today
+  let followUpDate = null;
+  const followUpNum = parseInt(followUpRaw, 10);
+  if (!isNaN(followUpNum) && /^\d+$/.test(followUpRaw)) {
+    const d = new Date();
+    d.setDate(d.getDate() + followUpNum);
+    followUpDate = d.toISOString().slice(0, 10);
+  }
+
+  // Store raw follow-up appended to existing notes
+  const notesValue = `[Quick Visit Update]\nFollow-up: ${followUpRaw}`;
+
+  // Update appointment directly via SQL
+  const sql = getSql();
+  if (!sql) {
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, quickVisitApptId: undefined, quickVisitPatient: undefined } },
+      reply: { body: 'Database error. Please try again.', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
+
+  try {
+    const result = await sql`
+      UPDATE appointments
+      SET treatment = ${treatment},
+          treatment_charges = ${estimate},
+          paid_amount = ${paid},
+          follow_up_date = ${followUpDate}::date,
+          notes = CASE
+            WHEN COALESCE(notes, '') = '' THEN ${notesValue}
+            ELSE notes || chr(10) || ${notesValue}
+          END,
+          updated_at = NOW()
+      WHERE id = ${apptId}
+        AND status NOT IN ('completed', 'cancelled', 'no_show', 'superseded')
+      RETURNING id
+    `;
+
+    if (result.length === 0) {
+      logger.warn('QUICK_VISIT_UPDATE_APPOINTMENT_NOT_FOUND', { appointmentId: apptId });
+      return {
+        session: { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, quickVisitApptId: undefined, quickVisitPatient: undefined } },
+        reply: { body: 'Could not find the appointment. It may have been completed or cancelled.', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+        replyType: 'list',
+      };
+    }
+
+    logger.info('QUICK_VISIT_UPDATE_SAVED', {
+      waId: session.waId,
+      appointmentId: apptId,
+      treatment,
+      estimate,
+      paid,
+      followUpDate,
+      followUpRaw,
+    });
+
+    logger.info('FOLLOW_UP_RAW_CAPTURED', {
+      waId: session.waId,
+      followUpRaw,
+      parsedDays: isNaN(followUpNum) ? null : followUpNum,
+    });
+
+    session = {
+      ...session,
+      state: 'DOCTOR_MAIN_MENU',
+      context: { ...session.context, quickVisitApptId: undefined, quickVisitPatient: undefined },
+    };
+    return {
+      session,
+      reply: {
+        body: `✅ *Saved*\n\n*Treatment:* ${treatment}\n*Estimate:* ₹${estimate}\n*Paid:* ₹${paid}\n*Follow-up:* ${followUpRaw}${followUpDate ? ` (${followUpDate})` : ''}`,
+        buttonLabel: 'Menu',
+        sections: getDoctorMenuSections(),
+      },
+      replyType: 'list',
+    };
+  } catch (error) {
+    logger.error('QUICK_VISIT_UPDATE_SAVE_ERROR', { appointmentId: apptId, error: error.message });
+    return {
+      session: { ...session, state: 'DOCTOR_MAIN_MENU', context: { ...session.context, quickVisitApptId: undefined, quickVisitPatient: undefined } },
+      reply: { body: 'Could not save. Please try again.', buttonLabel: 'Menu', sections: getDoctorMenuSections() },
+      replyType: 'list',
+    };
+  }
 }
 
 // ───────────────────────────────────────────────
