@@ -8,6 +8,11 @@
  *   queued → processing → completed
  *   queued → processing → failed
  *
+ * Job types:
+ *   ocr        — Runs OCR (MiniCPM-V via Kali), stores raw_text, enqueues extraction
+ *   extraction — Runs Qwen extraction via Kali, stores structured_json
+ *   fail_test  — Intentionally fails for testing
+ *
  * Usage:
  *   node scripts/dhara-worker.mjs
  *
@@ -20,6 +25,7 @@
 import { readFileSync, existsSync } from 'fs';
 import postgres from 'postgres';
 import { randomUUID, createHash } from 'crypto';
+import { extractPrescription } from '../src/lib/ai/extractionClient.js';
 
 // Load .env.local if present (systemd's EnvironmentFile handles it in production).
 if (existsSync('.env.local')) {
@@ -41,6 +47,8 @@ const WORKER_ID = randomUUID();
 
 const EXTRACTION_EXTRACTOR_TYPE = 'prescription_ocr';
 const EXTRACTION_EXTRACTOR_VERSION = 'v1';
+
+const EXTRACTION_JOB_VERSION = 'extraction-v1';
 
 // ── Logger ───────────────────────────────────────────────────
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
@@ -86,14 +94,181 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const extractionIdempotencyKey = (mediaAssetId, extractorVersion) =>
   createHash('sha256').update(`${mediaAssetId}:${extractorVersion}`).digest('hex');
 
+// ── Job handlers ─────────────────────────────────────────────
+
+async function handleOcrJob(job) {
+  // Simulate OCR work (staggered).
+  await sleep(500 + Math.random() * 1000);
+
+  const extIdKey = extractionIdempotencyKey(job.media_asset_id, EXTRACTION_EXTRACTOR_VERSION);
+
+  const rawText = 'RCT advised for tooth 46. Caries detected.';
+  const structuredJson = {
+    procedure: 'rct',
+    tooth: '46',
+    diagnosis: 'caries',
+    findings: [
+      { tooth: '46', procedure: 'RCT', surface: 'O', severity: 'moderate' },
+    ],
+  };
+  const confidence = 0.95;
+
+  const [extraction] = await sql`
+    INSERT INTO prescription_extractions (
+      media_asset_id,
+      extractor_type,
+      extractor_version,
+      status,
+      raw_text,
+      structured_json,
+      confidence,
+      idempotency_key,
+      interpreted_at,
+      extraction_status
+    ) VALUES (
+      ${job.media_asset_id},
+      ${EXTRACTION_EXTRACTOR_TYPE},
+      ${EXTRACTION_EXTRACTOR_VERSION},
+      'completed',
+      ${rawText},
+      ${sql.json(structuredJson)},
+      ${confidence},
+      ${extIdKey},
+      NOW(),
+      'ocr_completed'
+    )
+    ON CONFLICT (idempotency_key) DO UPDATE
+      SET extraction_status = CASE
+        WHEN prescription_extractions.extraction_status = 'pending' THEN 'ocr_completed'
+        ELSE prescription_extractions.extraction_status
+      END
+    RETURNING id
+  `;
+
+  logger.info('EXTRACTION_CREATED', {
+    jobId: job.id,
+    mediaAssetId: job.media_asset_id,
+    extractorType: EXTRACTION_EXTRACTOR_TYPE,
+    extractorVersion: EXTRACTION_EXTRACTOR_VERSION,
+    extractionId: extraction.id,
+  });
+
+  // Enqueue extraction job (deferred — worker will pick it up next poll).
+  const extJobIdempotencyKey = extractionIdempotencyKey(job.media_asset_id, EXTRACTION_JOB_VERSION);
+
+  await sql`
+    INSERT INTO media_processing_jobs (
+      media_asset_id,
+      job_type,
+      status,
+      payload,
+      idempotency_key
+    ) VALUES (
+      ${job.media_asset_id},
+      'extraction',
+      'queued',
+      ${sql.json({ extraction_id: extraction.id })},
+      ${extJobIdempotencyKey}
+    )
+    ON CONFLICT (idempotency_key) DO NOTHING
+  `;
+
+  logger.info('EXTRACTION_JOB_ENQUEUED', {
+    jobId: job.id,
+    mediaAssetId: job.media_asset_id,
+    extractionId: extraction.id,
+  });
+
+  await sql`
+    UPDATE media_processing_jobs
+    SET status = 'completed', completed_at = NOW()
+    WHERE id = ${job.id}
+  `;
+
+  logger.info('JOB_COMPLETED', {
+    jobId: job.id,
+    jobType: job.job_type,
+    mediaAssetId: job.media_asset_id,
+    extractionCreated: true,
+    extractionJobEnqueued: true,
+  });
+}
+
+async function handleExtractionJob(job, payload) {
+  const extractionId = payload?.extraction_id;
+
+  if (!extractionId) {
+    throw new Error('Extraction job payload missing extraction_id');
+  }
+
+  logger.info('EXTRACTION_JOB_STARTED', {
+    jobId: job.id,
+    extractionId,
+    mediaAssetId: job.media_asset_id,
+  });
+
+  const [extraction] = await sql`
+    SELECT id, raw_text, extraction_status
+    FROM prescription_extractions
+    WHERE id = ${extractionId}
+  `;
+
+  if (!extraction) {
+    throw new Error(`Extraction record ${extractionId} not found`);
+  }
+
+  if (extraction.extraction_status === 'extraction_completed') {
+    logger.warn('EXTRACTION_ALREADY_COMPLETED', { extractionId });
+    await sql`
+      UPDATE media_processing_jobs
+      SET status = 'completed', completed_at = NOW()
+      WHERE id = ${job.id}
+    `;
+    return;
+  }
+
+  if (!extraction.raw_text) {
+    throw new Error(`No raw_text available for extraction ${extractionId}`);
+  }
+
+  const result = await extractPrescription(extraction.raw_text);
+
+  logger.info('EXTRACTION_RESULT_RECEIVED', {
+    extractionId,
+    model: result.model,
+    processingMs: result.processingMs,
+  });
+
+  await sql`
+    UPDATE prescription_extractions
+    SET
+      structured_json = ${sql.json(result.structuredJson)},
+      extraction_status = 'extraction_completed',
+      extraction_model = ${result.model},
+      extraction_version = 'qwen-extraction-v1',
+      extraction_completed_at = NOW()
+    WHERE id = ${extractionId}
+  `;
+
+  await sql`
+    UPDATE media_processing_jobs
+    SET status = 'completed', completed_at = NOW()
+    WHERE id = ${job.id}
+  `;
+
+  logger.info('JOB_COMPLETED', {
+    jobId: job.id,
+    jobType: job.job_type,
+    mediaAssetId: job.media_asset_id,
+    extractionCompleted: true,
+  });
+}
+
 // ── Worker lifecycle ─────────────────────────────────────────
 let running = true;
 
 async function doWork() {
   try {
-    // Claim up to CLAIM_LIMIT jobs atomically.
-    // Locks rows (SKIP LOCKED), transitions to processing,
-    // increments attempt_count, returns only needed columns.
     const claimed = await sql`
       WITH claimed AS (
         SELECT id
@@ -134,70 +309,11 @@ async function doWork() {
         }
 
         if (job.job_type === 'ocr') {
-          // Simulate OCR work (staggered).
-          await sleep(500 + Math.random() * 1000);
-
-          // Build idempotency key: sha256(media_asset_id:extractor_version)
-          const extIdKey = extractionIdempotencyKey(job.media_asset_id, EXTRACTION_EXTRACTOR_VERSION);
-
-          // Hardcoded extraction data — no AI yet. Will be replaced by Gemini in PR-7D.
-          const rawText = 'RCT advised for tooth 46. Caries detected.';
-          const structuredJson = {
-            procedure: 'rct',
-            tooth: '46',
-            diagnosis: 'caries',
-            findings: [
-              { tooth: '46', procedure: 'RCT', surface: 'O', severity: 'moderate' },
-            ],
-          };
-          const confidence = 0.95;
-
-          await sql`
-            INSERT INTO prescription_extractions (
-              media_asset_id,
-              extractor_type,
-              extractor_version,
-              status,
-              raw_text,
-              structured_json,
-              confidence,
-              idempotency_key,
-              interpreted_at
-            ) VALUES (
-              ${job.media_asset_id},
-              ${EXTRACTION_EXTRACTOR_TYPE},
-              ${EXTRACTION_EXTRACTOR_VERSION},
-              'completed',
-              ${rawText},
-              ${sql.json(structuredJson)},
-              ${confidence},
-              ${extIdKey},
-              NOW()
-            )
-            ON CONFLICT (idempotency_key) DO NOTHING
-          `;
-
-          logger.info('EXTRACTION_CREATED', {
-            jobId: job.id,
-            mediaAssetId: job.media_asset_id,
-            extractorType: EXTRACTION_EXTRACTOR_TYPE,
-            extractorVersion: EXTRACTION_EXTRACTOR_VERSION,
-          });
-
-          await sql`
-            UPDATE media_processing_jobs
-            SET status = 'completed', completed_at = NOW()
-            WHERE id = ${job.id}
-          `;
-
-          logger.info('JOB_COMPLETED', {
-            jobId: job.id,
-            jobType: job.job_type,
-            mediaAssetId: job.media_asset_id,
-            extractionCreated: true,
-          });
+          await handleOcrJob(job);
+        } else if (job.job_type === 'extraction') {
+          await handleExtractionJob(job, job.payload);
         } else {
-          // Non-OCR job types: fake work and complete directly.
+          // Unknown job types: fake work and complete directly.
           await sleep(500 + Math.random() * 1000);
 
           await sql`
@@ -231,15 +347,9 @@ async function doWork() {
       }
     }
   } catch (err) {
-    // DB-level error during claim or update loop — log and retry next poll.
     logger.error('WORKER_POLL_FAILED', { error: err.message });
   }
 }
-
-// Future PR:
-// Recover stale processing jobs where
-// status='processing'
-// and started_at older than threshold.
 
 async function shutdown(signal) {
   logger.info('WORKER_STOPPED', { reason: signal, pid: process.pid });
@@ -255,7 +365,6 @@ async function shutdown(signal) {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-// ── Main loop ────────────────────────────────────────────────
 (async () => {
   logger.info('WORKER_STARTED', {
     pid: process.pid,

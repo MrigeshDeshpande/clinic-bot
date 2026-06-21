@@ -27,3 +27,50 @@ export function validateResponse(raw, availableIntents) {
     language: raw.language || 'unknown',
   };
 }
+
+const REQUIRED_EXTRACTION_FIELDS = [
+  'patient',
+  'observations',
+  'diagnoses',
+  'treatment_recommendations',
+  'completed_treatments',
+  'medications',
+  'financial_estimates',
+  'followups',
+  'unclassified_notes',
+];
+
+const ARRAY_FIELDS = new Set([
+  'observations',
+  'diagnoses',
+  'treatment_recommendations',
+  'completed_treatments',
+  'medications',
+  'financial_estimates',
+  'followups',
+  'unclassified_notes',
+]);
+
+export function validateExtractionResponse(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Extraction response must be a JSON object');
+  }
+
+  for (const field of REQUIRED_EXTRACTION_FIELDS) {
+    if (!(field in raw)) {
+      throw new Error(`Missing required field "${field}" in extraction response`);
+    }
+
+    if (ARRAY_FIELDS.has(field)) {
+      if (!Array.isArray(raw[field])) {
+        throw new Error(`Field "${field}" must be an array, got ${typeof raw[field]}`);
+      }
+    } else if (field === 'patient') {
+      if (typeof raw[field] !== 'object' || raw[field] === null || Array.isArray(raw[field])) {
+        throw new Error(`Field "patient" must be an object`);
+      }
+    }
+  }
+
+  return raw;
+}

@@ -956,6 +956,47 @@ export async function runMigrations() {
         ON prescription_extractions(extractor_version);
     `;
 
+    // ── PR-7E: Extraction pipeline columns ──────────────────────────
+    // Adds second-stage extraction tracking to prescription_extractions.
+    // extraction_status tracks the extraction pipeline lifecycle:
+    //   pending       — awaiting extraction
+    //   ocr_completed — OCR done, raw_text available
+    //   extraction_completed — Qwen extraction done, structured_json populated
+    //   review_pending — flagged for dentist review
+    //   approved      — reviewed and approved
+    //   rejected      — reviewed and rejected
+
+    await db`
+      ALTER TABLE prescription_extractions
+        ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+    `;
+
+    await db`
+      ALTER TABLE prescription_extractions
+        ADD COLUMN IF NOT EXISTS extraction_model VARCHAR(50)
+    `;
+
+    await db`
+      ALTER TABLE prescription_extractions
+        ADD COLUMN IF NOT EXISTS extraction_version VARCHAR(20)
+    `;
+
+    await db`
+      ALTER TABLE prescription_extractions
+        ADD COLUMN IF NOT EXISTS extraction_completed_at TIMESTAMPTZ
+    `;
+
+    await db`DO $$ BEGIN
+      ALTER TABLE prescription_extractions ADD CONSTRAINT valid_extraction_pipeline_status
+        CHECK (extraction_status IN ('pending', 'ocr_completed', 'extraction_completed', 'review_pending', 'approved', 'rejected'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$`;
+
+    await db`
+      CREATE INDEX IF NOT EXISTS idx_extractions_extraction_status
+        ON prescription_extractions(extraction_status);
+    `;
+
     // ── Async job queue: media_processing_jobs ──────────────────────
     // DB-as-queue for background workloads (OCR, voice, lab, brief).
     // Worker polls via SELECT ... FOR UPDATE SKIP LOCKED.

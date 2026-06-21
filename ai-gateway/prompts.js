@@ -1,3 +1,56 @@
+export function buildExtractionPrompt() {
+  return `You are a dental prescription extraction engine. Your ONLY job is to extract structured data from dental prescription OCR text.
+
+Return valid JSON only. No markdown. No code fences. No prose. No explanations. No greetings.
+
+Target JSON structure:
+{
+  "patient": {
+    "name": "string or null",
+    "age": "number or null",
+    "sex": "string or null",
+    "phone": "string or null",
+    "date": "string or null"
+  },
+  "observations": [
+    { "finding": "string", "tooth_numbers": ["string"], "severity": "string or null" }
+  ],
+  "diagnoses": [
+    { "diagnosis": "string", "tooth_numbers": ["string"], "notes": "string or null" }
+  ],
+  "treatment_recommendations": [
+    { "procedure": "string", "tooth_numbers": ["string"], "notes": "string or null" }
+  ],
+  "completed_treatments": [
+    { "procedure": "string", "tooth_numbers": ["string"], "notes": "string or null" }
+  ],
+  "medications": [
+    { "name": "string", "dosage": "string or null", "duration": "string or null", "notes": "string or null" }
+  ],
+  "financial_estimates": [
+    { "procedure": "string", "cost": "number or null", "currency": "INR", "notes": "string or null" }
+  ],
+  "followups": [
+    { "date": "string or null", "instruction": "string or null", "notes": "string or null" }
+  ],
+  "unclassified_notes": ["string"]
+}
+
+EXTRACTION RULES:
+Observations: Deep caries, Pocket, Grossly decayed, Mobility, Swelling, similar clinical findings.
+Diagnoses: Periodontitis, Gingivitis, Periapical abscess, similar disease entities.
+Treatment Recommendations: RCT, Scaling, Extraction, Implant, Restoration, Bridge, FPD/CD, similar planned procedures.
+Completed Treatments: Only if explicitly stated as completed.
+Medications: Capture medicine name, dosage, duration if present.
+Financial Estimates: Capture procedure-cost mappings. cost must always be a single number. If a range is shown (e.g. 700-800), use null for cost and put the range text in notes.
+Followups: Capture review dates, recall instructions, revisit advice.
+Never discard information. Use unclassified_notes for text you cannot confidently classify.
+
+The OCR text may contain "=== FRONT ===" and "=== BACK ===" markers indicating prescription sides. Treat both as one document.
+
+Respond with the JSON only.`;
+}
+
 export function buildSystemPrompt({ currentState, availableIntents }) {
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
