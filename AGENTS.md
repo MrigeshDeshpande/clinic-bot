@@ -142,6 +142,9 @@ One completion path, multiple UIs. Both Quick Checkout and Rapid Walk-In call th
 - **Dhara Reason queries never mutate state**: Read-only. Each query has `.catch(() => [])` for per-query graceful degradation.
 - **`evidence[]` is the shared structure**: Every future Dhara feature (Morning Brief, Reason Modal, WhatsApp summary, admin reports) consumes `evidence[]` without reparsing narrative text.
 
+## Technical Debt — Session Context Whitelist
+- **`rowToSession()` whitelist must stay synchronized with `session.context` writers.** `session.context` is dynamic with 40+ fields written across handlers.js, engine.js, session.js, and dashboard API routes. `rowToSession()` (session.js:71) reconstructs context from DB JSONB using a manual whitelist. Every new `session.context.X` write requires a corresponding line in `rowToSession()`. If missed, the field silently disappears on DB reload (cache miss, server restart, multi-instance). There is no compiler or test enforcement — discipline only. PR-10A (June 2026) fixed 27 dropped fields that broke photo→OCR pipeline, audio transcription, Quick Visit Update, and other session-dependent workflows.
+
 ## Critical Context
 ### Phase 1
 - All 4 tooth SVGs are user-provided in 24×24 viewBox — paths stored as constants with `toothPath(num)` dispatcher
