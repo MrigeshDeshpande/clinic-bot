@@ -1059,6 +1059,12 @@ export async function runMigrations() {
         ON media_processing_jobs(status, created_at);
     `;
 
+    // ── PR-11: Allow pending observation media without appointment ──
+    await db`DO $$ BEGIN
+      ALTER TABLE media_assets ALTER COLUMN appointment_id DROP NOT NULL;
+    EXCEPTION WHEN others THEN NULL;
+    END $$`;
+
       logger.info('DB_MIGRATIONS_COMPLETE');
       return;
     } catch (error) {

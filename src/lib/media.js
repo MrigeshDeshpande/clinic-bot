@@ -143,3 +143,47 @@ export async function processAndStoreMedia({ mediaId, mimeType, appointmentId, w
 
   return { key, mediaType };
 }
+
+// TODO(DHARA): processAndStoreMedia serves two roles:
+// 1. Appointment media attachment (chit_media dual-write, requires appointmentId)
+// 2. Observation ingestion (no appointment context yet)
+// Split once observation flow stabilizes.
+
+export async function ingestObservationMedia({ mediaId, mimeType, waId }) {
+  const result = await processAndStoreMedia({ mediaId, mimeType, appointmentId: null, waId, patientId: null });
+  if (!result?.key) return null;
+
+  try {
+    const sql = getSql();
+    if (!sql) return result;
+    const mediaType = mimeType?.startsWith('audio/') ? 'audio' : 'image';
+    await sql.begin(async (tx) => {
+      const [asset] = await tx`
+        INSERT INTO media_assets (appointment_id, patient_id, uploaded_by_type, media_type, mime_type, r2_key, source)
+        VALUES (null, null, 'doctor', ${mediaType}, ${mimeType}, ${result.key}, 'whatsapp')
+        ON CONFLICT (r2_key) DO NOTHING
+        RETURNING id
+      `;
+      if (asset?.id) {
+        const ocrKey = createHash('sha256').update(`${asset.id}:ocr-v1`).digest('hex');
+        await tx`
+          INSERT INTO media_processing_jobs (media_asset_id, job_type, status, idempotency_key)
+          VALUES (${asset.id}, 'ocr', 'queued', ${ocrKey})
+          ON CONFLICT (idempotency_key) DO NOTHING
+        `;
+        logger.info('OBSERVATION_OCR_ENQUEUED', { mediaAssetId: asset.id, jobType: 'ocr' });
+      } else {
+        logger.warn('OBSERVATION_DUPLICATE_MEDIA', { r2Key: result.key });
+      }
+      logger.info('OBSERVATION_MEDIA_CREATED', {
+        mediaAssetId: asset?.id ?? null,
+        r2Key: result.key,
+        source: 'whatsapp',
+        inserted: !!asset?.id,
+      });
+    });
+  } catch (err) {
+    logger.error('OBSERVATION_INGEST_ERROR', { r2Key: result.key, error: err.message });
+  }
+  return result;
+}

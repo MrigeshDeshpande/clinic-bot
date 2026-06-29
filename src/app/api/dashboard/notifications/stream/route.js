@@ -34,3 +34,4 @@ export async function GET(req) {
     },
   });
 }
+// opencode -s ses_1111e79daffeZoO0GJyiOVGm38
