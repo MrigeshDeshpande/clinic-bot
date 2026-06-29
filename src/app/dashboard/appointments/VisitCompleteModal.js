@@ -35,7 +35,7 @@ const FOLLOW_UP_SUGGEST = {
   'Pediatric Dentistry': 180,
 };
 
-const CONSULTATION_DEFAULT = 2000;
+const CONSULTATION_DEFAULT = 200;
 const CONSULTATION_STEP = 100;
 const TREATMENT_STEP = 50;
 

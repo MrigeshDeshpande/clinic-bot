@@ -47,7 +47,7 @@ function upiDeepLink(amount, txnRef, note) {
   return `upi://pay?pa=${pa}&am=${am}&tn=${tn}${tr ? `&tr=${tr}` : ''}`;
 }
 
-const CONSULTATION_DEFAULT = 2000;
+const CONSULTATION_DEFAULT = 200;
 const LOCATIONS = ['Hudco', 'Bhilai', 'Durg', 'Nehru Nagar', 'Borsi'];
 const PHONE_PREFIX = '+91';
 function stripPhonePrefix(v) { return v?.replace(/^(\+91|91)/, '') || v || ''; }
