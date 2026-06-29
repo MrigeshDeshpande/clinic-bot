@@ -271,7 +271,7 @@ function VisitPageInner() {
         if (ms) setMedicineSettings({ salts: ms.salts || {}, custom: ms.custom || [], usage: ms.usage || {}, templates: ms.templates || [] });
         if (ms?.usage) setMedicineUsage(ms.usage);
         if (ms?.templates) setMedicineTemplates(ms.templates);
-        if (data.settings?.visit_layout) setVisitLayout(data.settings.visit_layout);
+        if (data.settings?.visit_layout?.leftColumn) setVisitLayout(data.settings.visit_layout);
       })
       .catch(() => {});
   }, []);

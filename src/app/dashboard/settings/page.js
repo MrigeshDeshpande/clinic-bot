@@ -384,7 +384,7 @@ export default function SettingsPage() {
       useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
       useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
-    const layout = settings.visit_layout || DEFAULT_VISIT_LAYOUT;
+    const layout = settings.visit_layout?.leftColumn ? settings.visit_layout : DEFAULT_VISIT_LAYOUT;
 
     function handleDragEnd(column, event) {
       const { active, over } = event;

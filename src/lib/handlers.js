@@ -13,7 +13,7 @@ import { isDateBlocked, fetchBlockedDates, blockDate, unblockDate } from '@/db/r
 import { createPatient, searchPatients, findPatientById, findPatientByPhone, createAppointmentForPatient, getVisitsByPatientPhone,
          updateVisitLog, findPatientsByWaId, updatePatient } from '@/db/repositories/patientRepository';
 import { insertFeedback } from '@/db/repositories/feedbackRepository';
-import { processAndStoreMedia, downloadMediaFromMeta } from '@/lib/media';
+import { processAndStoreMedia, downloadMediaFromMeta, ingestObservationMedia } from '@/lib/media';
 import { T } from '@/config/translations';
 import { transcribeAudio } from '@/lib/transcriber';
 import { getR2SignedUrl, r2Configured } from '@/lib/r2';
@@ -156,6 +156,8 @@ async function progressiveFieldFill(session, justSetField, entities) {
   return session;
 }
 
+// LEGACY — identity now resolved after OCR, not via WhatsApp chat.
+// DELETE after stability confirmed (PR-14).
 async function handleDoctorMediaPatientLookup(session, query) {
   const pm = session.context?.pendingMedia;
   if (!pm) {
@@ -3094,25 +3096,23 @@ async function notifyDoctor(body) {
 }
 
 // ───────────────────────────────────────────────
+// Doctor observation photo handler
+// ───────────────────────────────────────────────
+// State-agnostic: photo → 📸 Got it → silence → background pipeline.
+// Identity resolution happens after OCR, not via WhatsApp chat.
+async function handleDoctorObservationPhoto(session, normalized) {
+  await ingestObservationMedia({ mediaId: normalized.mediaId, mimeType: normalized.mimeType, waId: normalized.waId });
+  logger.info('PHOTO_RECEIVED', { waId: normalized.waId, sessionState: session.state });
+  return { session, reply: { body: '📸 Got it' }, replyType: 'text' };
+}
+
+// ───────────────────────────────────────────────
 // Doctor dispatch
 // ───────────────────────────────────────────────
 async function handleDoctorDispatch(session, normalized, entities, intent) {
-  // Media message handling (images, audio) — intercept before state routing
+  // State-agnostic photo handler — intercept ALL media before state routing
   if (normalized?.hasMedia && normalized?.mediaId) {
-    return handleDoctorMediaMessage(session, normalized, intent);
-  }
-
-  // Pending media: doctor sent an image earlier, now replying with patient name
-  if (session.context?.pendingMedia && session.state !== 'DOCTOR_SEARCH_PATIENT') {
-    const text = (normalized?.textClean || '').trim();
-    if (text && text.length >= 2) {
-      session = {
-        ...session,
-        state: 'DOCTOR_SEARCH_PATIENT',
-        context: { ...session.context, pendingMediaQuery: text },
-      };
-      return handleDoctorMediaPatientLookup(session, text);
-    }
+    return handleDoctorObservationPhoto(session, normalized);
   }
 
   // Transcription flow: accept/edit/re-record transcribed audio
@@ -3225,7 +3225,8 @@ function handleDoctorBack(session) {
 }
 
 // ───────────────────────────────────────────────
-// Doctor media message handling
+// LEGACY PHOTO FLOW — replaced by handleDoctorObservationPhoto + ingestObservationMedia.
+// DELETE after stability confirmed (PR-14).
 // ───────────────────────────────────────────────
 async function handleDoctorMediaMessage(session, normalized, intent) {
   const mediaId = normalized.mediaId;
