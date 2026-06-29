@@ -20,6 +20,6 @@ export async function classifyWithFallback(normalized, session) {
     }
   }
 
-  // Use the gateway (handles shadow mode, AI call, and rule fallback internally)
+  // Use the gateway (handles AI call with rule fallback internally)
   return gatewayUnderstand({ normalized, session });
 }

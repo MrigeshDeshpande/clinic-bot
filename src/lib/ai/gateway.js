@@ -1,13 +1,10 @@
 import { classifyIntent } from '@/lib/router';
 import { logger } from '@/lib/logger';
 import { understand as kaliUnderstand } from '@/lib/ai/kali';
-import { insertAiClassification } from '@/db/repositories/aiClassificationRepository';
 import { GLOBAL_INTENTS, CORRECTION_INTENTS } from '@/config/intents';
 import { TRANSITIONS } from '@/config/states';
 
 const USE_KALI = process.env.KALI_AI_URL && process.env.NODE_ENV !== 'test';
-const SHADOW_MODE = process.env.SHADOW_MODE === 'true';
-const SHADOW_SAMPLE_RATE = parseFloat(process.env.SHADOW_SAMPLE_RATE) || 0.05;
 
 function getAvailableIntents(state) {
   const stateIntents = TRANSITIONS[state] || [];
@@ -36,9 +33,7 @@ export async function understand({ normalized, session }) {
   }
 
   // Priority 1: AI via Kali gateway
-  const shouldSampleAI = !SHADOW_MODE || Math.random() < SHADOW_SAMPLE_RATE;
-
-  if (USE_KALI && shouldSampleAI) {
+  if (USE_KALI) {
     try {
       const aiResult = await kaliUnderstand({
         message: normalized.textClean,
@@ -48,40 +43,7 @@ export async function understand({ normalized, session }) {
         availableIntents: getAvailableIntents(session.state),
       });
 
-      // Always get rule result for comparison
-      const ruleResult = classifyIntent(normalized, session);
-
-      if (SHADOW_MODE) {
-        // Shadow mode: log AI result but return rule result
-        logger.info('INTENT_CLASSIFICATION_SHADOW', {
-          provider: 'kali_shadow',
-          ai_intent: aiResult.intent,
-          ai_language: aiResult.language,
-          rule_intent: ruleResult.intent,
-          processingMs: aiResult.processingMs,
-          state: session.state,
-          text: normalized.textClean,
-        });
-
-        insertAiClassification({
-          sessionState: session.state,
-          message: normalized.textClean,
-          availableIntents: getAvailableIntents(session.state),
-          intent: aiResult.intent,
-          entities: aiResult.entities,
-          language: aiResult.language,
-          provider: aiResult.provider,
-          processingMs: aiResult.processingMs,
-          rawModelResponse: null,
-          ruleIntent: ruleResult.intent,
-          matched: ruleResult.intent === aiResult.intent,
-        }).catch(err => logger.warn('AI_CLASSIFICATION_LOG_FAILED', { error: err.message }));
-
-        ruleResult.source = 'rule_fallback';
-        return ruleResult;
-      }
-
-      // Production: use AI result with rule fallback
+      // Use AI result
       logger.info('INTENT_CLASSIFICATION', {
         provider: aiResult.provider,
         intent: aiResult.intent,

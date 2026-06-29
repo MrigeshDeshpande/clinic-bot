@@ -251,7 +251,7 @@ export async function processEvent(payload) {
       // Track last message IDs for continuity
       session.context.lastMessageIds = [...(session.context.lastMessageIds || []).slice(-4), normalized.msgId];
 
-      // Step 2e: classifyIntent — uses AI with rule fallback in shadow/production
+      // Step 2e: classifyIntent — uses AI with rule fallback
       const intentResult = await classifyWithFallback(normalized, session);
 
       // Step 2e-ii: Explicit correction detection (for non-booking states where router may miss it)
