@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verify } from '@/lib/auth';
 
-export async function proxy(req) {
+export async function middleware(req) {
   const { pathname } = req.nextUrl;
 
   if (!process.env.DASHBOARD_PASSWORD) {

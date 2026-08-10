@@ -1,5 +1,7 @@
 # DHARA Reality Map — Clinic-Bot Workflow Audit
 
+> Secrets were removed from this file. All credentials live in `.env` (see `.env.example`).
+
 ## 1. Entry Points
 
 ### 1A. WhatsApp Booking (New Patient)

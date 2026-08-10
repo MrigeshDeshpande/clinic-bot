@@ -475,12 +475,8 @@ function AppointmentsContentInner() {
               <button
                 onClick={async () => {
                   if (!confirm(`Mark all ${data.totals.confirmed} confirmed appointments as completed?`)) return;
-                  const res = await fetch(`/api/dashboard/appointments/complete-all?date=${selectedDate}&action=complete_all`, { method: 'POST' });
-                  // wait, is it /api/dashboard/appointments/bulk or complete_all? The original code had:
-                  // /api/dashboard/appointments/bulk?date=${selectedDate}&action=complete_all
-                  // Let's preserve the original endpoint URL!
-                  const res2 = await fetch(`/api/dashboard/appointments/bulk?date=${selectedDate}&action=complete_all`, { method: 'POST' });
-                  const json = await res2.json();
+                  const res = await fetch(`/api/dashboard/appointments/bulk?date=${selectedDate}&action=complete_all`, { method: 'POST' });
+                  const json = await res.json();
                   if (json.success) {
                     const r = await fetch(`/api/dashboard/appointments?date=${selectedDate}`);
                     const d = await r.json();
